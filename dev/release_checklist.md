@@ -31,6 +31,14 @@ git rm -r dev .claude .vscode
 git rm CLAUDE.md air.toml
 git commit -m "release x.y.z: strip development-only files"
 
+# 2b. Prove the release tree IS dev minus the strip list. BOTH must print nothing.
+#     Together they are what makes "dev-green means release-green" a fact, not a hope.
+#     NOTE `refs/heads/dev`, not `dev`: here the name is a revision AND the directory
+#     just stripped, and git refuses the ambiguity.
+git diff --name-only refs/heads/dev HEAD -- \
+  | grep -vE '^(dev/|\.claude/|\.vscode/|CLAUDE\.md$|air\.toml$)'
+git ls-files -- dev .claude .vscode CLAUDE.md air.toml
+
 # 3. PR
 git push -u origin release/x.y.z
 gh pr create --base master --title "tabxplor x.y.z" --body "<NEWS summary>"
@@ -60,10 +68,32 @@ git push origin vx.y.z
   (`jamovi/`, `po/`, `vignettes/articles/`, `_pkgdown.yml`, `.github/`,
   `README.Rmd`, `cran-comments.md`, `.Rbuildignore`). If a new dev-only path
   appears, add it to step 2 here.
+- **Re-cutting a stale release branch** (its tree is months behind, or predates a directory
+  that now ships): `gh pr comment` the reason and `gh pr close` the PR, `git push origin
+  --delete release/x.y.z`, then step 2 as written. Deleting the remote branch of an open PR
+  auto-closes it, so close it first with the reason recorded. The maintainer runs `git branch
+  -D release/x.y.z` in their own terminal -- twice, once to free the name and once after the
+  merge -- and it fails with `cannot delete branch used by worktree` unless the checkout has
+  been moved off it (`git checkout dev`).
+- **GitHub Pages is a once-per-repo setup, done AFTER the first merge.** The deploy action
+  creates `gh-pages` itself on the first push to `master`; enabling Pages before that branch
+  exists is refused. Settings -> Pages -> "Deploy from a branch" -> `gh-pages` / `(root)`, or
+  `gh api --method POST repos/<owner>/<repo>/pages -f 'source[branch]=gh-pages' -f
+  'source[path]=/'`. Not "GitHub Actions" (it would mean rewriting `pkgdown.yaml` around
+  `upload-pages-artifact`/`deploy-pages`, diverging from the r-lib template the workflow came
+  from), and never `master`/`docs` -- `docs/` is git-ignored by design. Set the repo `homepage`
+  field to the site URL at the same time, or the sidebar shows no link to it.
 - **The site must be live before step 5.** Every `bricenocenti.github.io` link in the Rd,
   the README and the vignettes 404 until the pkgdown workflow has deployed from `master` and
   Pages is enabled, and CRAN's incoming check reports them. Merge, confirm the site answers,
-  then submit.
+  then submit. The gate, reading exactly the files CRAN reads -- every line must be `200`, and
+  NOT `curl -L`, because a 301 is also a NOTE:
+
+  ```bash
+  git grep -ho 'https://bricenocenti\.github\.io/tabxplor/[A-Za-z0-9._/#-]*' \
+      -- DESCRIPTION README.md man vignettes | sed 's/[.,)]*$//' | sort -u |
+    while read -r u; do printf '%s  %s\n' "$(curl -sI -o /dev/null -w '%{http_code}' "$u")" "$u"; done
+  ```
 - **rhub: the compiler containers say nothing here.** tabxplor has no `src/`, so `clang*`,
   `gcc*`, `c23`, `lto`, `*-asan`, `valgrind` and `rchk` only exercise a toolchain the package
   never uses -- and a stale image there fails on a *dependency* (`clang19`/`clang20` carry an

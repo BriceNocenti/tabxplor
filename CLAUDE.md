@@ -1190,7 +1190,94 @@ restyles a `bookdown::gitbook` book (`dev/formations_stat_migration.md` §5.7), 
 stylesheet as an `htmlDependency` instead of a `<style>` per table — a dependency is per DOCUMENT and
 `theme =` is per CALL, so it needs a design, not a patch.
 
-#### Phase 24h — PR to master and pkgdown site online
+#### Phase 24h — PR to master and pkgdown site online ✓ DONE
+
+**`master` carries the release, and the site is live.** `master` is `725cc6c`, the merge commit of
+PR #5 (`release/2.0.0` → `master`); https://bricenocenti.github.io/tabxplor/ answers from the
+`gh-pages` branch the pkgdown workflow wrote on that push. The whole phase is `dev/release_checklist.md`
+steps 1–4 plus the once-per-repo Pages setup — no package code changed, and no golden moved.
+
+**The July branch was unusable, so it was re-cut rather than refreshed.** `release/2.0.0` dated from
+2026-07-23, sat 168 commits behind `dev`, and its tree **predates `data/`** (the four example data sets
+arrived in Phase 22l), so the package on it could not build its own examples; every check on PR #3 was
+red from July. PR #3 was closed with that reason recorded, the remote branch deleted, and the branch
+cut afresh from `dev` — one strip commit (`71d6f1b`, 465 deletions), exactly the checklist's step 2.
+⚠ Re-cutting costs a `git branch -D` in the maintainer's own terminal, twice (the name is held by the
+stale local branch before, and by the merged one after), and the second one fails with
+`cannot delete branch used by worktree` unless the checkout is moved off it first.
+
+**Two proofs replace reading the diff.** `git diff --name-only refs/heads/dev HEAD --` filtered of the
+strip list must be empty, and `git ls-files -- dev .claude .vscode CLAUDE.md air.toml` must be empty:
+together they say the release tree IS `dev` minus the strip list, which is what makes "dev-green means
+release-green" a fact rather than a hope. Both held on the strip commit and again after the mid-flight
+merge, with the tree objects of `R/ man/ tests/ vignettes/ data/ inst/ po/ jamovi/ pkgdown/` byte-identical
+to `dev`'s and `.Rbuildignore` identical on both branches. ⚠ The first proof needs `refs/heads/dev`, not
+`dev`: on a release branch the name is a revision AND the directory just stripped, and git refuses the
+ambiguity.
+
+**The second suite had never been updated after 24c/24e/24g — 23 failures, every one stale.** It is not
+run per-edit, so three phases of deliberate change had accumulated in it while `tests/testthat/` was kept
+current: the signed CI bounds (`[-12;+0]%`, 3 sites), `min_digits` as a floor on a foreign token,
+`rd_link_text()`'s two-syntax rewrite and the ordinal shape row (5 sites), regression footer rows no longer
+bold, the Excel width constants (2 sites), `data-quarto-disable-processing` on every `<table>` (2 sites),
+the `width:0;min-width:100%` idiom moving from `.tx-foot` to `.tabxplor-caption` (2 sites), the dark-theme
+ground rule, `quarto` now appearing in the light stylesheet, the `tx-sec` aside rule, and `tab_transpose()`
+no longer deprecated. All deleted (35 lines, 10 files) rather than updated — the shipped suite already
+locks each of those facts in its subsystem home. Two exceptions: `tab_transpose()`'s block kept its live
+`expect_error(xpose(42))` and was retitled, the shipped suite covering only the not-deprecated half; and
+one comment was rewritten where the assertion it described was the one deleted. ⚠ The `pvalue` case is
+**not** a defect — `po/R-fr.po` translates `pvalue (%s%s)` to itself, the field name kept as notation by
+translator choice, exactly as the tooltip's words are. Result **FAIL 0 | PASS 5885**.
+
+**The shipped suite's one WARN was a warning leaking out of a test that was not about it.**
+`test-tab-reg.R:370` asserts `reg_formulas()$fit`, and `tvhours ~ race` under Poisson genuinely is
+over-dispersed — the package was right and the test wrapped only `suppressMessages()`, which does nothing
+to a warning. Its two siblings making the identical fit (`test-tab-reg.R:96`, `test-tab-color.R:277`)
+already had `suppressWarnings()`; line 370 was the one that missed it. **FAIL 0 | WARN 0 | PASS 4632**.
+The two SKIPs stay: one needs a 24-bit-ANSI terminal, the other is the `svyVGAM`-not-installed fallback
+and so can only run where the package is absent.
+
+**The pkgdown PR check found the one thing nothing else could.** `R CMD check` never sees
+`vignettes/articles/` (`.Rbuildignore`d) and pkgdown never runs on a `dev` push, so the PR was the first
+build of the five French articles since the 24b rename — all 11 built, `txtheme 0.1.0` resolved from
+GitHub (`@14f0c99`), both its assets copied, `site_prune.R` correctly skipped, deploy correctly gated off.
+It also surfaced **three shipped vignettes whose `\VignetteIndexEntry{}` no longer matched their title**:
+Phase 24d retitled `tabxplor.Rmd`, `tabxplor-reg.Rmd` and `tabxplor-reading-a-regression.Rmd` and updated
+`_pkgdown.yml`'s navbar, but not the index entries. `R CMD check` does not fail on it — which is why all
+five platforms and `check(manual = TRUE)` were green — yet `\VignetteIndexEntry{}` is exactly what
+`vignette(package = "tabxplor")` and CRAN's package page display, so 2.0.0 would have shipped two names
+per document. Fixed on `dev`, merged into the release branch, CI re-run: the 8 title warnings became 5,
+and those five are the French articles correctly having no index entry at all, being articles and not
+vignettes.
+
+**Pages: deploy from a branch, `gh-pages` at root.** That is what the workflow already writes
+(`JamesIves/github-pages-deploy-action`, `branch: gh-pages, folder: docs, clean: true`) and what the r-lib
+template regenerates, so it costs no workflow change; the "GitHub Actions" source would mean rewriting
+`pkgdown.yaml` around `upload-pages-artifact`/`deploy-pages` with a `github-pages` environment, and
+`master`/`docs` cannot work at all — `docs/` is git-ignored by design. ⚠ The branch only exists AFTER the
+first deploy, so Pages is enabled after the merge, never before. The site is then stable by construction:
+the deploy step is gated `if: github.event_name != 'pull_request'`, so a `dev` push and a PR never touch
+it — only a push to `master`, a published release, or a manual dispatch — and `clean: true` means each
+deploy fully replaces the branch, so nothing stale accumulates.
+
+**Verified live, and this is the gate Phase 25 cites.** All 11 `bricenocenti.github.io` URLs in the files
+CRAN reads (`DESCRIPTION`, `README.md`, `man/`, `vignettes/`) answer **200 with no redirect** — checked
+without `curl -L`, since a 301 is also a NOTE — where 24f recorded every one of them as 404. Nine core
+pages, five English and five French articles all 200; `/CLAUDE.html` **404** and zero CLAUDE entries among
+the sitemap's 132 `<loc>`s, the guarded prune having had nothing to do because `master` carries no root
+`*.md` outside the four `pkgdown:::package_mds` already spares. The deployed content is post-24g, not a
+stale build: `tabxplor-type`, `get_test`, `tabxplor-base-coercion` and `set_caption` are on the reference
+index, `tab_num()` wears its superseded badge, and the example data sets are off the index while
+`reference/car_salaries.html` still resolves — 24d's `internal`-section trick working as designed. Both
+palettes render (62 colour-slot classes and 33 print-ready marks on the home page), every table carries
+`data-quarto-disable-processing`, `extra.js` seeds `theme=light` so the site opens light whatever the
+reader's OS says, and the two reworked articles each render 34 tables / 504 coloured cells / 39 legend
+blocks in both languages, French accents served as UTF-8. The repo `homepage` field now points at the site.
+
+⚠ **A `dev` branch cannot be private.** GitHub has no per-branch visibility — access follows the
+repository — so `dev/`, `CLAUDE.md` and `.claude/` are public on `dev` and always have been. The strip
+keeps `master` user-facing and keeps development files out of the CRAN tarball and off the site; it is not
+concealment, and only a separate private repository would be.
 
 ### Phase 25 — CRAN release
 

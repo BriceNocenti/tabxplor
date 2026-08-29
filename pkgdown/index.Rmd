@@ -87,15 +87,21 @@ tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 
 Or as a black and white table ready for publication:
 
-```{r print-ready-reg, message = FALSE}
+```{r print-ready-reg, eval = FALSE}
 options(tabxplor.theme = "print_ready")
 tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
 
-```{r include=FALSE}
-options(tabxplor.theme = "light")
-```
-
+<!-- A SCREENSHOT, and the one example this page does NOT render live -- README.Rmd shows the same
+     image. This document emits ONE stylesheet (tab_kable_css = FALSE + the tab_css() chunk above),
+     and a stylesheet is table-independent by contract (R/tab-palettes.R): `.p1..m4` are slots, so a
+     second theme on one page cannot be expressed. A `print_ready` REGRESSION takes the
+     `print_emphasis` arm, whose bold/italic/underline is written as markup and survives, while the
+     colour it must suppress lives only in CSS that is never emitted -- so the cells came out wearing
+     both. A crosstab is safe (`print_marks` is cell TEXT), which is why the vignettes render theirs.
+     WARNING: the src is `reference/figures/`, NOT the `man/figures/` README.Rmd uses -- pkgdown
+     copies man/figures/ there (copy_figures) and does not rewrite the home page's image paths. -->
+<img src="reference/figures/README-4-reg-married-print-ready.webp" width="624" alt="The same regression table in the black-and-white publication theme: bold, italics and underlining replace the colors, on the same ladder of thresholds.">
 
 ## Export your tables
 
