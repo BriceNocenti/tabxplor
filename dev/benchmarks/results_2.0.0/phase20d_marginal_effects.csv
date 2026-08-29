@@ -1,9 +1,0 @@
-"case","seconds_before","seconds_after","speedup"
-"binomial coefficient",0.273,0.279,1
-"binomial marginal",8.686,0.589,14.7
-"binomial marginal ratio",8.459,0.416,20.3
-"binomial marginal empirical",9.211,0.66,14
-"binomial at_reference",1.232,1.262,1
-"binomial display=ame",6.614,0.404,16.4
-"multinomial coefficient",2.524,2.413,1
-"multinomial marginal",36.394,3.425,10.6
