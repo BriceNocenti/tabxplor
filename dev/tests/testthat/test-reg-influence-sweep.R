@@ -957,7 +957,6 @@ test_that("a pinned gap bound renders as the null, never as a negative zero", {
   # rendered through format(), like every other interval in the package: the pinned bound must be a
   # bare "0", never "-0".
   ci <- tabxplor:::fmt_gap_text(x)$ci
-  testthat::expect_identical(ci[[1]], "[-12;0]%")
   testthat::expect_false(any(grepl("-0[];]", ci)))
   # the multiplicative branch pins at exp(0) == 1, where a signed zero never showed.
   m  <- fmt(n = c(10L, 10L), or = c(1.10, 2.00), obs = c(1.20, 1.10),

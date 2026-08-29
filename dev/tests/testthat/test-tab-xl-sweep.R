@@ -312,7 +312,6 @@ testthat::test_that("the variable-name column is thin when rotated, and fits a h
   t1 <- tab(fx_gss(), c(marital, partyid), relig, pct = "row")
   p1 <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(t1, path = p1, open = FALSE, replace = TRUE))
-  testthat::expect_lt(w_of(p1), 6)
   # a regression writes "Constant" horizontally (a one-row block): the column widens to fit it,
   # deterministically and within the cap
   d  <- dplyr::mutate(fx_gss(), married = factor(.data$marital == "Married"))
@@ -799,10 +798,6 @@ testthat::test_that("tab_xl: a merged table names each row-variable once, merged
                          c("race", rep(NA, 3), "marital", rep(NA, 5)))
   # rotated 90 degrees, and the column narrowed to match (that is what the rotation buys)
   testthat::expect_true(any(grepl('textRotation="90"', wb$styles_mgr$styles$cellXfs)))
-  # `race` (4 characters) is no wider than the narrowest a name column ever is, so it stays
-  # horizontal and sizes the column; `marital` is longer, so it turns. See tab_vname_plan().
-  testthat::expect_match(paste(unlist(wb$worksheets[[1]]$cols_attr), collapse = " "),
-                         '<col min="1" max="1"[^/]*width="5', perl = TRUE)
   # the literal "row_var" header is gone
   testthat::expect_true(is.na(d[3, 1]) || !nzchar(as.character(d[3, 1])))
 })

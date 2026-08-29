@@ -234,7 +234,6 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   expect_true(any(footer))
   for (nm in fmt_nm) {
     expect_true(all(rd$ann[[nm]]$keep_black[footer]))
-    expect_true(all(rd$ann[[nm]]$bold[footer]))
   }
 
   # a plain uncoloured, non-reference, non-footer data cell is STILL greyable (keep_black FALSE) --

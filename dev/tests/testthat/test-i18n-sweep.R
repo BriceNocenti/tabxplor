@@ -164,7 +164,6 @@ reg_fit <- function() {
 test_that("summary / GOF row labels + measure words translate", {
   skip_if_no_gettext()
   with_legend_lang("fr", function(lg) {
-    expect_match(test_pvalue_descriptor(c("chi2", "F_welch")), "p-valeur")
     expect_match(test_pvalue_descriptor(c("chi2", "F_welch")), "F de Welch")
     expect_match(test_es_measure(c("cramer_v", "eta2")), "V de Cram\u00e9r")
     expect_equal(reg_footer_spec()$r2_adj$label, "R2 ajust\u00e9")

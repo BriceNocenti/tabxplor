@@ -31,7 +31,8 @@ statistically solid, to spot the structure of your data immediately.
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 .tabxplor-tab{margin-bottom:1.2em;}
-.tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+.tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
 .tabxplor-tab th,.tabxplor-tab td{border-width:0;}
@@ -269,7 +270,7 @@ gss <- gss_cat_data_formatting() # cleaned-up version of forcats::gss_cat
 tab(gss, race, party3, pct = "row", color = "difference")
 ```
 
-<table class="tabxplor-tab">
+<table class="tabxplor-tab" data-quarto-disable-processing="true">
 
 <thead>
 
@@ -534,7 +535,7 @@ tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row",
     color = "difference", ref = "first", color_signif = "grey_non_signif")
 ```
 
-<table class="tabxplor-tab">
+<table class="tabxplor-tab" data-quarto-disable-processing="true">
 
 <thead>
 
@@ -1064,7 +1065,7 @@ Logistic regression: married by race, age +1 more
 
 </div>
 
-<table class="tabxplor-tab tx-has-stars">
+<table class="tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 
 <thead>
 
@@ -1593,7 +1594,620 @@ at the 90% level; no star: not significant.
 
 </table>
 
-<table class="tabxplor-tab tx-shape">
+<table class="tabxplor-tab tx-shape" data-quarto-disable-processing="true">
+
+<thead>
+
+<tr>
+
+<th class="tx-l">
+
+outcome
+</th>
+
+<th class="tx-l">
+
+numeric predictor
+</th>
+
+<th class="tx-l">
+
+observed range
+</th>
+
+<th class="tx-l">
+
+observed shape (central 95%)
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td class="tx-l">
+
+p = %<sub>Married</sub> ; log(p/(1-p))
+</td>
+
+<td class="tx-l">
+
+age
+</td>
+
+<td class="tx-l">
+
+13-57% (OR 8.7)
+</td>
+
+<td class="tx-l tx-sparkcell">
+
+<svg class="tx-spark" width="192.6" height="44" viewBox="0 0 192.6 44" aria-hidden="true">
+
+<polyline points="1.3,42.7 11.3,30.9 21.3,13.1 31.3,7.2 41.3,1.3 51.3,1.3 61.3,1.3 71.3,1.3 81.3,1.3 91.3,1.3 101.3,1.3 111.3,1.3 121.3,1.3 131.3,1.3 141.3,1.3 151.3,1.3 161.3,7.2 171.3,7.2 181.3,13.1 191.3,13.1" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+Or as a black and white table ready for publication:
+
+``` r
+options(tabxplor.theme = "print_ready")
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+<div class="tabxplor-caption">
+
+Logistic regression: married by race, age +1 more
+
+</div>
+
+<table class="tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
+
+<thead>
+
+<tr>
+
+<th class="tx-span" colspan="3">
+
+</th>
+
+<th class="tx-span" colspan="2">
+
+married: 01-Married
+</th>
+
+</tr>
+
+<tr>
+
+<th class="tx-l tx-br tx-bl" rowspan="2">
+
+</th>
+
+<th class="tx-l tx-br tx-bl tx-rv" rowspan="2">
+
+levels
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+n
+</th>
+
+<th class="tx-r tx-num">
+
+Obs_OR
+</th>
+
+<th class="tx-r tx-num tx-br">
+
+Model_OR
+</th>
+
+</tr>
+
+<tr>
+
+<th class="tx-r tx-num tx-br tx-unit">
+
+\<n\>
+</th>
+
+<th class="tx-r tx-num tx-unit">
+
+\<(obs%) OR\>
+</th>
+
+<th class="tx-r tx-num tx-br tx-unit">
+
+\<OR (adj%)\>
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr class="tx-b tx-bb2">
+
+<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="1">
+
+Constant
+</td>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+<b>Reference profile</b>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b></b>
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+<b></b>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b>1/1.43</b><span class="tx-sec" style="font-weight:normal;">\*\*\* (41%)</span>
+</td>
+
+</tr>
+
+<tr class="tx-b">
+
+<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="3">
+
+race
+</td>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+<b>White</b>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b>9 862</b>
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+<span class="tx-sec"
+style="font-weight:normal;">(52%) </span><b>     1</b><span class="tx-sec"
+style="font-weight:normal;">   </span>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b>     1</b><span class="tx-sec"
+style="font-weight:normal;">    (51%)</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Black
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+1 867
+</td>
+
+<td class="tx-r tx-num m3 tx-b">
+
+<span class="tx-sec"
+style="font-weight:normal;">(31%) </span><b><i><u>1/2.45</u></i></b><span class="tx-sec" style="font-weight:normal;">\*\*\*</span>
+</td>
+
+<td class="tx-r tx-num tx-br m3 tx-b">
+
+<b><i><u>1/2.22</u></i></b><span class="tx-sec" style="font-weight:normal;">\*\*\* (33%)</span>
+</td>
+
+</tr>
+
+<tr class="tx-bb2">
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Other
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+1 261
+</td>
+
+<td class="tx-r tx-num g1">
+
+<span class="tx-sec">(49%) </span>1/1.11<span class="tx-sec">\*  </span>
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+  1.08<span class="tx-sec">    (53%)</span>
+</td>
+
+</tr>
+
+<tr class="tx-bb2">
+
+<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="1">
+
+age
+</td>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+per 26.9 (2SD), at 42.4 (mean)
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+</td>
+
+<td class="tx-r tx-num p3 tx-b">
+
+<span class="tx-sec"
+style="font-weight:normal;">      </span><b><u>  2.13</u></b><span class="tx-sec" style="font-weight:normal;">\*\*\*</span>
+</td>
+
+<td class="tx-r tx-num tx-br p2 tx-b">
+
+<b>  1.95</b><span class="tx-sec" style="font-weight:normal;">\*\*\*      </span>
+</td>
+
+</tr>
+
+<tr class="tx-b">
+
+<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="4">
+
+rincome
+</td>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+<b>1-Lt \$10000</b>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b>2 149</b>
+</td>
+
+<td class="tx-r tx-num tx-b">
+
+<span class="tx-sec"
+style="font-weight:normal;">(37%) </span><b>     1</b><span class="tx-sec"
+style="font-weight:normal;">   </span>
+</td>
+
+<td class="tx-r tx-num tx-br tx-b">
+
+<b>     1</b><span class="tx-sec"
+style="font-weight:normal;">    (39%)</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+2-\$10000 to 14999
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+1 168
+</td>
+
+<td class="tx-r tx-num p1">
+
+<span class="tx-sec">(41%) </span>  1.21<span class="tx-sec">\*\* </span>
+</td>
+
+<td class="tx-r tx-num tx-br g1">
+
+  1.15<span class="tx-sec">\*   (42%)</span>
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+3-\$15000 to 24999
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+2 325
+</td>
+
+<td class="tx-r tx-num p1">
+
+<span class="tx-sec">(43%) </span>  1.33<span class="tx-sec">\*\*\*</span>
+</td>
+
+<td class="tx-r tx-num tx-br p1">
+
+  1.28<span class="tx-sec">\*\*\* (45%)</span>
+</td>
+
+</tr>
+
+<tr class="tx-bb2">
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+4-\$25000 or more
+</td>
+
+<td class="tx-r tx-num tx-br g2">
+
+7 348
+</td>
+
+<td class="tx-r tx-num p3 tx-b">
+
+<span class="tx-sec"
+style="font-weight:normal;">(55%) </span><b><u>  2.14</u></b><span class="tx-sec" style="font-weight:normal;">\*\*\*</span>
+</td>
+
+<td class="tx-r tx-num tx-br p2 tx-b">
+
+<b>  1.85</b><span class="tx-sec" style="font-weight:normal;">\*\*\* (54%)</span>
+</td>
+
+</tr>
+
+<tr class="tx-bt2">
+
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-bb2" rowspan="8">
+
+Model fit
+</td>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+N
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+12 990
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Dispersion (robust/model SE)
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+1.00
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Collinearity (max VIF)
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+1.03
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+Influence (max dfbetas)
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+0.05
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+LR vs null
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+\<0.01%
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+McFadden R2
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+0.049
+</td>
+
+</tr>
+
+<tr>
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+AIC
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+17 129
+</td>
+
+</tr>
+
+<tr class="tx-bb tx-bb2">
+
+<td class="tx-l tx-br tx-bl tx-rv">
+
+BIC
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+</td>
+
+<td class="tx-r tx-num">
+
+</td>
+
+<td class="tx-r tx-num tx-br">
+
+17 181
+</td>
+
+</tr>
+
+</tbody>
+
+<tfoot>
+
+<tr>
+
+<td colspan="5">
+
+<div class="tx-foot">
+
+Model: logistic regression; OR: odds ratio (vs the reference category);
+obs%: observed proportion; adj%: adjusted/predicted
+proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1"
+style="font-weight:normal;">1.2</span>; <span class="p2"
+style="font-weight:bold;"><b>1.5</b></span>; <span class="p3"
+style="font-weight:bold;text-decoration:underline;"><b><u>2</u></b></span>;
+<span class="p4"
+style="font-weight:bold;text-decoration:underline double;"><b><u>4</u></b></span>.
+Italic: OR ≤ <span class="m1"
+style="font-weight:normal;font-style:italic;"><i>1/1.2</i></span>;
+<span class="m2"
+style="font-weight:bold;font-style:italic;"><b><i>1/1.5</i></b></span>;
+<span class="m3"
+style="font-weight:bold;font-style:italic;text-decoration:underline;"><b><i><u>1/2</u></i></b></span>;
+<span class="m4"
+style="font-weight:bold;font-style:italic;text-decoration:underline double;"><b><i><u>1/4</u></i></b></span>.
+Unmarked: not significantly different from the reference category (Wald
+interval on the log odds-ratio, 95% confidence; matching Woolf interval
+on the observed column) or under the first threshold (×1.2).<br>\*\*\*:
+significantly different from the reference category (in bold) at the 99%
+confidence level (from 1 for the Constant); \*\*: at the 95% level; \*:
+at the 90% level; no star: not significant.
+
+</div>
+
+</td>
+
+</tr>
+
+</tfoot>
+
+</table>
+
+<table class="tabxplor-tab tx-shape" data-quarto-disable-processing="true">
 
 <thead>
 
@@ -1665,8 +2279,7 @@ copy-paste from Excel) :
 ``` r
 tab(gss, marital, race, pct = "row", color = "difference") |> tab_html()
 tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()
-tab(gss, marital, race, pct = "row", color = "difference") |>
-  tab_xl(theme = "print_ready")
+tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print_ready")
 ```
 
 ## Learn more

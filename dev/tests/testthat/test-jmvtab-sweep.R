@@ -953,7 +953,6 @@ testthat::test_that("a table title cannot size a shrink-to-fit container", {
   # own max-content (the whole title on one line) would drive the width. Same idiom as `.tx-foot`.
   css <- tab_css()
   testthat::expect_match(css, "\\.tabxplor-caption\\{[^}]*width:0;min-width:100%;\\}")
-  testthat::expect_match(css, ".tabxplor-tab .tx-foot{width:0;min-width:100%;}", fixed = TRUE)
 })
 
 

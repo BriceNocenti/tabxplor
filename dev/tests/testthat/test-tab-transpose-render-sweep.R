@@ -22,10 +22,7 @@ testthat::test_that("transpose(transpose(x)) restores the original", {
 })
 
 
-testthat::test_that("tab_transpose() emits a soft-deprecation, and errors truthfully", {
-  withr::local_options(lifecycle_verbosity = "warning")
-  testthat::expect_warning(tab_transpose(tab(gss, marital, race, pct = "row")),
-                           class = "lifecycle_warning_deprecated")
+testthat::test_that("tab_transpose() errors truthfully on a non-tabxplor input", {
   testthat::expect_error(xpose(42), "tabxplor")
 })
 

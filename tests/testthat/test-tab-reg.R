@@ -367,8 +367,9 @@ test_that("reg_formulas() names the measure to type and the R call that ran", {
   expect_identical(rd$fit, 'svyglm(binomial("identity"))')
 
   expect_identical(f(family = "gaussian")$fit, "lm()")
-  expect_identical(suppressMessages(
-    reg_formulas(tab_reg(d, "tvhours", "race", family = "poisson", empirical = FALSE)))$fit,
+  # tvhours is over-dispersed under Poisson: that warning is the fit's own verdict, not a defect
+  expect_identical(suppressWarnings(suppressMessages(
+    reg_formulas(tab_reg(d, "tvhours", "race", family = "poisson", empirical = FALSE))))$fit,
     'glm(poisson("log"))')
   expect_identical(suppressMessages(
     reg_formulas(tab_reg(d, "marital", "race", family = "multinomial", empirical = FALSE)))$fit,

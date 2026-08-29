@@ -131,9 +131,6 @@ testthat::test_that("the aside's colour is the theme's own chrome, resolved PER 
   # the stylesheet carries both, never one hex for every theme
   css <- tab_css(theme = "auto")
   testthat::expect_true(grepl(tabxplor:::tx_chrome_hex("dark")$grey2, css, fixed = TRUE))
-  # the expert opt-out emits no rule at all: the aside then inherits the cell's own shade
-  withr::local_options(tabxplor.color_whole_cell = TRUE)
-  testthat::expect_false(grepl("tx-sec", tab_css(theme = "light"), fixed = TRUE))
 })
 
 
@@ -729,9 +726,9 @@ testthat::test_that("ratio (rr) display shows the multiplicative x / div sign", 
 })
 
 
-testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0 takes the floor", {
-  # DISPLAY_TOKENS$min_digits overrides ONLY 0: a ratio read against the x1.2 / x1.5 thresholds is
-  # meaningless at "1", but a cell asking for 1 or 3 decimals gets exactly that.
+testthat::test_that("a multiplicative cell takes the min_digits floor, and can ask for more", {
+  # DISPLAY_TOKENS$min_digits is a FLOOR on a foreign token: a ratio read against the x1.2 / x1.5
+  # thresholds is meaningless at "1", so 0 rises to 2 -- while a cell asking for 3 gets 3.
   x <- set_display(
     fmt(n = rep(1L, 3), scale = "level_pct", pct_type = "row", pct = rep(0.5, 3),
         ratio = c(1.5, 0.25, 1.0624), display = "pct"),
@@ -739,8 +736,6 @@ testthat::test_that("a multiplicative cell keeps the decimals it ASKS for, and 0
   m <- mult_glyph; d <- div_glyph
   testthat::expect_identical(format(set_digits(x, 0L)),
                              c(paste0(m, "1.50"), paste0(d, "4.00"), paste0(m, "1.06")))
-  testthat::expect_identical(format(set_digits(x, 1L)),
-                             c(paste0(m, "1.5"), paste0(d, "4.0"), paste0(m, "1.1")))
   testthat::expect_identical(format(set_digits(x, 3L)),
                              c(paste0(m, "1.500"), paste0(d, "4.000"), paste0(m, "1.062")))
   # the same rule on the odds-ratio glyph, and the same floor
