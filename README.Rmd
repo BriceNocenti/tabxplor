@@ -19,12 +19,12 @@ knitr::opts_chunk$set(
 library(tabxplor)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
-# The tables below are rendered in a black-and-white PUBLICATION palette rather than in colour.
-# Reason: GitHub's markdown sanitizer strips `class` and `style` from raw html, so colours cannot
-# reach a README reader there -- while <b>/<i>/<u> and plain characters do. `print_ready` picks the
-# right one per table: repeated marks for a crosstab (nothing at all is lost -- they ARE characters)
-# and the emphasis ladder for a regression, whose cells already carry their own direction symbol.
-options(tabxplor.theme = "print_ready")
+# The tables below are SCREENSHOTS of the pkgdown site (man/figures/README-*.webp), not rendered
+# here. Reason: GitHub's markdown sanitizer strips `class` and `style` from raw html, so no colour of
+# ours reaches a README reader -- and the black-and-white fallback that does get through is not what
+# the package looks like. The chunks that produced them are kept, unevaluated, as the record of what
+# to re-shoot: run one on the site, capture the table node at DPR 2, convert with
+# `cwebp -lossless -z 9 -m 6`.
 options(tabxplor.tab_kable_tooltips = FALSE)
 # Pin the language, BOTH ways -- this English README must not depend on who builds it (knitting it
 # on the maintainer's fr_FR.UTF-8 box otherwise yields French legends, captions and GOF labels).
@@ -58,20 +58,7 @@ set_color_palette(theme = "light")
 - In R the tables **are `tibble`s you can keep working on with `dplyr`**. Cells are rich values, each one carries its count, percentage, confidence interval and reference behind the displayed number.
 - Weighted data and survey design are supported.
 
-![A color-coded tabxplor cross-table in the console](man/figures/README-hero.jpg)
-
-```{r css, echo = FALSE, results = "asis"}
-# ONE stylesheet for the whole page, so it must NAME a palette rather than let each table pick: the
-# cross-tables below need no rules at all (their marks are characters), while the regression table's
-# ladder is css and nothing else -- so the page is styled for that one.
-# GitHub strips this block, along with every `class` and `style`, so there the tables inherit the
-# reader's own theme and are correct in light AND dark mode -- nothing of ours survives to clash with
-# it. Where the block IS read (the pkgdown home), a publication palette states its chrome down to the
-# cells, so the table stays one consistent light sheet whatever the page around it does.
-cat(tab_css(theme = "print_emphasis"))
-```
-
-*The tables below are shown in tabxplor's publication-ready black-and-white scheme (`theme = "print_ready"`): a superscript `+` or `-` after a cross-table cell, repeated once more at each threshold, and a bold / underlined ladder on the regression table. **Colors are the default**, and the right choice for exploring — github strips them from a README, see [package website](https://bricenocenti.github.io/tabxplor/).*
+*The tables below are screenshots of the [package website](https://bricenocenti.github.io/tabxplor/), where they are live html: GitHub strips the colors out of a README. Above each one is the code that built it.*
 
 ## Installation
 
@@ -87,26 +74,43 @@ devtools::install_github("BriceNocenti/tabxplor")
 
 A simple cross-table with row percentages: shades of blue mean the cell is over-represented compared to the total row, shades of yellow to red mean it is under-represented.
 
-```{r quick-look}
+```{r quick-look, eval = FALSE}
 gss <- gss_cat_data_formatting() # a cleaned-up version of forcats::gss_cat
 
 tab(gss, race, party3, pct = "row", color = "difference")
 ```
 
+<img src="man/figures/README-1-gss-race-party3.webp" width="776" alt="Party identification by race, in row percentages: cells over-represented compared to the total row are blue, under-represented ones yellow to red.">
+
 Several column variables can be crossed at once for series of Yes/No survey questions. With `color_signif = "grey_non_signif"`, cells that are not significantly different from the total are greyed out, so every colored figure is a solid one. Use `wt =` for weighted or survey data. Example with [FactoMineR](http://factominer.free.fr/index_fr.html) tea data :
 
-```{r quick-look-signif}
+```{r quick-look-signif, eval = FALSE}
 tea_when_vars <- c("breakfast", "tea.time", "evening", "lunch", "dinner", "always")
 tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row", 
     levels = "first", na = "drop", 
     color = "difference", ref = "first", color_signif = "grey_non_signif")
 ```
 
+<img src="man/figures/README-2-tea-spc-when-vars.webp" width="776" alt="Six Yes/No questions about when tea is drunk, crossed with occupation: only the cells significantly different from the reference row keep a color, the others are greyed out.">
+
 The same visual language extends to regression models: `tab_reg()` detects a binary outcome and fits a logistic regression, coloring odds ratios by strength and greying the non-significant ones, with a default comparison between the modelised deviations and their crude/observed counterparts.
 
-```{r quick-look-reg, message = FALSE}
+```{r quick-look-reg, eval = FALSE}
 tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
+
+<img src="man/figures/README-3-reg-married.webp" width="776" alt="Logistic regression of being married on race, age and income: each modelled odds ratio sits beside its observed counterpart, colored by strength and greyed when not significant, over a model-fit footer.">
+
+<img src="man/figures/README-3-reg-married-shape-table.webp" width="776" alt="The shape table under the regression: the observed curve of the outcome against age, over its observed range.">
+
+Or as a black and white table ready for publication:
+
+```{r print-ready-reg, eval = FALSE}
+options(tabxplor.theme = "print_ready")
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+<img src="man/figures/README-4-reg-married-print-ready.webp" width="624" alt="The same regression table in the black-and-white publication theme: bold, italics and underlining replace the colors, on the same ladder of thresholds.">
 
 ## Export your tables
 

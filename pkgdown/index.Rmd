@@ -85,6 +85,18 @@ The same visual language extends to regression models: `tab_reg()` detects a bin
 tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
 
+Or as a black and white table ready for publication:
+
+```{r print-ready-reg, message = FALSE}
+options(tabxplor.theme = "print_ready")
+tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
+```
+
+```{r include=FALSE}
+options(tabxplor.theme = "light")
+```
+
+
 ## Export your tables
 
 Any table exports with its colors to Excel, html or markdown (for Word, copy-paste from Excel) :
@@ -94,6 +106,8 @@ tab(gss, marital, race, pct = "row", color = "difference") |> tab_html()
 tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl()
 tab(gss, marital, race, pct = "row", color = "difference") |> tab_xl(theme = "print_ready")
 ```
+
+
 
 ## Learn more
 

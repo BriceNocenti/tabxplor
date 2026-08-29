@@ -70,6 +70,17 @@ git push origin vx.y.z
   R-devel from 2026-03 that vctrs 0.7.2 will not load on). Use the platforms that vary the
   RUNTIME instead: `nosuggests` (the 25 Suggests and their `tx_need_pkg()` gates), `nold`,
   `atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`.
+- **`nosuggests` is the one worth rehearsing here first, and it is a real gate.** Its whole
+  mechanism is `_R_CHECK_DEPENDS_ONLY_=true`, which `tools:::.check_packages` alone reads -- so it
+  bites at CHECK time and reproduces locally, no rhub involved:
+  `withr::with_envvar(c("_R_CHECK_DEPENDS_ONLY_" = "true"), devtools::check(manual = TRUE))`.
+  ⚠ What it hides is `Depends + Imports + VignetteBuilder`, plus testthat for the tests step
+  (`tools:::setRlibs`) -- so anything else a TEST or a VIGNETTE reaches for must be guarded, the
+  same way every Rd example already is. Run it before a release; it takes 3 min and it is the
+  check most likely to find something.
+  If the rhub job instead sits silent for hours and dies at GitHub's 6 h limit, that is a stalled
+  container, not a result: `R CMD build` never reads that variable, so the build it hangs in is
+  the one every other platform finishes in ~90 s. Cancel it and re-run the platform alone.
 - `.Rbuildignore` stays identical on both branches — building the CRAN tarball
   from `dev` must keep working.
 - Hotfix on master only if CRAN demands an immediate patch: fix on `dev`,

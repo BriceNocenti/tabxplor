@@ -13,6 +13,7 @@ testthat::test_that("tab_export() dispatches to each format", {
   testthat::expect_no_error(as.character(tab_export(t_row, "html")))
   testthat::expect_type(tab_export(t_row, "md", print = FALSE), "character")
 
+  testthat::skip_if_not_installed("openxlsx2")
   f <- tempfile(fileext = ".xlsx")
   tab_export(t_row, "xl", path = f, open = FALSE, replace = TRUE)
   testthat::expect_true(file.exists(f) && file.size(f) > 0)

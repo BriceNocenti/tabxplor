@@ -974,7 +974,22 @@ nor R-devel r90246. So every package importing vctrs fails there identically. �
 now in `dev/release_checklist.md`: **tabxplor has no `src/`**, so `clang*` / `gcc*` / `c23` / `lto` /
 `*-asan` / `valgrind` / `rchk` exercise a toolchain the package never uses. The platforms that vary
 the RUNTIME are the ones worth spending: `nosuggests` (25 Suggests behind `tx_need_pkg()`), `nold`,
-`atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`.
+`atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`. ⚠ On the run that followed, five of
+those passed and `nosuggests` sat silent for **5h57m** and died at GitHub's 6 h limit — infrastructure
+again, and provably: its mechanism is `_R_CHECK_DEPENDS_ONLY_=true`, which `tools:::.check_packages`
+ALONE reads, so it is inert during the `R CMD build` the job hung in — the very build its twin image
+`atlas` (same Fedora 42, same R-devel r90185) finished in **89 s**. But the variable bites at CHECK
+time and so rehearses locally in one `withr::with_envvar()` -- and doing that found **three real
+gaps the stalled job would have reported**, now fixed and the run **0/0/0**. What it hides is
+`Depends + Imports + VignetteBuilder`, plus testthat for the tests step (`tools:::setRlibs`), so:
+`VignetteBuilder: knitr` whitelisted knitr but not **rmarkdown**, which every vignette's
+`output:` needs -- it is `knitr, rmarkdown` now, that field being R's own list of what a vignette
+build may reach; two tests called the Excel exporter with no `skip_if_not_installed("openxlsx2")`
+while their 26 siblings had one; and the ANSI-to-html knitr hook all five vignettes install called
+`fansi::` unguarded, so four of them died on their first console table -- it now degrades to
+stripped ASCII through one `ansi_html()`, and the one `forest_plot()` chunk that actually evaluates
+takes `eval = requireNamespace("ggplot2")`, the idiom every Rd example already used. Every Rd
+example passed untouched. The rehearsal is now a checklist step.
 
 **win-builder's ERROR and WARNING were one cause: the manual is LaTeX.** Seven `Unicode character
 not set up for use with LaTeX` — σ once, ⚠ six times — and nothing else in `man/` was at fault
@@ -1175,6 +1190,7 @@ restyles a `bookdown::gitbook` book (`dev/formations_stat_migration.md` §5.7), 
 stylesheet as an `htmlDependency` instead of a `<style>` per table — a dependency is per DOCUMENT and
 `theme =` is per CALL, so it needs a design, not a patch.
 
+#### Phase 24h — PR to master and pkgdown site online
 
 ### Phase 25 — CRAN release
 

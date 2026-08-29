@@ -146,6 +146,7 @@ testthat::test_that("every exporter accepts transpose = TRUE without error", {
   t <- tab(gss, c(marital, race), c(relig, tvhours), pct = "row", color = TRUE, na = "drop")
   testthat::expect_no_error(tab_md(t, transpose = TRUE, print = FALSE))
   testthat::expect_no_error(tab_kable(t, transpose = TRUE))
+  testthat::skip_if_not_installed("openxlsx2")
   testthat::expect_no_error(tab_xl(t, path = withr::local_tempfile(fileext = ".xlsx"),
                                    transpose = TRUE, replace = TRUE, open = FALSE))
 })
