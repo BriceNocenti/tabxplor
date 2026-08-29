@@ -101,7 +101,7 @@ children:
             stretchFactor: 3
             children:
               - type: Label
-                label: color = <i>(what measure of deviation the colors shows)</i>
+                label: color = <i>(what measure of deviation colors show)</i>
                 fitToGrid: true
                 children:
                   - type: RadioButton
@@ -375,7 +375,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: conf_level = <i>(confidence level)</i>
+                label: <b>conf_level = <i>(confidence level)</i></b>
                 children:
                   - type: TextBox
                     name: conf_level
@@ -389,7 +389,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: stars = <i>(significance stars)</i>
+                label: <b>stars = <i>(significance stars)</i></b>
                 children:
                   - type: CheckBox
                     name: stars

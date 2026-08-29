@@ -1279,10 +1279,14 @@ repository — so `dev/`, `CLAUDE.md` and `.claude/` are public on `dev` and alw
 keeps `master` user-facing and keeps development files out of the CRAN tarball and off the site; it is not
 concealment, and only a separate private repository would be.
 
-### Phase 25 — CRAN release
 
+### Phase 25 — CRAN submission
 
+**DONE**.
 
+#### Phase 6 — jamovi release
+
+#### Phase 6a — jamovi release preparation
 
 
 

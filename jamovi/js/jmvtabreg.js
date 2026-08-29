@@ -950,7 +950,7 @@ var TABX = {
 // would be a second control in a table that has no room for one. tab_reg() already parses it
 // (reg_anchor_value() reads a numeric string before the keywords).
 var REG_ANCHORS = ["", "0", "median", "min", "max"];
-var REG_ANCHOR_LABELS = { "": _("mean (default)"), "0": _("0 (as in glm)") };
+var REG_ANCHOR_LABELS = { "": _("mean (default)"), "0": _("0") };
 
 var VAR_TABLE_HOST = {
     ctrl: "varTableCtrl",

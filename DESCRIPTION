@@ -67,7 +67,7 @@ Imports:
     grid,
     survey (>= 3.0.0),
     nnet (>= 7.3.0),
-    MASS (>= 7.3.0),
+    MASS (>= 7.3.0)
 Depends:
     R (>= 4.1.0)
 VignetteBuilder: knitr, rmarkdown

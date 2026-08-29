@@ -174,9 +174,9 @@ options:
       title: "anova = <i>(which test for numeric variables ?)</i>"
       type: List
       options:
-        - title: "Welch <i>(unequal variances)</i>"
+        - title: "Welch (unequal variances)"
           name:  welch
-        - title: "classic <i>(equal variances)</i>"
+        - title: "classic (equal variances)"
           name:  classic
       default: welch
       description:
@@ -383,9 +383,9 @@ options:
       title: comp
       type: List
       options:
-        - title: "tab <i>(compare in each subtable)</i>"
+        - title: "tab (compare in each subtable)"
           name:  tab
-        - title: "all <i>(compare with the total subtable)</i>"
+        - title: "all (compare with the total subtable)"
           name:  all
       default: tab
       description:
@@ -459,11 +459,11 @@ options:
       title: ""
       type: List
       options:
-        - title: "wilson <i>(score, default)</i>"
+        - title: "wilson (score, default)"
           name:  wilson
-        - title: "wald <i>(normal approx.)</i>"
+        - title: "wald (normal approx.)"
           name:  wald
-        - title: "beta <i>(Clopper-Pearson exact)</i>"
+        - title: "beta (Clopper-Pearson exact)"
           name:  beta
       default: wilson
       description:
@@ -475,9 +475,9 @@ options:
       title: ""
       type: List
       options:
-        - title: "newcombe <i>(hybrid score)</i>"
+        - title: "newcombe (hybrid score)"
           name:  newcombe
-        - title: "ac <i>(Agresti-Caffo)</i>"
+        - title: "ac (Agresti-Caffo)"
           name:  ac
         - title: wald
           name:  wald
@@ -492,11 +492,11 @@ options:
       title: ""
       type: List
       options:
-        - title: "welch <i>(unequal variances)</i>"
+        - title: "welch (unequal variances)"
           name:  welch
-        - title: "student <i>(pooled variance, 2 groups)</i>"
+        - title: "student (pooled variance, 2 groups)"
           name:  student
-        - title: "ols <i>(pooled over all levels)</i>"
+        - title: "ols (pooled over all levels)"
           name:  ols
       default: welch
       description:
@@ -510,11 +510,11 @@ options:
       title: ""
       type: List
       options:
-        - title: "robust <i>(each group's variance)</i>"
+        - title: "robust (each group's variance)"
           name:  robust
-        - title: "quasipoisson <i>(dispersion-scaled)</i>"
+        - title: "quasipoisson (dispersion-scaled)"
           name:  quasipoisson
-        - title: "poisson <i>(naive counts)</i>"
+        - title: "poisson (naive counts)"
           name:  poisson
       default: robust
       description:
@@ -594,41 +594,41 @@ options:
       options:
         - title: "auto"
           name:  auto
-        - title: "base <i>(pct or mean)</i>"
+        - title: "base (pct or mean)"
           name:  base
-        - title: "base_ci <i>(base + interval)</i>"
+        - title: "base_ci (base + interval)"
           name:  base_ci
-        - title: "ci <i>(interval alone)</i>"
+        - title: "ci (interval alone)"
           name:  ci
-        - title: "diff <i>(difference to ref)</i>"
+        - title: "diff (difference to ref)"
           name:  diff
-        - title: "ratio <i>(ratio to ref)</i>"
+        - title: "ratio (ratio to ref)"
           name:  ratio
-        - title: "or <i>(odds ratios)</i>"
+        - title: "or (odds ratios)"
           name:  or
-        - title: "base_diff <i>(base + diff)</i>"
+        - title: "base_diff (base + diff)"
           name:  base_diff
-        - title: "base_ratio <i>(base + ratio)</i>"
+        - title: "base_ratio (base + ratio)"
           name:  base_ratio
-        - title: "or_base <i>(OR + pct)</i>"
+        - title: "or_base (OR + pct)"
           name:  or_base
-        - title: "base_or <i>(pct + OR)</i>"
+        - title: "base_or (pct + OR)"
           name:  base_or
-        - title: "n <i>(counts)</i>"
+        - title: "n (counts)"
           name:  "n"
-        - title: "wn <i>(weighted counts)</i>"
+        - title: "wn (weighted counts)"
           name:  wn
-        - title: "pct <i>(percentages)</i>"
+        - title: "pct (percentages)"
           name:  pct
-        - title: "mean <i>(numeric variables)</i>"
+        - title: "mean (numeric variables)"
           name:  mean
-        - title: "mean_sd <i>(mean + sd)</i>"
+        - title: "mean_sd (mean + sd)"
           name:  mean_sd
-        - title: "mean_cv <i>(mean + cv)</i>"
+        - title: "mean_cv (mean + cv)"
           name:  mean_cv
-        - title: "ctr <i>(contribs to var.)</i>"
+        - title: "ctr (contribs to var.)"
           name:  ctr
-        - title: "var <i>(variance)</i>"
+        - title: "var (variance)"
           name:  var
       default: auto
       description:
