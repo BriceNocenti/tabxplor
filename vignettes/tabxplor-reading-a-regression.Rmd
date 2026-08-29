@@ -4,7 +4,7 @@ description: >
   One analysis walked from a first cross-table to a finished sentence — what a model adds, what it takes away, and how to say it without losing the percentages.
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Reading a regression without losing sight of the percentages}
+  %\VignetteIndexEntry{Reading a regression model without losing sight of the observed data}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
