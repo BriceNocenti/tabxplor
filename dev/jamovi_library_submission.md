@@ -188,20 +188,15 @@ The old artifacts are kept, not deleted: `tabxplor_2.0.0_R4.5.0-x64-linux.jmo` a
 - [ ] Renaming a module after submission is costly — `tabxplor` is final.
 - [ ] For future updates, bump the version in **both** `DESCRIPTION` and `jamovi/0000.yaml`.
 
-## The email
+## email
 
 To: `contact@jamovi.org`
 Subject: Module submission — tabxplor 2.0.0 (crosstables and regression tables)
 
-Replace `<LINK>` with wherever you host the `.jmo`. **The "tested on jamovi 28.2 (Linux)" line is
-only accurate once the manual GUI session above is done** — the build and the unit tests pass on
-28.2, but the UI has not been driven by hand there yet. Either run that session first, or soften the
-line to say 2.7.36 / 2.7.37 were the manually tested versions.
-
 ```text
 Hello,
 
-I would like to submit tabxplor to the jamovi library.
+I’m a sociology professor at University of Burgundy, France, and I would like to submit the tabxplor module to the jamovi library.
 
   Module   : tabxplor, version 2.0.0
   Source   : https://github.com/BriceNocenti/tabxplor (branch master)
@@ -210,25 +205,24 @@ I would like to submit tabxplor to the jamovi library.
              both under the "tabxplor" menu group
   Docs     : https://bricenocenti.github.io/tabxplor/
 
-tabxplor builds cross-tables for data exploration, with colour helpers that
-highlight deviations (differences from totals, comparisons between rows or
-columns, contributions to variance, odds ratios) and significance (confidence
-intervals, stars). The same grammar applies to regression models, so a model's
-adjusted effects can be compared systematically with their crude counterparts.
-Survey weights are fully supported, and tables can be exported to Excel, HTML
-and markdown. The R package is on CRAN (submitted, currently pending review).
+I use both the R package and the jamovi UI to teach quantitative sociology (and I also use jamovi to teach R programming smoothly, starting from the buttons to teach the related code, that’s why the arguments names are displayed in the UI). Until now I was compiling the .jmo myself for Windows, students could not make it work on Mac OS, etc., but they would need it to work on their own data at home.
 
-Both analyses have been tested on jamovi 28.2 (Linux) and 2.7.37 (Windows),
-including datasets with missing values, empty selections, accented and special
-characters in variable names, and weighted data. Both implement input checks
-and fail gracefully rather than crashing. The module ships a French UI
-translation alongside English.
+I love jamovi and I think my students do too, and in the past I had some difficulties to use the shipped crosstables and regressions models, because the approach is more tests-based, perfect for experimental sciences like medicine or psychology, but social sciences working on survey data, like sociology, are often more effect-size-based (tests validate the tables but the tables are more importants than the tests, etc.). `tabxplor` makes cross-tables and regression models readable at a glance for data exploration. It builds a table with percentages, weighted counts (working with jamovi weights), confidence intervals, tests, and colors highlight the cells that stand out from the reference category, only when the difference is significant, etc. The regression part shows the observed effect alongside the model estimated to teach what the adjustement do, which is quite useful for teaching too.
 
-A Linux x64 build (R 4.6.0) is available here if it helps for testing:
-<LINK>
+I’ve tested both UIs live on jamovi 28.2 (Ubuntu) and 2.7.37 (Windows), both in English and French. 
+
+A Linux x64 build (R 4.6.0) is attached if it helps for testing.
+
+The R package 2.0.0 version itself is on it’s way to CRAN, and is green on : 
+- [Github action](https://github.com/BriceNocenti/tabxplor/actions/runs/33243522983) : "macOS, R-release"; "Microsoft Windows Server, R-release"; "Ubuntu Linux LTS, R-devel"; "Ubuntu Linux LTS, R-release"; "Ubuntu Linux LTS, R-oldrel-1"
+- [R win-builder (R-devel)](https://win-builder.r-project.org/BpTORb79u0GB/)
+- [rhub](https://github.com/BriceNocenti/tabxplor/actions/runs/33245122778) : "nold", "atlas", "mkl", "ubuntu-next", "ubuntu-release"
 
 Happy to make any change you need.
 
+Thanks for all your work on jamovi,
+
 Best regards,
+
 Brice Nocenti
 ```
