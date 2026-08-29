@@ -306,7 +306,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content.** A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone; a *variable* name is written vertically only where the rotation actually saves width — the names that cannot turn, a one-row block like `Constant`, set the floor every other name is weighed against, and a rotated one wraps to its block's own height. That decision is one prep fact both media read. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
@@ -1040,6 +1040,140 @@ YAML description, a URL or a test — no number and no rendered cell is reachabl
 re-run win-builder and rhub (without the compiler containers); then finish `cran-comments.md`, which
 still claims "no NOTEs" everywhere and needs the real run links and whatever the fresh runs say.
 
+
+
+#### Phase 24g — what the courses' migration audit asks of the package ✓ DONE
+
+A 1.3.1-era corpus of university courses was audited against 2.0.0 (`dev/formations_stat_migration.md`,
+a one-off audit that moves to `dev/archive_2.0.0/` once the port is done). Most of what it found is
+the courses' to fix. This phase was the package's part — seven places where 2.0.0 broke a contract
+1.3.1 honoured or said something in a comment the code did not do — plus **Quarto citizenship**,
+because the courses are moving to `.qmd`. No redesign: every item landed in a declared table or a
+boundary that already existed, and two of them REMOVED an inconsistency rather than adding a lever.
+
+**A caption is a fact about the table, so a producer states one.** `caption` was an `EXPORT_ARGS` row
+only, so the sole way to attach one at build time was `set_caption()` — backwards, `subtext` being a
+`tab()` argument. One new `TAB_ARGS` row beside `subtext` (`producers = c("tab", "tab_reg",
+"tab_counts")`) and one write per producer, through the existing `set_caption()`, which stays the only
+writer of `meta$spec$vars$caption`; `rd_caption()` is untouched, so an exporter's own `caption =` keeps
+precedence. `tab()` and `tab_reg()` gain a formal, `tab_counts()` **none** — it binds its whole surface
+off `...` through `tab_dots_expand()`, so declaring the producer is the entire wiring. ⚠ The write sits
+**before** `as_tabxplor_tabs()` / `new_tabxplor_tabs()` in all four returns: `set_caption()` maps over a
+list and `purrr::map()` hands back a bare one, so the re-class after it is what keeps `output_list =
+TRUE` and a multi-outcome `tab_reg()` their class. It is skipped on `.return_armed`, the jamovi
+live-cache seam, which returns mid-build and never passes one. `set_caption(x, NULL)` is
+attribute-identical to no call at all, so the unconditional call costs nothing and moved no golden.
+
+**The caption's markup is host-aware — one rule, three hosts.** `bookdown:::parse_fig_labels()` numbers
+a table only where a line matches `^\s*<caption`, and 2.0.0 emitted the title as a `<div>` sibling: so
+**every captioned table in a bookdown document kept the raw label in its title, registered no anchor,
+and every `\@ref(tab:…)` rendered `??`** — while tabxplor's own instructions name
+`bookdown::html_document2()` as the required target. `tx_caption_host()` (`R/tab-render-html.R`) now
+reads the two flags the ecosystem itself uses, through the existing `tx_knitr_opt()`: a real
+`<caption>` under bookdown (`bookdown.internal.label`), **nothing** under Quarto when the cell wrote
+`tbl-cap` (`quarto.version` + the cell option), the `<div>` everywhere else — including the Viewer,
+`tab_export(file =)` and jamovi, where `tx_knitr_opt()` answers NULL.
+
+⚠ **Three facts measured by rendering, not read off docs, and each now a `# WARNING:` at its line.**
+(1) **The inner element must be a `<span>`, never a `<div>`** — the obvious shape, and the wrong one:
+bookdown's scan runs on the POST-pandoc html, and pandoc's writer gives every *block* tag a line of its
+own, pushing the label two lines below `<caption>` and out of the `content[i - 0:1]` window; a `<span>`
+stays on the text's line and still carries the width guard, `display:block;width:0;min-width:100%` (the
+`.tx-foot` idiom) being what stops a long title sizing a narrow table. (2) **`caption-side:top` is
+load-bearing**: Bootstrap puts a caption at the BOTTOM and `tx_html_deps()` injects Bootstrap into every
+knitted document, so without `.tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}` the bookdown
+arm's title would sit under its table. (3) Pandoc **unescapes** `\#` → `#`, which is why the token
+bookdown greps for is `(#tab:x)` and nothing in R must touch it (`tx_html_escape()` cannot: it holds no
+`& < >`). ⚠ A bare `label: tbl-x` with no `tbl-cap` still numbers a Quarto table, so tabxplor's own
+title is kept there — only `tbl-cap` stands us down.
+
+**Quarto citizenship.** Every `<table>` tabxplor emits opens through one `tx_table_open()` carrying
+`data-quarto-disable-processing="true"` — the engine, the shape table and the degrade path, so a fourth
+site cannot forget it. Measured on **Quarto 1.10.18 + knitr 1.51** through the real `asis_output` path:
+without it the class comes back `tabxplor-tab cell caption-top table table-sm table-striped small` with
+a `<tr class="odd">`, `table-striped`'s zebra fill fighting colour-coded cells; with it the markup
+passes through byte-for-byte and cross-references still resolve. ⚠ It reproduces only on that path, not
+on `cat()` under `results: asis` — and it reaches the html engine only: `tab_md()`'s table is generated
+by pandoc from a pipe table, where `html-table-processing: none` is the user-side lever. The **raw-HTML
+fence** is a `# WARNING:` at `tab_kable_join()`, the one producer of the final string: Quarto fences
+asis output as `{=html}` only when it matches `^<\w+[ >]` and ends `</\w+>\s*$`, and a leading HTML
+comment would be enough to have the whole thing parsed as markdown instead.
+
+**The exporters refuse what they cannot use.** `tab_html()`, `tab_md()`, `tab_xl()`, `tab_css()` and
+`forest_plot()` each called `tx_deprecate_inert()` and **discarded its return value**, then never looked
+at `...` again — so `position =` (519 sites in one corpus), `n_min =` and every typo were accepted in
+silence, while `tab()` errored with a did-you-mean. All five now go through one named operation,
+`tx_export_dots()` — filter the retired names, then hand what is left to the same `tab_check_dots()`
+the producers use. It is one call because doing either half without the other is exactly what went
+wrong, and the error names the user's own call
+(*Unknown argument `colwith` in `tab_xl()`. i Did you mean `colwidth`?*). Its `known` set widens from the declared rows to **the declared rows PLUS the
+producer's own formals**: neither is the whole answer on its own, the grid being wider on `tab_counts()`
+and the signature wider on an exporter, where `EXPORT_ARGS` declares only the rows whose prose it needs.
+It is provably a no-op on the five crosstab producers, whose formals `tx_check_tab_args()` already
+asserts are declared. ⚠ `tab_export()` is deliberately left permissive — its `...` really is a
+pass-through and the leaf validates it; a check of its own would refuse a legitimate `css =`. ⚠ And an
+ABBREVIATION still partial-matches on an exporter, whose `...` is written last, so only a real typo
+lands in the dots — the opposite of `tab()`. The change caught **four latent typos** on its first run,
+all in `dev/tests/` (`tab_kable(tooltip =)`, three `tab_html(print =)`), plus one in the shipped suite.
+
+**Deprecations that fire, and a promise the code keeps.** `tx_deprecate_inert()` now takes `user_env`,
+**with no default** — because no default is right: lifecycle's own lands on that function's frame, an
+obvious one would land on the exporter's, and for either lifecycle sees an internal caller and says
+NOTHING AT ALL. That is how five retired arguments went a whole release without ever warning. It has to
+be `rlang::caller_env()` read in the exporter's own body, the one frame that names the person who typed
+the argument — and **having no default is the guard**, since a caller then has to decide. ⚠ The silent
+half is not assertable in the suite: under testthat, `deprecate_soft()` warns for the package under test
+whatever frame it is given, so what the test locks is that a frame must be given at all. `position`, `n_min` and `hide_near_zero` join
+`TX_INERT_EXPORT_ARGS`. `$rr` gains the read branch its own comment at `R/fmt_class.R` already promised,
+beside `ci` / `tot_wn` / `in_totrow`; `mutate()` stays permissive. ⚠ `normalize_color_spec()`'s
+`caller_env(2)` **stays two frames short on purpose** — a `# WARNING:` at the line says so: the colour
+aliases it remaps compute identical numbers, so a message on the commonest argument there is would be
+pure noise.
+
+**`get_test()` is public, `get_chi2()` is shimmed.** `get_chi2()` was 1.x's only programmatic route to a
+table's test and the one removal in the release with neither a shim nor a `NEWS.md` line; it is back as
+an unexported soft-deprecated alias returning `get_test(x)` — the spelling the corpus uses is `:::` —
+naming the two fields that moved (`df` → `df1`, `count` → `statistic`) and pointing the per-cell rows at
+the cells' own `ctr` field, `get_ctr()` being internal. `get_test()` gains `@export` and a page stating
+what the attribute IS — one tidy row per test, keyed `var` / `col`, a new kind of test being new ROWS —
+without restating the column list `new_test_tibble()` owns. ⚠ A table that ran none carries the **empty**
+tibble, same columns, not `NULL`. `set_test()` stays internal: `test` is row-bound and the vctrs
+reconcilers `vec_rbind` it, so `new_tab(test =)` is the validating writer. `_pkgdown.yml`: `get_test`
+joins *Inspect a table*, "Captions and options" becomes **Options**, and `set_caption` joins the block
+beside `new_tab` / `fmt_attr`, retitled *The type system* to cover the table's own attributes.
+
+**`NEWS.md` accuracy pass** — corrections only, no new bullet. `broom` is not a dependency at all;
+`get_n()` is internal in both versions, so the base count reads `Total$n`; of the six functions listed as
+removed only `tab_plot()` and `kable_tabxplor_style()` were ever exported in 1.3.1 (checked against
+`b812c5f:NAMESPACE`), the other four being `master`-only non-events; `print.tabxplor_kable()`, not
+kableExtra's, is what opens the Viewer page; and the inert export arguments move out of *Removed (now an
+error)*, where none of them ever belonged, into *Soft-deprecated* with the three new names and the
+strict-dots rule beside them. `caption =` replaces the `set_caption()` mention on the html line, so the
+new argument is stated without a new bullet.
+
+**Measured.** Shipped suite **FAIL 0 | PASS 4632** (+78) in ~40 s, the one WARN and two SKIP
+pre-existing and environmental. Two snapshots moved, each verified line by line before acceptance:
+`_snaps/tab-render-html.md` for exactly four `<table>` tags, `_snaps/golden.md` for exactly the two new
+CSS rules across its 16 style blocks. The structural `_golden/*.rds` did not move and could not — no
+number is reachable from any of this. New assertions in their subsystem homes:
+`test-tab-render-html.R` (the three hosts, bookdown's own line-shape predicate, the attribute on all
+three emit sites, the fence invariant over five shapes, the two CSS rules), `test-tab-args.R` (the row,
+the three producers, `NULL` as a no-op, the class kept through a list, the widened `known` proven a
+no-op on the producers), `test-tab-export-prep.R` (the fallback chain), `test-tab-deprecate.R`
+(`get_chi2()`, all five exporters refusing and warning, `tab_export()` still forwarding),
+`test-utils.R` (`tx_deprecate_inert()`, which had no test at all — which is how the `user_env` bug
+stayed invisible) and `test-fmt.R` (`$rr`). ⚠ Two of them had to be rewritten once the run was
+parallel: `deprecate_soft()` warns once per session per message, so a test naming a real exporter's
+retired argument passes or fails on which file ran first — the probes use a label of their own. ⚠ **Verified by rendering, twice**: a
+`bookdown::html_document2` document where a `tab(caption =)` and a `set_caption()` table both get
+`Table 1.1:` / `Table 1.2:`, resolving `\@ref(tab:…)` and leaving no raw token; and a `.qmd` through
+the Positron-bundled Quarto where the `tbl-cap` cell shows exactly one caption, the `label`-only cell
+keeps tabxplor's title and is still numbered, and neither table is restyled.
+
+⚠ **Out of scope, recorded so it is not re-derived**: whether `tx_html_deps()`'s bootstrap-cosmo
+restyles a `bookdown::gitbook` book (`dev/formations_stat_migration.md` §5.7), and shipping the
+stylesheet as an `htmlDependency` instead of a `<style>` per table — a dependency is per DOCUMENT and
+`theme =` is per CALL, so it needs a design, not a patch.
 
 
 ### Phase 25 — CRAN release

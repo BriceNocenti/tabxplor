@@ -48,6 +48,7 @@
 #' @param print If `TRUE`, print via `cat()` and return invisibly; if `FALSE`, return the string.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`, `html_24_bit`): colour is a CSS class, and exports are always 24-bit.
+#'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #'
 #' @return A character string (visible or invisible depending on `print`).
 #' @export
@@ -81,7 +82,7 @@ tab_md <- function(tabs,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated(),
                    ...) {
-  tx_deprecate_inert(rlang::list2(...), "tab_md")
+  tx_export_dots(rlang::list2(...), "tab_md", rlang::caller_env())
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   if (lifecycle::is_present(title)) {
     lifecycle::deprecate_soft("2.0.0", "tab_md(title)", "tab_md(caption)")

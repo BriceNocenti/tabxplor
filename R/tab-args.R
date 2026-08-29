@@ -362,6 +362,13 @@ TAB_ARGS <- list(
   subtext = list(
     producers = c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"), default = "",
     default_for = list(tab_reg = ""), doc = "A character vector to print rows of legend under the table."),
+  caption = list(
+    producers = c("tab", "tab_reg", "tab_counts"),
+    doc = c("A title for the table. It is \\strong{stored on the table}, so it survives a",
+            "\\pkg{dplyr} pipeline and travels into every export --- html, Markdown, Excel,",
+            "\\code{\\link{forest_plot}()} --- where an exporter's own \\code{caption} still wins.",
+            "\\code{\\link{set_caption}()} attaches one after the fact, \\code{get_caption()}",
+            "reads it back.")),
   output_list = list(
     producers = c("tab"),
     default = FALSE,
@@ -664,10 +671,12 @@ tab_arg_status <- function(name, producer = NULL) {
   if (!is.null(producer) && producer %in% names(st)) st[[producer]] else "live"
 }
 
-# --- `...` on the superseded producers ------------------------------------------------------------
+# --- `...`, on BOTH halves of the API --------------------------------------------------------------
 # tab_check_dots() validates `...`: an unnamed argument is refused by name rather than silently
-#   bound to a formal's position, and a typo gets a suggestion. It validates the crosstab producers
-#   AND tab_reg(), but not the exporters -- a backend's `...` is a pass-through.
+#   bound to a formal's position, and a typo gets a suggestion. Every entry point whose `...` is not
+#   a pass-through calls it -- the crosstab producers, tab_reg(), and the five exporters, which reach
+#   it through tx_deprecate_inert() (R/utils.R) so a RETIRED name warns and anything else aborts.
+#   ⚠ tab_export() is deliberately absent: its `...` really is a pass-through, and the leaf checks it.
 #' @keywords internal
 #' @noRd
 tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
@@ -676,11 +685,18 @@ tab_check_dots <- function(dots, producer, call = rlang::caller_env()) {
     pos <- if (is.null(nms)) seq_along(dots) else which(!nzchar(nms))
     cli::cli_abort(c(
       "{cli::qty(length(pos))}Argument{?s} {pos} of {.fn {producer}} {?is/are} not named.",
-      "i" = "Only {.arg data} and the variable roles are positional; name everything else."),
+      "i" = if (producer %in% EXPORT_PRODUCERS) "Only the table is positional; name everything else."
+            else "Only {.arg data} and the variable roles are positional; name everything else."),
       call = call)
   }
   if (!length(dots)) return(invisible(TRUE))
-  known <- tab_args_for(producer)
+  # DESIGN: what the function accepts is the DECLARED rows plus its own formals, because neither is
+  #   the whole answer on its own -- the grid is wider than the signature on a producer that takes
+  #   its surface off `...` (tab_counts()), and the signature is wider than the grid on an exporter,
+  #   where EXPORT_ARGS declares only the rows whose prose it needs. The union is what makes the
+  #   suggestion below name a real argument rather than the nearest declared one.
+  known <- union(tab_args_for(producer),
+                 setdiff(names(formals(get(producer, envir = asNamespace("tabxplor")))), "..."))
   # A dot-prefixed name is internal plumbing (the jamovi live-cache / level-merge fields), never a
   #   user argument, so it is never flagged as unknown.
   bad   <- setdiff(nms, known)

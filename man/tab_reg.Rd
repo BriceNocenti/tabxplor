@@ -31,6 +31,7 @@ tab_reg(
   digits = 0,
   cleannames = NULL,
   subtext = "",
+  caption = NULL,
   ...
 )
 }
@@ -317,6 +318,9 @@ that outcome's magnitude, so a six-figure salary prints no decimals and a rate p
 Uses \code{getOption("tabxplor.cleannames")} when \code{NULL}.}
 
 \item{subtext}{Optional character. A note shown below the table.}
+
+\item{caption}{A title for the table, stored on it and carried into every export. Without one a
+regression table titles itself from the model it shows.}
 
 \item{...}{One rarely-typed argument, plus internal plumbing.
 

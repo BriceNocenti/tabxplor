@@ -103,7 +103,8 @@ follows \code{getOption("tabxplor.export_theme")}.}
 
 \item{return_data}{Return the long estimate tibble instead of the plot.}
 
-\item{...}{Unused.}
+\item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0.
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 A \code{ggplot} (or a list of them), ready for \code{+ theme()} and \code{ggsave()}.

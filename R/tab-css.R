@@ -392,12 +392,19 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # ⚠ the `.tabxplor-tab table` half of the rule above keeps `margin:0`, and out-specifies this at
     # (0,1,1): a markdown div's INNER table must not add a second gap.
     paste0(".tabxplor-tab{margin-bottom:", TX_TAIL_SPACE, ";}"),
-    # the table TITLE is a `<div class="tabxplor-caption">` sibling emitted BEFORE the <table>, not a
-    # `<caption>` child (see above). `width:0;min-width:100%` is the same idiom as `.tx-foot` below --
-    # otherwise a long title would SIZE a shrink-to-fit container (jamovi's `.tx-scrollbox`). Its colour
-    # (full-contrast) is added to the rule table below.
-    paste0(".tabxplor-caption{text-align:left;font-weight:bold;font-size:110%;white-space:normal;",
-           "width:0;min-width:100%;}"),
+    # the table TITLE is ONE class on one of two elements: a `<div>` sibling emitted BEFORE the
+    # <table>, or -- under bookdown, the one host that numbers tables by scanning for a `<caption>` --
+    # a `<span>` inside a real `<caption>` (R/tab-render-html.R, tx_caption_host()). `width:0;
+    # min-width:100%` is the same idiom as `.tx-foot` below: otherwise a long title would SIZE a
+    # shrink-to-fit container (jamovi's `.tx-scrollbox`), and `display:block` is what lets the span
+    # honour it. Its colour (full-contrast) is added to the rule table below.
+    paste0(".tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;",
+           "white-space:normal;width:0;min-width:100%;}"),
+    # ⚠ `caption-side` is not decoration: BOOTSTRAP puts a caption at the BOTTOM, and tabxplor injects
+    # bootstrap into every knitted document (tx_html_deps()) -- so without this the bookdown arm's
+    # title would sit under its table. The padding reset is Bootstrap's too; text-align and colour
+    # need no rule, `.tabxplor-caption` (0,1,0) already out-specifying both element selectors.
+    ".tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}",
     ".tabxplor-tab tfoot{font-size:80%;text-align:left;}",
     # readable-compact: a real vertical rhythm (line-height 0.85 crammed the rows) + ~1mm of side
     # padding, so text no longer touches the column borders.
@@ -656,6 +663,7 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
 #'   by `color = c(text, background)` (see [tab()]).
+#'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #' @param format Which output the stylesheet is for, in [tab_export()]'s own vocabulary.
 #'   `"html"` (the default) is the full stylesheet [tab_html()] needs: the colour classes **and**
 #'   the table's own look (font, background, border colours, the greys). `"md"` emits the colour
@@ -681,7 +689,7 @@ tab_css <- function(theme = NULL, format = c("html", "md"),
     cli::cli_abort(c("{.arg chrome} is now {.arg format}, which names the output it is for.",
                      "i" = 'chrome = TRUE  ->  format = "html"  (the default)',
                      "i" = 'chrome = FALSE ->  format = "md"'))
-  tx_deprecate_inert(dots[setdiff(names(dots), "chrome")], "tab_css")
+  tx_export_dots(dots[setdiff(names(dots), "chrome")], "tab_css", rlang::caller_env())
   format <- rlang::arg_match(format)
   chrome <- identical(format, "html")
   o   <- resolve_export_opts(theme = theme, allow_auto = TRUE)

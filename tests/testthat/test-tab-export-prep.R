@@ -259,3 +259,21 @@ test_that("under comp = \"all\" a stacked sub-total is not a reference row", {
   expect_true(any(slot[sub] != 0L))
   expect_true(all(slot[is_totrow(col) & is_tottab(col)] == 0L))
 })
+
+
+# === Phase 24g: the caption fallback chain, with a THIRD way in ==================================
+
+testthat::test_that("rd_caption() still reads exporter > stored > a regression's own title", {
+  d <- fx_gss()
+  t <- tab(d, race, marital, pct = "row", caption = "Built in")
+  testthat::expect_match(as.character(tab_html(t)), "Built in", fixed = TRUE)
+  # the exporter's own argument still wins over a stored one, whichever way it was stored
+  testthat::expect_match(as.character(tab_html(t, caption = "Exporter")), "Exporter", fixed = TRUE)
+  testthat::expect_false(grepl("Built in", as.character(tab_html(t, caption = "Exporter")),
+                               fixed = TRUE))
+  # ... and a regression's auto-title is the last resort, so a stored caption displaces it
+  r <- suppressMessages(tab_reg(fx_reg_df(), "marital", "race", family = "binomial",
+                                caption = "My model"))
+  testthat::expect_identical(get_caption(r), "My model")
+  testthat::expect_match(as.character(tab_html(r)), "My model", fixed = TRUE)
+})

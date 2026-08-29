@@ -256,7 +256,7 @@ test_that("the outcome bracket is stripped in EVERY backend, wrapped names inclu
     testthat::expect_false(any(grepl("[", cl, fixed = TRUE)), info = b)
   }
   # html WRAPS the header names first, so the separator before the bracket is not a plain space
-  h <- as.character(tab_html(t, print = FALSE))
+  h <- as.character(tab_html(t))
   testthat::expect_false(grepl("[married]", substr(h, 1L, regexpr("</thead>", h)), fixed = TRUE))
 })
 
@@ -291,7 +291,7 @@ testthat::test_that("a predictor-subset comparison names its models once, in eve
   }
   # ⚠ html WRAPS the column NAMES before the header is built and leaves the col_var attribute raw,
   # so the guard compared a wrapped string to an unwrapped one and silently stopped firing there
-  h    <- as.character(tab_html(t, print = FALSE))
+  h    <- as.character(tab_html(t))
   head <- substr(h, 1L, regexpr("</thead>", h))
   testthat::expect_identical(lengths(regmatches(head, gregexpr("who", head, fixed = TRUE)))[[1]], 1L)
   # ...and the two models remain two BLOCKS: the vertical rule reads the col_var attribute, which

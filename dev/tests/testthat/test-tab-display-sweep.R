@@ -918,7 +918,7 @@ testthat::test_that("tab_reg() shows stars by default; stars = FALSE strips the 
 
 testthat::test_that("tab_kable main cells carry stars (opt-in) but tooltips do not leak them", {
   t1  <- tab(gss, marital, race, pct = "row", ci = "ref", stars = TRUE)
-  html <- as.character(tab_kable(t1, tooltip = TRUE))
+  html <- as.character(tab_kable(t1, tooltips = TRUE))
   testthat::expect_true(grepl("\\*", html))                    # main cells show stars
   # every data-toggle tooltip title is star-free (secondary fields do not leak stars)
   titles <- unlist(regmatches(html, gregexpr('title="[^"]*"', html)))

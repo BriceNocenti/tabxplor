@@ -184,26 +184,49 @@ tx_str_trunc <- function(string, width, ellipsis = "...") {
 }
 
 # A retired export argument is absorbed by `...`, named here, warned about ONCE per call and never
-# forwarded; anything else in `...` passes through untouched, so a real typo still errors at the leaf.
+# forwarded. What this filter LEAVES is then refused by tab_check_dots(), so an exporter answers a
+# typo exactly as tab() does -- the two halves of one API cannot disagree about what a typo is.
 #' @keywords internal
 TX_INERT_EXPORT_ARGS <- c(
   color_type  = "the text channel always uses the text palette; the CHANNEL is chosen by color = c(text, background)",
   html_24_bit = "exports are always 24-bit",
   engine      = "there is one HTML engine; restyle it with tab_css()",
   html_font   = "the font is a CSS rule -- set it with tab_css() or your own stylesheet",
-  full_width  = "table width is a CSS rule -- set it with tab_css() or your own stylesheet"
+  full_width  = "table width is a CSS rule -- set it with tab_css() or your own stylesheet",
+  position    = "placement is a CSS rule -- set it with tab_css() or your own stylesheet",
+  n_min          = "the small-base filter runs at build now: tab(n_min = )",
+  hide_near_zero = "what a cell shows is its display template -- see ?tabxplor-display"
 )
 
+# ⚠ WARNING: `user_env` has no default because no default is right -- lifecycle's own lands on this
+# function's frame, an obvious one would land on the exporter's, and for either lifecycle sees an
+# internal caller and says NOTHING AT ALL. That is how five retired arguments went a whole release
+# without ever warning. It must be `rlang::caller_env()` read in the EXPORTER'S OWN body.
 #' @keywords internal
-tx_deprecate_inert <- function(dots, fn) {
+tx_deprecate_inert <- function(dots, fn, user_env) {
   hit <- intersect(names(dots), names(TX_INERT_EXPORT_ARGS))
   for (nm in hit) {
     lifecycle::deprecate_soft(
       "2.0.0", I(paste0(fn, "(", nm, " = )")),
-      details = c("i" = paste0("Inert since 2.0.0: ", TX_INERT_EXPORT_ARGS[[nm]], "."))
+      details = c("i" = paste0("Inert since 2.0.0: ", TX_INERT_EXPORT_ARGS[[nm]], ".")),
+      user_env = user_env
     )
   }
   dots[setdiff(names(dots), names(TX_INERT_EXPORT_ARGS))]
+}
+
+# AN EXPORTER'S `...` IS NOT A PASS-THROUGH: it exists to absorb the retired names, so what the
+# filter above leaves is a typo, and is refused exactly as tab()'s own boundary refuses one. The two
+# halves are ONE call because doing either without the other is what went wrong -- warning nobody
+# (no `user_env`), or swallowing a typo (no check).
+# ⚠ `user_env` has no default on purpose: every caller passes `rlang::caller_env()` from the
+# EXPORTER'S OWN BODY, which is the only frame that names the person who typed the argument. `call`
+# is the OTHER frame -- the exporter's own, so the error reads as coming from tab_html() rather than
+# from here -- and caller_env() reads it correctly because this is only ever called from that body.
+#' @keywords internal
+tx_export_dots <- function(dots, fn, user_env) {
+  tab_check_dots(tx_deprecate_inert(dots, fn, user_env = user_env), fn,
+                 call = rlang::caller_env())
 }
 
 

@@ -34,8 +34,9 @@
 #'   Defaults to \code{getOption("tabxplor.theme")}. See \code{\link{tab_css}} for what each says.
 #' @param caption A single caption / title for the table.
 #' @param ... Format-specific arguments passed to the underlying exporter. Retired arguments
-#'   (`color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`) are caught here, reported
-#'   once, and not forwarded.
+#'   (`color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`, `position`, `n_min`,
+#'   `hide_near_zero`) are caught here, reported once, and not forwarded; the exporter this hands to
+#'   refuses anything else it cannot use.
 #'
 #' @return The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown
 #'   string (\code{"md"}), \code{x} invisibly with the Excel file written (\code{"xl"}), or a
@@ -52,7 +53,7 @@ tab_export <- function(x, format = c("html", "md", "xl", "forest"), path = NULL,
                        color = TRUE, color_legend = TRUE, lang = NULL, transpose = FALSE,
                        caption = NULL, var_names = NULL, ...) {
   format <- match.arg(format)
-  dots <- tx_deprecate_inert(rlang::list2(...), "tab_export")
+  dots <- tx_deprecate_inert(rlang::list2(...), "tab_export", user_env = rlang::caller_env())
   # do.call() so the FILTERED dots travel -- `...` may still hold a retired name.
   fwd <- function(f, ...) do.call(f, c(list(x), rlang::list2(...), dots))
   switch(

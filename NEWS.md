@@ -48,7 +48,7 @@
 * **`tab_export()`** is one entry point for every format, and **`tab_html()`** (the new name for
   `tab_kable()`) renders through a new dependency-free engine, about 3× faster and restylable because
   its geometry is CSS classes; **`tab_css()`** writes one stylesheet for a whole document. Also new:
-  `options(tabxplor.print = "html")` with hover tooltips, `set_caption()`, `transpose = TRUE`.
+  `options(tabxplor.print = "html")` with hover tooltips, `caption =`, `transpose = TRUE`.
 * **Excel export moved to `openxlsx2`**: a ratio stays a real number that sorts and filters while
   printing `1/2.11`, column widths fit their content, a secondary number becomes a column of its own,
   and `tab_xl(check = "auto")` draws the model-check plots under a regression table.
@@ -68,9 +68,9 @@
 
 * **Dependencies reshuffled.** `magrittr` / `stringr` / `crayon` are dropped, so **`%>%` is no longer
   re-exported** — use the base `|>` pipe. `kableExtra` and `DescTools` move to Suggests, Excel export
-  from `openxlsx` to `openxlsx2`, and `survey` / `nnet` / `MASS` / `broom` become hard dependencies.
+  from `openxlsx` to `openxlsx2`, and `survey` / `nnet` / `MASS` become hard dependencies.
 * **The base count, `add_pct` and the chi-squared / ANOVA p-values are drawn at display time**, not
-  stored as columns and rows. Read them with `get_n()` on the Total column and `get_test()`.
+  stored as columns and rows. Read them with `Total$n` and `get_test()`.
 * For **numeric (mean) columns** the `diff` field is a real **difference**, the cell/reference ratio
   moving to `ratio`, and a cell shows a coefficient of variation instead of a standard deviation; a
   numeric `row_vars` / `tab_vars` is grouped rather than exploded. `shape = "values_to_levels"` and
@@ -131,6 +131,11 @@
   `display = "{or}"` / `ref2 = "cumulative"`), `ci = "diff"` / `"ratio"` (use `ci = "ref"`), `chi2`
   (use `test`), `method_cell` / `method_diff` (use `ci_method`), and `"diff_ci"` / `"after_ci"` /
   `"ci"` (use `color` + `color_signif`).
+* Export arguments, accepted and ignored with a message: `color_type`, `html_24_bit`,
+  `html_font`, `full_width`, `position`, and `tab_xl(n_min =, hide_near_zero =)` — width, font and
+  placement are CSS rules now (`tab_css()`), and `n_min` is a `tab()` argument. Every other unknown
+  argument of `tab_html()` / `tab_md()` / `tab_xl()` / `tab_css()` / `forest_plot()` is an error
+  with a suggestion, as it already was on `tab()`.
 * Elsewhere: `tab_xl(print_color_legend =)` → `color_legend =`, `set_diff_type()` →
   `set_ref_type()`, the `in_totrow` cell field → `row_kind` (`is_totrow()` and `x$in_totrow` are
   unchanged), and `options(tabxplor.signif_levels)` / `options(tabxplor.signif_labels)`.
@@ -147,15 +152,13 @@
 
 ### Removed (now an error)
 
-* Functions: `tab_plot()`, `tab_logit()`, `multi_logit()`, `or_plot()`, `kable_tabxplor_style()` and
-  `tab_md_css()` — use `tab_export()`, `tab_reg()`, `forest_plot()`, `tab_html()` and
-  `tab_css(format = "md")`.
+* Functions: `tab_plot()` and `kable_tabxplor_style()` — use `tab_export()` and `tab_html()`.
 * **The `kableExtra` HTML engine**, with `engine =` (accepted and ignored) and the options
   `tabxplor.tab_kable_engine`, `tabxplor.always_add_css_in_tab_kable`, `tabxplor.kable_html_font`.
-  kableExtra stays optional: its print method is what opens a table in the Viewer.
-* Arguments and options: `color_type`, `html_24_bit`, `html_font`, `full_width`,
-  `tab_xl(n_min =, hide_near_zero =)`, `method_ratio` and its siblings,
-  `tabxplor.ci_print` (use `display = "base_ci"` /`"base_moe"`), `tabxplor.compact`, `tabxplor.color_style_type`.
+  kableExtra stays optional, and is no longer what opens a table in the Viewer: `tab_html()`
+  paints that page itself, to match the table's theme.
+* Options: `method_ratio` and its siblings, `tabxplor.ci_print` (use `display = "base_ci"` /
+  `"base_moe"`), `tabxplor.compact`, `tabxplor.color_style_type`.
 * **The `fmt` attribute `ci_type`**, with `get_ci_type()` / `set_ci_type()` and `fmt()`'s
   `ci_type =` argument: the stored interval is always on the estimate's own `scale`.
 

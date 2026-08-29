@@ -96,3 +96,32 @@ testthat::test_that("score_from_lv1() output feeds tab() cleanly", {
   testthat::expect_no_error(t <- tab(out, group, score))
   testthat::expect_s3_class(t, "tabxplor_tab")
 })
+
+
+# === SECTION: tx_deprecate_inert() ================================================================
+# The filter every exporter runs before tab_check_dots(): a retired name warns ONCE and is removed,
+# everything else is handed on untouched.
+
+testthat::test_that("tx_deprecate_inert() drops the retired names and keeps the rest", {
+  withr::local_options(lifecycle_verbosity = "quiet")
+  out <- tabxplor:::tx_deprecate_inert(list(engine = "x", full_width = TRUE, keep = 1), "tab_html",
+                                       user_env = globalenv())
+  testthat::expect_identical(out, list(keep = 1))
+  testthat::expect_identical(
+    tabxplor:::tx_deprecate_inert(list(), "tab_html", user_env = globalenv()), list())
+})
+
+testthat::test_that("`user_env` cannot be forgotten, which is how it went unnoticed", {
+  # ⚠ THE POINT OF THE FORMAL. lifecycle stays silent for an internal caller, so with `user_env` left
+  # to any default -- lifecycle's own, or a plausible one -- the five retired export arguments warned
+  # NOBODY for a whole release. Having NO default is the guard: a caller has to decide.
+  # ⚠ the silent half of that is not assertable here: under testthat, deprecate_soft() warns for the
+  # package under test whatever frame it is given. What IS assertable is that it must be given one.
+  testthat::expect_true(rlang::is_missing(formals(tabxplor:::tx_deprecate_inert)$user_env))
+  testthat::expect_error(tabxplor:::tx_deprecate_inert(list(engine = "x"), "tab_html"), "missing")
+  withr::local_options(lifecycle_verbosity = NULL)
+  # the `fn` label is unique ON PURPOSE: deprecate_soft() warns once per session per message, so a
+  # real exporter's name here would make the test depend on which file ran first.
+  testthat::expect_warning(
+    tabxplor:::tx_export_dots(list(engine = "x"), "tx_probe_direct", globalenv()), "deprecated")
+})

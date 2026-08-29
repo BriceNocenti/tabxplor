@@ -4505,6 +4505,8 @@ reg_stage_finalize <- function(ctx) {
 #' @param cleannames Logical. If `TRUE`, strips numeric prefixes from factor levels for display.
 #'   Uses `getOption("tabxplor.cleannames")` when `NULL`.
 #' @param subtext Optional character. A note shown below the table.
+#' @param caption A title for the table, stored on it and carried into every export. Without one a
+#'   regression table titles itself from the model it shows.
 #' @return A `tabxplor_grouped_tab` (grouped by predictor), one effect column per model / outcome.
 #'
 #' @seealso [reg_formulas()] shows the formula each column was fitted with, and [reg_measures()]
@@ -4584,7 +4586,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                     ref = NULL, multiplier = "2sd", shape = NULL, stats = "auto",
                     conf_level = NULL,
                     na = c("drop_by_outcome", "drop_by_model", "drop_all", "keep_for_predictors"),
-                    display = NULL, digits = 0, cleannames = NULL, subtext = "", ...) {
+                    display = NULL, digits = 0, cleannames = NULL, subtext = "", caption = NULL,
+                    ...) {
   # ⚠ FIRST: capture the four variable roles before anything can force their promises -- and the
   # EXPRESSION `data` was written as, which is how reg_check_plots() finds the microdata again
   # without the user naming it twice (only a bare name is ever re-resolved; see reg_plot_fits()).
@@ -4680,7 +4683,8 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
                      .names = outcome,
                      workers = tab_parallel_workers(.fit_cache))
     names(tabs) <- outcome
-    return(new_tabxplor_tabs(tabs))
+    # ⚠ set_caption() before the re-class: it maps over the list, and purrr::map() drops the class.
+    return(new_tabxplor_tabs(set_caption(tabs, caption)))
   }
 
   # THE argument boundary, in one call (R/reg-resolve.R): six stages in the one order they may run
@@ -4756,5 +4760,5 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # The model record IS this table's `spec$call` -- "how was this table made", the slot every
   # producer has. ⚠ `conf_level` is deliberately absent from it: the level lives on every COLUMN
   # (get_conf_level() is what consumers read), so a table-wide copy could only ever disagree.
-  set_reg_call(res, reg_call_record)
+  set_caption(set_reg_call(res, reg_call_record), caption)
 }

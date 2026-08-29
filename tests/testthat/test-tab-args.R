@@ -423,3 +423,48 @@ testthat::test_that("20h: the generated exporter blocks emit only the deduplicat
   testthat::expect_true(isTRUE(tabxplor:::EXPORT_ARGS$theme$doc_in_producer))
   testthat::expect_length(tabxplor:::tab_args_rd("tab_css"), 0L)   # all four rows stay home
 })
+
+
+# === Phase 24g: a caption is a fact about the table, so a producer can state one ==================
+
+testthat::test_that("caption is declared for the three producers and reaches the stored slot", {
+  testthat::expect_setequal(TAB_ARGS$caption$producers, c("tab", "tab_reg", "tab_counts"))
+  # the two grids may share a NAME; only a shared PRODUCER would make arg_table_of() a coin toss
+  testthat::expect_true("caption" %in% names(tabxplor:::EXPORT_ARGS))
+  testthat::expect_length(intersect(TAB_ARGS$caption$producers, tabxplor:::EXPORT_PRODUCERS), 0L)
+
+  d <- fx_gss()
+  built  <- tab(d, race, marital, pct = "row", caption = "A title")
+  posthoc <- set_caption(tab(d, race, marital, pct = "row"), "A title")
+  testthat::expect_identical(get_caption(built), "A title")
+  testthat::expect_identical(get_caption(built), get_caption(posthoc))
+  # NULL is a true no-op, so the unconditional call at the end of each producer costs nothing
+  testthat::expect_identical(attributes(tab(d, race, marital, pct = "row")),
+                             attributes(tab(d, race, marital, pct = "row", caption = NULL)))
+  # tab_counts() takes its whole surface off `...`, so declaring the producer is the entire wiring
+  cnt <- dplyr::count(d, marital, race)
+  testthat::expect_identical(
+    get_caption(tab_counts(cnt, marital, race, counts = n, pct = "row", caption = "C")), "C")
+})
+
+testthat::test_that("a caption survives the shapes a producer can return", {
+  d <- fx_gss()
+  # ⚠ set_caption() maps over a list and purrr::map() drops the class: the write has to happen
+  # BEFORE the re-class, or output_list = TRUE would hand back a bare list.
+  l <- tab(d, race, marital, year, pct = "row", caption = "Grouped", output_list = TRUE)
+  testthat::expect_s3_class(l, "tabxplor_tabs")
+  testthat::expect_true(all(vapply(l, function(x) identical(get_caption(x), "Grouped"), logical(1))))
+})
+
+testthat::test_that("tab_check_dots() knows the formals as well as the declared rows", {
+  # DESIGN: neither set is the whole answer -- the grid is wider on tab_counts(), the signature is
+  # wider on an exporter. The union is what makes the suggestion name a real argument.
+  kn <- function(p) union(tab_args_for(p),
+                          setdiff(names(formals(get(p, envir = asNamespace("tabxplor")))), "..."))
+  # ... and it is a NO-OP on the crosstab producers, whose formals are all declared already
+  for (p in c("tab", "tab_plain", "tab_num", "tab_counts", "tab_reg"))
+    testthat::expect_setequal(kn(p), tab_args_for(p))
+  # on an exporter it genuinely adds names
+  testthat::expect_gt(length(setdiff(kn("tab_xl"), tab_args_for("tab_xl"))), 0L)
+  testthat::expect_error(tab(fx_gss(), race, marital, pctt = "row"), "Did you mean")
+})

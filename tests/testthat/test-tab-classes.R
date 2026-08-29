@@ -515,3 +515,22 @@ testthat::test_that("as.table() names the dimnames after the variables", {
 testthat::test_that("a table with no fmt column is refused", {
   testthat::expect_error(as.matrix(new_tab(tibble::tibble(a = 1:2))), "no .*column")
 })
+
+
+# === Phase 24g: get_test() is public ==============================================================
+
+testthat::test_that("get_test() is exported and reads the tests off a built table", {
+  testthat::expect_true("get_test" %in% getNamespaceExports("tabxplor"))
+  t <- tab(fx_gss(), race, marital, pct = "row", test = TRUE)
+  x <- get_test(t)
+  testthat::expect_s3_class(x, "tbl_df")
+  # the KEY is the contract: a new kind of test is new rows, never new columns
+  testthat::expect_true(all(c("var", "col", "test", "statistic", "df1", "pvalue") %in% names(x)))
+  testthat::expect_gt(nrow(x), 0L)
+  # a table that ran none carries the EMPTY tibble, same columns -- the schema is stable, so a
+  # consumer never branches on absence; only a table stripped of its attributes gives NULL.
+  none <- get_test(tab(fx_gss(), race, marital, pct = "row"))
+  testthat::expect_identical(nrow(none), 0L)
+  testthat::expect_true(all(c("var", "col", "test", "statistic", "pvalue") %in% names(none)))
+  testthat::expect_null(get_test(tibble::tibble(a = 1)))
+})

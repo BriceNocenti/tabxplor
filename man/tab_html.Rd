@@ -114,9 +114,10 @@ so one copy styles every table. With \code{FALSE} and no \code{\link{tab_css}} c
 uncoloured.}
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
-\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}. The table is rendered by one
-dependency-free \verb{<table>} engine whose every look is a CSS class you can restyle -- font, width
-and colour are all \code{\link{tab_css}}'s business now.}
+\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}, \code{position}. The table is
+rendered by one dependency-free \verb{<table>} engine whose every look is a CSS class you can restyle
+-- font, width, colour and placement are all \code{\link{tab_css}}'s business now.
+Anything else is an error naming the argument you meant, as it already was in \code{\link{tab}}.}
 }
 \value{
 A html table. Printing it opens it in the Viewer, on a page painted to match the table --

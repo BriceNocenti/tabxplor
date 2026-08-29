@@ -75,3 +75,55 @@ testthat::test_that("a message bullet cannot be swallowed by the id argument", {
   # printing the id instead. The formal is dot-prefixed now.
   testthat::expect_identical(names(formals(tabxplor:::tx_inform_once))[[1]], ".id")
 })
+
+
+# === SECTION: the retired `chi2` table attribute ==================================================
+
+testthat::test_that("get_chi2() warns and hands back the test attribute", {
+  withr::local_options(lifecycle_verbosity = "warning")
+  t <- tab(fx_gss(), race, marital, pct = "row", test = TRUE)
+  lifecycle::expect_deprecated(x <- tabxplor:::get_chi2(t))
+  testthat::expect_identical(x, get_test(t))
+  testthat::expect_s3_class(x, "tbl_df")
+})
+
+
+# === SECTION: the exporters' `...` ================================================================
+# The two halves of the API answer a typo the same way: a RETIRED name warns and is dropped, anything
+# else aborts with a suggestion. Before 2.0.0 the exporters silently swallowed both.
+
+EXPORT_STRICT <- c("tab_html", "tab_kable", "tab_md", "tab_xl", "tab_css", "forest_plot")
+
+testthat::test_that("every exporter refuses an argument it cannot use", {
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  for (fn in EXPORT_STRICT) {
+    f <- get(fn, envir = asNamespace("tabxplor"))
+    x <- if (fn == "tab_css") list() else list(t)
+    testthat::expect_error(do.call(f, c(x, list(no_such_arg = 1))),
+                           "Unknown argument", info = fn)
+  }
+  # ... and names the one it meant.
+  # ⚠ an ABBREVIATION does not reach `...` here: an exporter writes `...` last, so R partial-matches
+  # `tooltip` onto `tooltips` as it always did. Only a real typo lands in the dots -- which is the
+  # opposite of tab(), whose `...` sits before its named surface.
+  testthat::expect_error(tab_html(t, captoin = "x"), "caption")
+  testthat::expect_silent(tab_html(t, tooltip = FALSE))
+})
+
+testthat::test_that("a retired export argument warns instead, and is dropped", {
+  withr::local_options(lifecycle_verbosity = "warning")
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  lifecycle::expect_deprecated(h <- tab_html(t, position = "left"))
+  testthat::expect_s3_class(h, "tabxplor_kable")
+  lifecycle::expect_deprecated(tab_html(t, engine = "kableExtra"))
+  # the three names this phase retired, all 1.x export arguments
+  for (a in c("position", "n_min", "hide_near_zero"))
+    testthat::expect_true(a %in% names(tabxplor:::TX_INERT_EXPORT_ARGS), info = a)
+})
+
+testthat::test_that("tab_export() keeps forwarding a leaf's own formals", {
+  # ⚠ its `...` IS a pass-through -- the leaf validates. A check of its own would refuse `css=`.
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  testthat::expect_s3_class(tab_export(t, "html", css = FALSE), "tabxplor_kable")
+  testthat::expect_error(tab_export(t, "html", no_such_arg = 1), "Unknown argument")
+})

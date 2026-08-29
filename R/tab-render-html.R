@@ -10,6 +10,12 @@
 #   - The <thead> is the prep's three rows (R/tab-export-prep.R). An INDEX column has no unit, so its
 #     header spans both rows and sits bottom-aligned, putting "levels" on the line of the "<row%>"
 #     beside it; Excel merges the same two.
+#   - THE TITLE IS ONE TEXT, ONE CLASS, THREE PLACEMENTS, decided by the HOST (tx_caption_host()):
+#     a <div> sibling by default -- the only shape that cannot size the table -- a real <caption>
+#     under bookdown, which numbers tables by scanning for one, and nothing at all under Quarto when
+#     the cell already wrote `tbl-cap`. The markup a host reads is not a style choice.
+#   - EVERY <table> OPENS THROUGH tx_table_open(), and what this file hands back must OPEN AND CLOSE
+#     WITH A TAG: two things Quarto needs, stated at those two functions.
 #   - The <style> is hoisted ONCE by tab_kable_join(). It works inside jamovi: the results view
 #     injects our html through jQuery .html(), which applies <style> nodes, and has no sanitizer on
 #     that path (what jamovi ignores is htmlDependency, not <style>).
@@ -86,6 +92,36 @@ render_kable_html <- function(rd, meta,
 
 
 # === SECTION: markup helpers (escaping, partial bold, typography) =================================
+
+# THE ONE PLACE A <table> OPENS. `data-quarto-disable-processing` is the documented library-author
+# lever: without it Quarto re-parses the table and stamps `table table-sm table-striped small` on it,
+# and a zebra fill fights colour-coded cells. It is inert everywhere else, and it does NOT break a
+# cross-reference -- a cell's `label:` rides on the Pandoc div around the output, not on this markup.
+tx_table_open <- function(class) {
+  paste0('<table class="', class, '" data-quarto-disable-processing="true">')
+}
+
+# WHO OWNS THE TABLE'S TITLE. The one host probe this file makes, answered from the ecosystem's own
+# flags through tx_knitr_opt(), which is NULL outside a render -- so the Viewer, tab_export(file =)
+# and jamovi always get "plain".
+#   "bookdown"  bookdown numbers a table only where a line matches `^\s*<caption` (parse_fig_labels(),
+#               which scans the label's own line and the one before it), so under bookdown the title
+#               has to BE a <caption> child. Without one, `(\#tab:x)` stays raw in the title, no
+#               anchor is written, and every \@ref(tab:x) renders "??".
+#               ⚠ MEASURED: the inner element must be a <span>, never a <div>. Pandoc re-lays-out our
+#               markup before bookdown sees it and gives every BLOCK tag its own line, which would
+#               push the label two lines below <caption> and out of that scan.
+#   "quarto"    with `tbl-cap` set the cell already carries a caption and ours would be a second one.
+#               ⚠ a bare `label: tbl-x` still numbers the table with no caption of its own, so our
+#               title is wanted there: only `tbl-cap` stands us down.
+#   "plain"     the <div> sibling -- the only shape that cannot size the table (R/tab-css.R).
+tx_caption_host <- function() {
+  if (isTRUE(tx_knitr_opt("bookdown.internal.label", "knit"))) return("bookdown")
+  cap <- tx_knitr_opt("tbl-cap")
+  if (!is.null(tx_knitr_opt("quarto.version", "knit")) &&
+      length(cap) && any(nzchar(as.character(cap)))) return("quarto")
+  "plain"
+}
 
 # escapes the whole label, then restores the ONE tag we ourselves inject (tab_wrap_text()'s "<br>") --
 # a user's own "<" in the text stays escaped.
@@ -191,7 +227,8 @@ html_face_wrap <- function(html, bold, italic, underline) {
 
 # Returns the BARE <table> string; the <style> block is hoisted once by tab_kable_join(). Only a
 # palette's TYPOGRAPHY reaches this markup, read from the RESOLVED theme, never from `meta$theme`.
-render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data) {
+render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data,
+                               cap_host = tx_caption_host()) {
   # the model-fit block's first row draws a boundary across the whole table (2px), where a row_var
   # separator stops at the name column.
   foot_top <- if (length(rd$footer_rows)) min(rd$footer_rows) else NA_integer_
@@ -397,11 +434,18 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""
 
-  # the title is a `<div>` sibling before the <table>, not a `<caption>` child -- a caption
-  # participates in the table's width. See R/tab-css.R (.tabxplor-caption).
-  cap <- if (!is.null(caption) && length(caption) && nzchar(caption)) {
-    paste0('<div class="tabxplor-caption">', tx_html_escape(caption), '</div>')
-  } else ""
+  # THE TITLE: one text, one class, two placements of it (tx_caption_host() above says which).
+  # ⚠ the text is parsed as MARKDOWN by pandoc on its way out -- which is exactly what turns a
+  # bookdown `(\#tab:x)` token into the `(#tab:x)` its own scanner greps for, so nothing here may
+  # un-escape it (tx_html_escape() cannot reach it: it holds no & < >).
+  cap_txt <- if (!is.null(caption) && length(caption) && nzchar(caption))
+    tx_html_escape(caption) else ""
+  cap_div <- if (nzchar(cap_txt) && identical(cap_host, "plain"))
+    paste0('<div class="tabxplor-caption">', cap_txt, '</div>') else ""
+  # ⚠ its own line: pandoc re-lays-out the block anyway, but the Viewer, jamovi and a saved file do
+  # not, and this is what makes the `^\s*<caption` shape assertable without pandoc in the loop.
+  cap_el  <- if (nzchar(cap_txt) && identical(cap_host, "bookdown"))
+    paste0('\n<caption><span class="tabxplor-caption">', cap_txt, '</span></caption>') else ""
 
   # the footnote sits in a `tx-foot` div so its long prose does not SIZE the table -- `width:0`
   # contributes nothing to max-content, `min-width:100%` fills once the table is sized (R/tab-css.R).
@@ -414,8 +458,8 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # significance stars gets `tx-has-stars`, flipping the number cells to the monospace stack in CSS.
   tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
   paste0(
-    cap,
-    '<table class="', tbl_class, '">',
+    cap_div,
+    tx_table_open(tbl_class), cap_el,
     '<thead>', span_thead, thead, unit_thead, '</thead>',
     '<tbody>', body, '</tbody>',
     tfoot,
@@ -455,7 +499,7 @@ shape_html_table <- function(tab) {
     paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
            paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
   # `tx-shape`: a note under the table, not a second table -- one step smaller and in the aside ink.
-  paste0('<table class="tabxplor-tab tx-shape">', '<thead>', thead, '</thead>',
+  paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
          '<tbody>', body, '</tbody>', tfoot, '</table>')
 }
 
@@ -469,7 +513,7 @@ render_html_degrade <- function(tab) {
   cols <- lapply(tab, function(col) paste0('<td>', tx_html_escape(as.character(col)), '</td>'))
   row_inner <- if (length(cols)) do.call(paste0, cols) else rep("", nrow(tab))
   body <- paste0('<tr>', row_inner, '</tr>', collapse = "\n")
-  paste0('<table class="tabxplor-tab"><thead>', thead,
+  paste0(tx_table_open("tabxplor-tab"), '<thead>', thead,
          '</thead><tbody>', body, '</tbody></table>')
 }
 
@@ -478,6 +522,13 @@ render_html_degrade <- function(tab) {
 
 # Joins the per-table render parts: hoists ONE <style> block and stacks the <table> fragments.
 # `theme` is the render INTENT, carried to print.tabxplor_kable() so the Viewer page can match it.
+#
+# ⚠ WARNING: THE STRING THIS RETURNS MUST OPEN WITH A TAG AND CLOSE WITH ONE. Quarto fences asis
+# output as a raw `{=html}` block only when it matches `^<\w+[ >]` and ends `</\w+>\s*$`; miss that
+# -- a leading HTML comment is enough -- and the whole thing is parsed as MARKDOWN instead, where
+# `*x*` becomes <em>, `@tbl-y` becomes a live cross-reference and an opening <div> swallows the
+# closing `:::` of the cell. Every part here already starts `<style>`, `<div ` or `<table `; keep it
+# that way, and add nothing before them. Asserted in test-tab-render-html.R.
 tab_kable_join <- function(parts, css = "", theme = NULL) {
   # ⚠ NO <br> BETWEEN THE PARTS ANY MORE: each part ends in a `.tabxplor-tab`, which now carries one
   # line of air below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism

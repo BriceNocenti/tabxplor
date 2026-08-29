@@ -134,11 +134,9 @@ reference:
   - reg_measures
   - reg_formulas
 
-- title: Captions and options
-  desc: >
-    A caption travels with the table into every export; every default lives in a `tabxplor.*` option.
+- title: Options
+  desc: Every default lives in a `tabxplor.*` option.
   contents:
-  - set_caption
   - tabxplor-options
 
 - title: Inspect a table
@@ -146,19 +144,22 @@ reference:
   contents:
   - tab_structure
   - tab_columns
+  - get_test
   - is_tab
   - tabxplor-base-coercion
 
-- title: The fmt cell type
+- title: The type system
   desc: >
-    The `tabxplor_fmt` vctrs record behind every numeric cell: a **field** varies from cell to cell,
-    an **attribute** holds for a whole column.
+    What a table and its cells are made of: the `tabxplor_fmt` vctrs record behind every numeric
+    cell, where a **field** varies from cell to cell and an **attribute** holds for a whole column,
+    and the attributes the table itself carries.
   contents:
   - fmt
   - fmt_fields
   - fmt_attributes
   - fmt_attr
   - new_tab
+  - set_caption
   - fmt_get_color_code
 
 - title: internal

@@ -127,7 +127,10 @@
 #'    same sheets
 #' }
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
-#'   (`color_type`, `html_24_bit`): colour is a channel of `color =`, and Excel is always 24-bit.
+#'   (`color_type`, `html_24_bit`, `n_min`, `hide_near_zero`): colour is a channel of `color =`,
+#'   Excel is always 24-bit, and the other two are `tab()`'s business --- the small-base filter and
+#'   the display template.
+#'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #'
 #' @return  The table(s) with formatting and colors in an Excel file, as a side effect.
 #'  Invisibly returns \code{tabs}.
@@ -158,7 +161,7 @@ tab_xl <-
            ratio_cells = NULL, check = FALSE, data = NULL,
            print_color_legend = lifecycle::deprecated(), ...) {
 
-    tx_deprecate_inert(rlang::list2(...), "tab_xl")
+    tx_export_dots(rlang::list2(...), "tab_xl", rlang::caller_env())
 
     font_text      <- font_text      %||% tx_option("xl_font_text")
     font_num       <- font_num       %||% tx_option("xl_font_num")

@@ -145,7 +145,7 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
                 ci_method = NULL, anova = NULL, design_effect = NULL,
                 totaltab = "line", common_totrow = FALSE,
                 n = NULL, n_min = 0, add_pct = FALSE,
-                subtext = "", digits = 0, display = NULL, color_breaks = NULL,
+                subtext = "", caption = NULL, digits = 0, display = NULL, color_breaks = NULL,
                 output_list = FALSE,
                 spread_vars, filter) {
 
@@ -367,9 +367,15 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
            .cache = .cache, .defer_level_merge = .defer_level_merge,
            .levels_order = .levels_order, .levels_collapse = .levels_collapse)
 
+  # ⚠ no caption on the armed return: that is the jamovi live-cache seam (R/jmvtab-cache.R), which
+  # hands the table back mid-build and never passes one.
   if (isTRUE(.return_armed)) return(result)
 
   result <- finalize_color_tail(result, color_spec, color_breaks, display)
+  # THE one write. It sits here for two reasons: past tab_build(), so every merge / spread / compact
+  # is done; and BEFORE as_tabxplor_tabs(), because set_caption() maps over a list of tables and
+  # purrr::map() returns a bare one -- the re-class below is what puts the class back.
+  result <- set_caption(result, caption)
 
   if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_html(result))
 
@@ -416,6 +422,12 @@ normalize_color_spec <- function(color, color_signif = "ignore", deprecate = TRU
     cli::cli_abort(c("Unknown {.arg color_signif} value {.val {signif}}.",
                      "i" = "Valid: {.val {ok_signif}}."))
   }
+  # WARNING: two frames short ON PURPOSE, so deprecate_old() below never fires. This resolver runs
+  #   inside tab_resolve_common_args(), so caller_env(2) lands on the PRODUCER, not on the user, and
+  #   lifecycle stays silent for a same-package caller. That is the wanted outcome: `color =
+  #   "diff_ci"` / "after_ci" / "ci" are remapped to `difference` + a `color_signif` policy that
+  #   computes the identical numbers, so the message would be pure noise on the commonest argument
+  #   there is. Do not "fix" it by threading `user_env` -- decide first that the warning is wanted.
   uenv       <- rlang::caller_env(2)
   # WARNING: normalising must run AFTER the alias decode -- measure_key() resolves a policy-carrying
   #   alias to its MEASURE, so normalising first discards the policy half. "auto" passes through.

@@ -1118,7 +1118,8 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
 #'   goes to the caption instead.
 #' @param subtext Include the table's subtext and footer lines in the caption.
 #' @param return_data Return the long estimate tibble instead of the plot.
-#' @param ... Unused.
+#' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0.
+#'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #'
 #' @return A \code{ggplot} (or a list of them), ready for \code{+ theme()} and \code{ggsave()}.
 #' @seealso \code{\link{reg_check_plots}} for the model checks, \code{\link{tab_export}} to export
@@ -1141,6 +1142,8 @@ forest_plot <- function(x, columns = NULL, what = c("auto", "effect", "level"),
                         legend = "auto",
                         theme = NULL, lang = NULL, caption = NULL, subtext = TRUE,
                         return_data = FALSE, ...) {
+  # `...` exists only to absorb the retired export arguments; anything else is a typo (R/tab-args.R).
+  tx_export_dots(rlang::list2(...), "forest_plot", rlang::caller_env())
   what   <- match.arg(what);   observed <- match.arg(observed)
   guide  <- match.arg(guide);  center   <- match.arg(center)
   layout <- match.arg(layout); footer   <- match.arg(footer)

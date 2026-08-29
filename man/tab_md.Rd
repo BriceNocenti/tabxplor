@@ -90,7 +90,8 @@ uncoloured table renders byte-identical either way.}
 \code{col_var_names = FALSE} is \code{var_names = "rows"} (or \code{"none"}).}
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
-(\code{color_type}, \code{html_24_bit}): colour is a CSS class, and exports are always 24-bit.}
+(\code{color_type}, \code{html_24_bit}): colour is a CSS class, and exports are always 24-bit.
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 A character string (visible or invisible depending on \code{print}).

@@ -4353,12 +4353,17 @@ mutate.tabxplor_fmt <- function(.data, ...) {
 `$.tabxplor_fmt` <- function(x, name) {
   # DESIGN: $wn falls back to the raw count n when there are no weighted counts (same fallback as
   # get_wn() -- keep in sync). $ci is not a stored field: it is recomputed from the ci_inf/ci_sup
-  # bounds by get_ci(), so user code reading $ci keeps working. ($rr is a read-side alias of $ratio.)
+  # bounds by get_ci(), so user code reading $ci keeps working.
   if (name == "wn" & all(is.na( dplyr::pull(vctrs::vec_proxy(x), "wn")))) {
     dplyr::pull(vctrs::vec_proxy(x), "n")
 
   } else if (name == "ci") {
     get_ci(x)
+
+  } else if (name == "rr") {
+    # the 1.x name of `ratio`. A READ alias only: a write still lands in the proxy under its own
+    # name, which `mutate()` is deliberately permissive about.
+    get_ratio(x)
 
   } else if (name == "tot_wn") {
     get_tot_wn(x)

@@ -1,5 +1,6 @@
 # PURPOSE: The 1.x -> 2.0.0 translation layer -- the retired arguments, the superseded tab_many()
-#   entry point, and the retired `type` vocabulary of the fmt column attributes.
+#   entry point, the retired `type` vocabulary of the fmt column attributes, and the retired `chi2`
+#   table attribute.
 # ROLE: Grouped here so the live build path never meets them: every function in this file exists to
 #   map an OLD spelling onto a current one and then get out of the way.
 # KEY CONSTRAINTS:
@@ -361,4 +362,21 @@ fmt_type_from_scale <- function(x) {
   row   <- EST_SCALES[[scale]]
   if (is.null(row) || !identical(row$kind, "level")) return("coef")
   switch(row$est_field, mean = "mean", n = "n", get_pct_type(x))
+}
+
+
+# === SECTION: The retired `chi2` table attribute ==================================================
+
+# 1.x's only programmatic route to a table's test, reached with `tabxplor:::get_chi2()`. `test` is
+# the same attribute, renamed and widened (an ANOVA, a model fit and a global test are rows of it
+# now), so this is a RENAME, not a schema translation -- and the two rows that moved are named in
+# the message rather than mapped, because the wide `chi2 stats` frame no longer exists to map onto.
+#' @keywords internal
+#' @noRd
+get_chi2 <- function(x) {
+  lifecycle::deprecate_soft("2.0.0", I("get_chi2()"), "get_test()", details = c(
+    "i" = "`df` is `df1` (`df2` on an F test) and `count` is `statistic`.",
+    "i" = "The per-cell chi-2 contributions are the cells' own `ctr` field."
+  ))
+  get_test(x)
 }

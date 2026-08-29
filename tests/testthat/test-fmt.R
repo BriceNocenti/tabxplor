@@ -623,3 +623,13 @@ testthat::test_that("the three row predicates never return NA", {
   testthat::expect_identical(is_refrow(x), c(TRUE, FALSE))
   testthat::expect_identical(is_tottab(x), c(TRUE, FALSE))
 })
+
+
+# === SECTION: the read aliases of the renamed 1.x fields ==========================================
+
+testthat::test_that("$rr reads $ratio, as the method's own comment promises", {
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  f <- t[["Married"]]
+  testthat::expect_identical(f$rr, f$ratio)
+  testthat::expect_identical(f$rr, get_ratio(f))
+})

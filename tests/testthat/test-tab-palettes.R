@@ -111,7 +111,7 @@ testthat::test_that("print_marks marks the cells instead of starring them", {
   testthat::expect_false(grepl("*", format(y, stars = TRUE, theme = "print_marks"), fixed = TRUE))
   # ... in every backend: the numFmt literal keeps an Excel cell a real NUMBER.
   testthat::expect_match(tab_md(x, theme = "print_marks", css = FALSE, print = FALSE), "\u207a")
-  testthat::expect_match(as.character(tab_html(x, theme = "print_marks", print = FALSE)), "\u207a")
+  testthat::expect_match(as.character(tab_html(x, theme = "print_marks")), "\u207a")
   skip_if_not_installed("openxlsx2")
   f <- withr::local_tempfile(fileext = ".xlsx")
   suppressMessages(tab_xl(x, path = f, theme = "print_marks", open = FALSE, replace = TRUE))

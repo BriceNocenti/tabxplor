@@ -330,7 +330,7 @@ tab_counts <- function(data, row_var, col_var, tab_vars, counts, wt_counts,
 
   result <- tab_build_tables(ctx)
 
-  finalize_color_tail(result, color_spec, color_breaks, display)
+  set_caption(finalize_color_tail(result, color_spec, color_breaks, display), caption)
 }
 
 

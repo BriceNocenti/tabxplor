@@ -110,6 +110,30 @@ is_tab <- function(x) {
 
 get_subtext <- purrr::attr_getter("subtext")
 
+#' Read a table's statistical tests
+#'
+#' @description
+#' The tests a table carries and prints under itself: a crosstab's chi-squared or ANOVA, a
+#' regression's model-fit statistics and global tests. \code{get_test()} hands them back as a tidy
+#' tibble --- one row per test, keyed by \code{var} (the row variable, the predictor, or \code{""}
+#' for the whole table) and \code{col} (the column variable it keys under) --- so a test can be
+#' filtered, reshaped or reported like any other data. A new kind of test is new rows, never new
+#' columns.
+#'
+#' The remaining columns name the statistic (\code{test}, \code{statistic}, \code{df1}, \code{df2},
+#' \code{pvalue}), the base it was computed on (\code{n}, \code{min_e}, \code{deff}) and its effect
+#' size (\code{effect_size}, \code{es_type}). Per-CELL contributions to the chi-squared are not here:
+#' they are the \code{ctr} field of the cells themselves (\code{tabs$Total$ctr}).
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @return A tibble of tests --- empty, with the same columns, when the table ran none (build them
+#'   with \code{tab(test = TRUE)}); \code{NULL} only when \code{x} has lost its attributes.
+#' @seealso [tab()] for `test =`, [tab_structure()] and [tab_columns()] for the rest of a table's
+#'   metadata.
+#' @export
+#' @examples
+#' tabs <- tab(forcats::gss_cat, race, marital, test = TRUE)
+#' get_test(tabs)
 get_test <- function(x) attr(x, "test", exact = TRUE)
 
 set_test <- function(x, test) {
@@ -658,9 +682,10 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param get_data Get the transformed data instead of the html table.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
-#'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`. The table is rendered by one
-#'  dependency-free `<table>` engine whose every look is a CSS class you can restyle -- font, width
-#'  and colour are all \code{\link{tab_css}}'s business now.
+#'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`, `position`. The table is
+#'  rendered by one dependency-free `<table>` engine whose every look is a CSS class you can restyle
+#'  -- font, width, colour and placement are all \code{\link{tab_css}}'s business now.
+#'  Anything else is an error naming the argument you meant, as it already was in \code{\link{tab}}.
 
 #' @return A html table. Printing it opens it in the Viewer, on a page painted to match the table --
 #' so a `theme = "dark"` table no longer sits in a white pane. Everything the cell has no room for --
@@ -686,9 +711,8 @@ tab_html <- function(tabs,
                      whitespace_only = TRUE,
                      css = NULL,
                      ...) {
-  # Retired args (`color_type`/`html_24_bit`/`engine`/`html_font`/`full_width`) are absorbed by `...`,
-  # warned about once, never forwarded.
-  tx_deprecate_inert(rlang::list2(...), "tab_html")
+  # the retired names warn and are dropped, a typo is an error with a suggestion (R/utils.R).
+  tx_export_dots(rlang::list2(...), "tab_html", rlang::caller_env())
   # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
   # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
   caption <- caption %||% tx_knitr_opt("tab.cap")

@@ -42,7 +42,8 @@ page but not add characters to it. It adds roughly 1.5 KB to a \code{light}/\cod
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 (\code{color_type}): the text channel always uses the text palette, and the colour CHANNEL is chosen
-by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).}
+by \code{color = c(text, background)} (see \code{\link[=tab]{tab()}}).
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 The CSS, invisibly when \code{file} is given. Printed as-is by \code{knitr} with \code{results = "asis"}.

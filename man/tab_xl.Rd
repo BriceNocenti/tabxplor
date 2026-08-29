@@ -136,7 +136,10 @@ pipeline, a subset expression) --- an ordinary \code{tab_reg(gss, ...)} recovers
 \item{print_color_legend}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{color_legend}.}
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
-(\code{color_type}, \code{html_24_bit}): colour is a channel of \verb{color =}, and Excel is always 24-bit.}
+(\code{color_type}, \code{html_24_bit}, \code{n_min}, \code{hide_near_zero}): colour is a channel of \verb{color =},
+Excel is always 24-bit, and the other two are \code{tab()}'s business --- the small-base filter and
+the display template.
+Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
 The table(s) with formatting and colors in an Excel file, as a side effect.

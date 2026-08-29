@@ -34,6 +34,7 @@ tab(
   n_min = 0,
   add_pct = FALSE,
   subtext = "",
+  caption = NULL,
   digits = 0,
   display = NULL,
   color_breaks = NULL,
@@ -231,6 +232,12 @@ variable (for \code{pct = "row"}) or a row with the frequencies of the column va
 (for  \code{pct = "col"}).}
 
 \item{subtext}{A character vector to print rows of legend under the table.}
+
+\item{caption}{A title for the table. It is \strong{stored on the table}, so it survives a
+\pkg{dplyr} pipeline and travels into every export --- html, Markdown, Excel,
+\code{\link{forest_plot}()} --- where an exporter's own \code{caption} still wins.
+\code{\link{set_caption}()} attaches one after the fact, \code{get_caption()}
+reads it back.}
 
 \item{digits}{The number of digits to print, as a single integer, or an integer vector the
 same length as \code{col_vars}.}

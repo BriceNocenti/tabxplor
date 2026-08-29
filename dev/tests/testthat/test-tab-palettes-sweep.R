@@ -69,7 +69,7 @@ testthat::test_that("the cell suffix supports the number rather than competing w
   x <- tab(fx_gss(), marital, race, pct = "row", color = "diff", ci = "cell")
   x <- dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ set_display(set_pvalue(., 0.001), "pct")))
   for (th in c("light", "print_minimalistic")) {
-    h <- as.character(tab_html(x, theme = th, print = FALSE))
+    h <- as.character(tab_html(x, theme = th))
     testthat::expect_match(h, '<span class="tx-sec"[^>]*>\\*\\*\\*</span>', label = th)
     testthat::expect_no_match(h, "<[biu]>[^<]*\\*\\*\\*", label = th)
   }

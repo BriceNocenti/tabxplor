@@ -59,8 +59,9 @@ the col-percentages-with-several-row-variables use case.}
 are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{...}{Format-specific arguments passed to the underlying exporter. Retired arguments
-(\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}) are caught here, reported
-once, and not forwarded.}
+(\code{color_type}, \code{html_24_bit}, \code{engine}, \code{html_font}, \code{full_width}, \code{position}, \code{n_min},
+\code{hide_near_zero}) are caught here, reported once, and not forwarded; the exporter this hands to
+refuses anything else it cannot use.}
 }
 \value{
 The value of the underlying exporter: an HTML/knitr object (\code{"html"}), a markdown

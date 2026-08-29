@@ -95,7 +95,8 @@ testthat::test_that("cells carry slot classes, never inline colour", {
   # slot class is no longer first -- match it anywhere in the attribute.
   testthat::expect_match(b, 'class="[^"]*\\b(p|m)[1-4]\\b')   # a text-coloured cell
   testthat::expect_match(b, 'class="[^"]*\\bg[12]\\b')        # an uncoloured cell
-  testthat::expect_match(h, '<table class="tabxplor-tab">', fixed = TRUE)   # no theme token
+  testthat::expect_match(h, '<table class="tabxplor-tab" data-quarto-disable-processing="true">',
+                         fixed = TRUE)   # no theme token
 })
 
 
@@ -305,4 +306,89 @@ testthat::test_that("jamovi moves the gap onto the scrollbox", {
   s <- tabxplor:::jmv_results_style()
   expect_match(s, paste0("margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";"), fixed = TRUE)
   expect_match(s, ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}", fixed = TRUE)
+})
+
+
+# === who owns the table's title, and who owns the table =========================================
+# One caption TEXT, one class, three placements (tx_caption_host()) -- plus the one attribute that
+# stops Quarto restyling a table it did not build.
+
+# drives the two ecosystem flags tx_caption_host() reads, and puts them back
+rh_with_host <- function(code, bookdown = NULL, quarto = NULL, tbl_cap = NULL) {
+  old_opt <- options(knitr.in.progress = TRUE)
+  ok <- knitr::opts_knit$get(); oc <- knitr::opts_current$get()
+  on.exit({options(old_opt); knitr::opts_knit$restore(ok); knitr::opts_current$restore(oc)},
+          add = TRUE)
+  knitr::opts_knit$set(`bookdown.internal.label` = bookdown, `quarto.version` = quarto)
+  knitr::opts_current$set(`tbl-cap` = tbl_cap)
+  force(code)
+}
+
+testthat::test_that("the caption takes one of three shapes, decided by the host", {
+  t <- tab(gss, race, marital, pct = "row", caption = "A title")
+  plain <- rh_strip_style(tab_html(t))
+  expect_match(plain, '<div class="tabxplor-caption">A title</div><table', fixed = TRUE)
+  expect_false(grepl("<caption", plain, fixed = TRUE))
+
+  # bookdown: a real <caption>, INSIDE the table, and no sibling div
+  bd <- rh_strip_style(rh_with_host(tab_html(t), bookdown = TRUE))
+  expect_match(bd, '<caption><span class="tabxplor-caption">A title</span></caption>', fixed = TRUE)
+  expect_false(grepl('<div class="tabxplor-caption">', bd, fixed = TRUE))
+
+  # Quarto owns it only when the cell wrote one
+  q_cap <- rh_strip_style(rh_with_host(tab_html(t), quarto = "1.10", tbl_cap = "Quarto's"))
+  expect_false(grepl("tabxplor-caption", q_cap, fixed = TRUE))
+  # ⚠ a bare `label: tbl-x` numbers the table with no caption of its own: ours is still wanted
+  q_lab <- rh_strip_style(rh_with_host(tab_html(t), quarto = "1.10"))
+  expect_match(q_lab, '<div class="tabxplor-caption">A title</div>', fixed = TRUE)
+})
+
+testthat::test_that("bookdown's own scan finds the caption: its own line, no block above the label", {
+  # bookdown numbers a table only where `^\\s*<caption` matches the label's line or the one before,
+  # so a BLOCK element inside the caption (a <div>) would push the text out of that window. This is
+  # the literal predicate bookdown:::parse_fig_labels() applies.
+  t <- tab(gss, race, marital, pct = "row", caption = "(\\#tab:x) Titre")
+  bd <- rh_strip_style(rh_with_host(tab_html(t), bookdown = TRUE))
+  lines <- strsplit(bd, "\n", fixed = TRUE)[[1]]
+  i <- grep("(\\#tab:x)", lines, fixed = TRUE)
+  expect_length(i, 1L)
+  expect_true(any(grepl("^\\s*<caption", lines[c(i, i - 1L)])))
+  # the token itself is untouched: it holds no & < >, so escaping cannot reach it (pandoc turns the
+  # backslash into the `(#tab:x)` bookdown greps for).
+  expect_match(bd, "(\\#tab:x) Titre", fixed = TRUE)
+})
+
+testthat::test_that("every <table> tabxplor emits disables Quarto's own table processing", {
+  attr_ <- 'data-quarto-disable-processing="true"'
+  # the engine
+  expect_match(as.character(tab_html(tab(gss, race, marital, pct = "row"))), attr_, fixed = TRUE)
+  # the degrade path (no fmt columns at all)
+  expect_match(as.character(suppressMessages(tab_html(tibble::tibble(a = 1, b = "x")))),
+               attr_, fixed = TRUE)
+  # every one of them, not just the first
+  h <- as.character(tab_html(tab(gss, c(race, partyid), marital, pct = "row")))
+  expect_identical(lengths(regmatches(h, gregexpr("<table", h, fixed = TRUE))),
+                   lengths(regmatches(h, gregexpr(attr_, h, fixed = TRUE))))
+})
+
+testthat::test_that("the emitted string opens with a tag and closes with one (Quarto's raw fence)", {
+  # Quarto fences asis output as raw `{=html}` only when it matches these two; miss them and the
+  # markup is parsed as MARKDOWN instead. tab_kable_join() carries the WARNING.
+  t  <- tab(gss, race, marital, pct = "row", caption = "A title")
+  t2 <- tab(gss, race, marital, pct = "row")
+  cases <- list(tab_html(t), tab_html(t, css = FALSE), tab_html(t2, css = FALSE),
+                tab_html(list(t2, t2)), rh_with_host(tab_html(t), bookdown = TRUE))
+  for (h in cases) {
+    expect_match(as.character(h), "^<[[:alnum:]]+[ >]")
+    expect_match(as.character(h), "</[[:alnum:]]+>[[:space:]]*$")
+  }
+})
+
+testthat::test_that("a <caption> is pinned to the top and unpadded", {
+  # ⚠ Bootstrap puts a caption at the BOTTOM and tabxplor injects Bootstrap into every knitted
+  # document (tx_html_deps()), so the bookdown arm needs this rule to sit above its table at all.
+  css <- tab_css(format = "html", style_tag = FALSE)
+  expect_match(css, ".tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}", fixed = TRUE)
+  # the width guard needs a block box to hang off, which a <span> is not by default
+  expect_match(css, ".tabxplor-caption{display:block;", fixed = TRUE)
 })
