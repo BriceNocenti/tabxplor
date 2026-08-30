@@ -20,19 +20,19 @@ What will break in the university course material at `~/github/formations_stat` 
 
 ## 2. Reading key
 
-| Class | Meaning |
-| --- | --- |
-| **E** | Hard error — the chunk aborts, the document does not knit |
-| **N** | Silent no-op — the code runs and no longer does what it used to |
-| **#** | Silent number change — different figures, no message |
+| Class | Meaning                                                                                 |
+|-------|-----------------------------------------------------------------------------------------|
+| **E** | Hard error — the chunk aborts, the document does not knit                               |
+| **N** | Silent no-op — the code runs and no longer does what it used to                         |
+| **#** | Silent number change — different figures, no message                                    |
 | **F** | Formatting or structure change — visible, usually an improvement, but prose may now lie |
-| **P** | Prose drift — the course text describes something tabxplor no longer prints |
+| **P** | Prose drift — the course text describes something tabxplor no longer prints             |
 
-| Verdict | Meaning |
-| --- | --- |
+| Verdict     | Meaning                                                                      |
+|-------------|------------------------------------------------------------------------------|
 | **FIX-PKG** | tabxplor's problem; changing the courses would be papering over a regression |
-| **PORT** | Adapt the courses — the 2.0.0 behaviour is the intended one |
-| **ACCEPT** | Nothing to do; the change is an improvement and breaks nothing |
+| **PORT**    | Adapt the courses — the 2.0.0 behaviour is the intended one                  |
+| **ACCEPT**  | Nothing to do; the change is an improvement and breaks nothing               |
 
 ---
 
@@ -40,28 +40,28 @@ What will break in the university course material at `~/github/formations_stat` 
 
 Ranked by how much work each pattern represents, not by count.
 
-| # | Pattern | Class | Raw sites | Verdict |
-| --- | --- | --- | --- | --- |
-| §5.1 | bookdown `(\#tab:x)` cross-references die — no `<caption>` element | E/F | whole M2 book | **FIX-PKG** |
-| §9 | `tab_logit()` / `multi_logit()` framework | E | 148 | **PORT** (replace with `tab_reg()`) |
-| §5.2 | `fill_table()` HTML string surgery | E/N | 19 exercises | **PORT** |
-| §4.4 | `tab_plain(num = TRUE, df = TRUE)` returns a tibble, not a `data.frame` | E | 43 | **PORT** |
-| §5.3 | The CSS contract — vendored `tab.css` and `style.css` blocks inert | F | all docs | **PORT** |
-| §4.1 | `kable_tabxplor_style()` is defunct | E | 16 live | **PORT** |
-| §4.3 | `tabxplor:::get_chi2()` removed with no shim | E | 4 live, 39 total | **FIX-PKG** |
-| §4.5 | `select(-n)`, `arrange(is_totrow(n), …)` — the `n` column is gone | E | ~20 | **PORT** |
-| §6.1 | `options(tabxplor.compact = TRUE)` is dead — taught verbatim to students | N | ~18 files | **PORT** |
-| §5.4 | `tab_kable(position = )` silently swallowed | N | 519 | **FIX-PKG** |
-| §7.1 | `method_diff` `"ac"` → `"newcombe"`, mean CIs → Welch | # | every `after_ci` table | **ACCEPT** |
-| §4.2 | `tab_plot()` is defunct | E | 5 | **PORT** |
-| §6.2 | `options(tabxplor.ci_print)` is dead | N | ~30 | **PORT** |
-| §4.6 | `fmt(type = "OR")`, `fmt0(type = )`, `$rr`, `mutate(rr = )` | E/N | logit only | **PORT** |
-| §4.7 | Reserved level names `"Total"` / `"Ensemble"` now abort | E | unknown | **PORT** |
-| §7.2 | `color = "auto"` / `TRUE` gained a background channel | # / F | ~10 | **ACCEPT** |
-| §7.4 | Numeric `row_vars` banded instead of exploded | F | a few | **PORT** |
-| §8 | ~15 deprecated-but-working spellings | F | ~2000 | **PORT** (teaching) |
-| §10 | ggfacto: modernised version uncommitted | F | 44 | **PORT** (install first) |
-| §11 | Prose drift | P | many | **PORT** (flag now, rewrite later) |
+| #    | Pattern                                                                  | Class | Raw sites              | Verdict                             |
+|------|--------------------------------------------------------------------------|-------|------------------------|-------------------------------------|
+| §5.1 | bookdown `(\#tab:x)` cross-references die — no `<caption>` element       | E/F   | whole M2 book          | **FIX-PKG**                         |
+| §9   | `tab_logit()` / `multi_logit()` framework                                | E     | 148                    | **PORT** (replace with `tab_reg()`) |
+| §5.2 | `fill_table()` HTML string surgery                                       | E/N   | 19 exercises           | **PORT**                            |
+| §4.4 | `tab_plain(num = TRUE, df = TRUE)` returns a tibble, not a `data.frame`  | E     | 43                     | **PORT**                            |
+| §5.3 | The CSS contract — vendored `tab.css` and `style.css` blocks inert       | F     | all docs               | **PORT**                            |
+| §4.1 | `kable_tabxplor_style()` is defunct                                      | E     | 16 live                | **PORT**                            |
+| §4.3 | `tabxplor:::get_chi2()` removed with no shim                             | E     | 4 live, 39 total       | **FIX-PKG**                         |
+| §4.5 | `select(-n)`, `arrange(is_totrow(n), …)` — the `n` column is gone        | E     | ~20                    | **PORT**                            |
+| §6.1 | `options(tabxplor.compact = TRUE)` is dead — taught verbatim to students | N     | ~18 files              | **PORT**                            |
+| §5.4 | `tab_kable(position = )` silently swallowed                              | N     | 519                    | **FIX-PKG**                         |
+| §7.1 | `method_diff` `"ac"` → `"newcombe"`, mean CIs → Welch                    | #     | every `after_ci` table | **ACCEPT**                          |
+| §4.2 | `tab_plot()` is defunct                                                  | E     | 5                      | **PORT**                            |
+| §6.2 | `options(tabxplor.ci_print)` is dead                                     | N     | ~30                    | **PORT**                            |
+| §4.6 | `fmt(type = "OR")`, `fmt0(type = )`, `$rr`, `mutate(rr = )`              | E/N   | logit only             | **PORT**                            |
+| §4.7 | Reserved level names `"Total"` / `"Ensemble"` now abort                  | E     | unknown                | **PORT**                            |
+| §7.2 | `color = "auto"` / `TRUE` gained a background channel                    | # / F | ~10                    | **ACCEPT**                          |
+| §7.4 | Numeric `row_vars` banded instead of exploded                            | F     | a few                  | **PORT**                            |
+| §8   | ~15 deprecated-but-working spellings                                     | F     | ~2000                  | **PORT** (teaching)                 |
+| §10  | ggfacto: modernised version uncommitted                                  | F     | 44                     | **PORT** (install first)            |
+| §11  | Prose drift                                                              | P     | many                   | **PORT** (flag now, rewrite later)  |
 
 ---
 
@@ -105,13 +105,13 @@ tabxplor:::get_chi2(vartab1) %>%
 
 The schema is not compatible. 1.3.1 returned a wide frame with a `chi2 stats` column taking the values `tables` / `pvalue` / `df` / `cells` / `variance` / `count`. 2.0.0's `new_test_tibble()` (`R/tab_classes.R:340-362`) returns a long/tidy frame: `var`, `col`, `test`, `statistic`, `df1`, `df2`, `pvalue`, `n`, `min_e`, `effect_size`, `es_type`, `pvalue_exact`, `deff`, `outcome`, `col_group`.
 
-| 1.3.1 `chi2 stats` | 2.0.0 |
-| --- | --- |
-| `pvalue` | `pvalue` |
-| `df` | `df1` (plus `df2` for F tests) |
-| `count` | `statistic` |
-| `cells` | not carried — `n` is the raw base, `min_e` the minimum expected count |
-| `variance` | not carried — `effect_size` / `es_type` instead |
+| 1.3.1 `chi2 stats` | 2.0.0                                                                 |
+|--------------------|-----------------------------------------------------------------------|
+| `pvalue`           | `pvalue`                                                              |
+| `df`               | `df1` (plus `df2` for F tests)                                        |
+| `count`            | `statistic`                                                           |
+| `cells`            | not carried — `n` is the raw base, `min_e` the minimum expected count |
+| `variance`         | not carried — `effect_size` / `es_type` instead                       |
 
 **Live sites: 4** — `04-AC.Rmd:235, 261` and `M2_02.Rmd:2422, 2461`. The `04-AC.Rmd` pair is a teaching demo about chi-squared variance decomposition built from hand-made `fmt()` tables (`04-AC.Rmd:226-233`, `:252-259`), and it is exactly the `variance` row that is no longer carried. 35 further sites are commented out.
 
@@ -166,14 +166,14 @@ as.matrix(tab(FES2017, CSER, PR2017ALL1, wt = w5)) |> FactoMineR::CA()
 
 A shim reconstructs it — but only on three access paths (`tabxplor_deprecated_column()`, `R/tab_classes.R:260-278`):
 
-| Expression | 2.0.0 |
-| --- | --- |
-| `tabs$n` | ✓ works, soft-deprecation message |
-| `tabs[["n"]]` | ✓ works |
-| `dplyr::pull(tabs, n)` | ✓ works |
-| `dplyr::select(tabs, -n)` | ✗ **error** — no shim on the select path |
-| `dplyr::arrange(tabs, is_totrow(n), …)` | ✗ **error** — see below |
-| `dplyr::filter(tabs, is_totrow(n))` | ✗ **silently returns zero rows** |
+| Expression                              | 2.0.0                                    |
+|-----------------------------------------|------------------------------------------|
+| `tabs$n`                                | ✓ works, soft-deprecation message        |
+| `tabs[["n"]]`                           | ✓ works                                  |
+| `dplyr::pull(tabs, n)`                  | ✓ works                                  |
+| `dplyr::select(tabs, -n)`               | ✗ **error** — no shim on the select path |
+| `dplyr::arrange(tabs, is_totrow(n), …)` | ✗ **error** — see below                  |
+| `dplyr::filter(tabs, is_totrow(n))`     | ✗ **silently returns zero rows**         |
 
 The mask cases are the nasty ones. dplyr builds its data mask with low-level `.subset2()`, which does **not** dispatch on `$.tabxplor_tab` / `[[.tabxplor_tab`. So a bare `n` inside `filter()`/`arrange()` resolves to the *function* `dplyr::n`; `is_totrow()`'s default method is `rep(FALSE, length(x))` (`R/fmt_class.R:785`), and `length(<closure>)` is 1 — so `filter()` gets a size-1 `FALSE` it happily recycles and **drops every row with no warning**, while `arrange()` aborts because a sort key must be size `nrow`.
 
@@ -288,16 +288,16 @@ Affected: every `caption =` and every `tab.cap=` chunk option in the corpus — 
 
 **All eight of its assumptions are now false.**
 
-| `fill_table()` assumes | 2.0.0 emits |
-| --- | --- |
-| the table is the first `< *table` line | a `<style>` block and/or a caption `<div>` come first |
-| splitting on `">"` is safe | an unescaped `<0.01%` in chi-squared rows; `<br>`; `<svg>` |
-| one `<tr>` in the header | up to **three** — span row, level row, unit row |
-| every value is in a `</span>` | almost none are — bare text in the `<td>` |
-| the last `<tr>` is the Total row | it is the `<tfoot>` legend row |
-| `<td>` counts are stable per row | label columns are `rowspan` cells, first row only |
-| reference cells carry `ref:` | only under `display = "diff"` |
-| `text-align:right` is inline | it is the class `tx-r`, defined in the CSS |
+| `fill_table()` assumes                 | 2.0.0 emits                                                |
+|----------------------------------------|------------------------------------------------------------|
+| the table is the first `< *table` line | a `<style>` block and/or a caption `<div>` come first      |
+| splitting on `">"` is safe             | an unescaped `<0.01%` in chi-squared rows; `<br>`; `<svg>` |
+| one `<tr>` in the header               | up to **three** — span row, level row, unit row            |
+| every value is in a `</span>`          | almost none are — bare text in the `<td>`                  |
+| the last `<tr>` is the Total row       | it is the `<tfoot>` legend row                             |
+| `<td>` counts are stable per row       | label columns are `rowspan` cells, first row only          |
+| reference cells carry `ref:`           | only under `display = "diff"`                              |
+| `text-align:right` is inline           | it is the class `tx-r`, defined in the CSS                 |
 
 Detail on the three that are least obvious. A `<span>` now appears only for a composite cell's aside, a background-channel pill, a publication-palette mark and the legend swatches — so on a default `pct = "row"` table the `</span` mask matches the Total column alone. The `ref:` token still exists (`R/fmt_class.R:3909`) but is gated on the cell's display literally being `diff`; the default shows a plain `%` and puts `ref` in the tooltip. And the unit header row shows the type tag (`<n>`, `<row%>`), which is itself unescaped text containing `<`.
 
@@ -386,7 +386,7 @@ Three patterns, three outcomes.
 - **`tooltips = FALSE, popover = FALSE`** — both still formals, both still read `options(tabxplor.tab_kable_tooltips)` / `options(tabxplor.kable_popover)` (`R/tab-options.R:299-307`). `R/setup.R:45`'s `kable_popover = TRUE` still works.
 - **`caption =`** — still a formal, still falls back to the knitr `tab.cap` chunk option. Only its *markup* changed (§5.1).
 - **`color_legend = FALSE`**, **`theme =`** — still formals.
-- **`tab_kable()` itself** — a permanent, non-deprecated alias of `tab_html()` (`R/tab_classes.R:749`). All 957 calls keep working.
+- **`tab_kable()` itself** — a permanent, non-deprecated alias of `tab_html()` (`R/tab_classes.R:749`). But `tab_html` and more clear and should be prefered.
 - **`tab_xl()`** — `sheets = "unique"`, `colwidth =`, `path =`, `replace =`, `font_text =` all still formals. Backend moved `openxlsx` → `openxlsx2`, invisibly. `tab_xl(list(tab1, tab2))` still works.
 - **`results = 'asis'` is still not needed** for tables; `knit_print` methods are registered for `tabxplor_kable`, `tabxplor_tab`, `tabxplor_grouped_tab` and `tabxplor_tabs`. It *is* needed for the new `cat(tab_css())` chunk (§5.3).
 - **`tabxplor:::unbrk` and `tabxplor:::sigma_sign`** — character constants in **both** versions (`b812c5f:R/utils.R:1061-1062` vs `R/utils.R:690-691`); only the escaping style changed. `nbsp()`/`padx()` in `R/setup.R:68-84` and the inline `` `r tabxplor:::sigma_sign` `` in prose keep working.
@@ -520,13 +520,13 @@ Sites: `tab_pct(color = TRUE)` in `04-AC.Rmd:228-233, 254-259` and `R/setup.R:22
 
 `COLOR_SCALES` (`R/tab_classes.R:2685-2720`) versus 1.3.1's `.onLoad()` (`b812c5f:R/utils.R:41-44`):
 
-| Ladder | 1.3.1 | 2.0.0 |
-| --- | --- | --- |
-| percentages | `pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3)` | `pct_diff = c(0.05, 0.1, 0.2, 0.3)` |
-| percentages, ratio | — (the `2` rung above) | `pct_ratio`, on the background channel |
-| means | `mean_breaks = c(1.15, 1.5, 2, 4)`, a ratio | `mean_diff`, standardised — the new default |
-| means, ratio | — | `mean_ratio = c(1.1, 1.2, 1.5, 2)` |
-| contributions | `contrib_breaks = c(1, 2, 5, 10)` | `contrib`, unchanged |
+| Ladder             | 1.3.1                                       | 2.0.0                                       |
+|--------------------|---------------------------------------------|---------------------------------------------|
+| percentages        | `pct_breaks = c(0.05, 0.1, 0.2, 2, 0.3)`    | `pct_diff = c(0.05, 0.1, 0.2, 0.3)`         |
+| percentages, ratio | — (the `2` rung above)                      | `pct_ratio`, on the background channel      |
+| means              | `mean_breaks = c(1.15, 1.5, 2, 4)`, a ratio | `mean_diff`, standardised — the new default |
+| means, ratio       | —                                           | `mean_ratio = c(1.1, 1.2, 1.5, 2)`          |
+| contributions      | `contrib_breaks = c(1, 2, 5, 10)`           | `contrib`, unchanged                        |
 
 The `×2` rung that sat inside 1.3.1's percentage *difference* ladder has moved to the ratio channel, where it belongs.
 
@@ -573,22 +573,22 @@ Checked deliberately, so the port does not chase phantoms:
 
 None of these break. All of them warn, and **all of them are what the courses teach students to type**, so a student pasting course code into their own console sees a `lifecycle` message that the course does not explain. `R/setup.R:13-16` sets `warning = FALSE, message = FALSE` globally, so the knitted documents stay clean — the noise is in the student's session only.
 
-| 1.3.1 spelling | Sites | 2.0.0 | Behaviour |
-| --- | --- | --- | --- |
-| `tab_many()` | 385 | `tab()` | soft-deprecated; keeps the legacy list shape |
-| `chi2 = TRUE` | 168 | `test =` | warns, routes |
-| `add_n = FALSE` | 34 | `n = "no"` | warns, routes; `add_n = TRUE` is a no-op |
-| `OR = "OR"` / `"or"` / `"OR_pct"` | 12 | `display = "{or}"` etc. | warns; see note |
-| `ci = "diff"` | some | `ci = "ref"` | warns, rewrites |
-| `compact = TRUE` | 7 | `output_list = FALSE` | warns, inverts |
-| `method_cell = "wald"` | 3 | `ci_method = c(cell = )` | warns |
-| `row_var =` / `col_var =` | 14 | `row_vars` / `col_vars` | partial-matches, warns |
-| `tab_prepare()` | 4 | `tab()` arguments | warns |
-| `fct_recode_helper()` | 85 | — | soft-deprecated |
-| `tab_pct()` `tab_tot()` `tab_ci()` `tab_chi2()` | 18 | the `tab()` pipeline | **warns every call** |
-| `fmt(type = )`, `set_type()`, `get_type()` | 27 | `scale` + `pct_type` | warns; defunct in 2.1.0 |
-| `fmt(in_totrow = )` | few | `row_kind =` | warns |
-| `set_color_style()` | 2 (commented) | `set_color_palette()` | warns, then does nothing |
+| 1.3.1 spelling                                  | Sites         | 2.0.0                    | Behaviour                                    |
+|-------------------------------------------------|---------------|--------------------------|----------------------------------------------|
+| `tab_many()`                                    | 385           | `tab()`                  | soft-deprecated; keeps the legacy list shape |
+| `chi2 = TRUE`                                   | 168           | `test =`                 | warns, routes                                |
+| `add_n = FALSE`                                 | 34            | `n = "no"`               | warns, routes; `add_n = TRUE` is a no-op     |
+| `OR = "OR"` / `"or"` / `"OR_pct"`               | 12            | `display = "{or}"` etc.  | warns; see note                              |
+| `ci = "diff"`                                   | some          | `ci = "ref"`             | warns, rewrites                              |
+| `compact = TRUE`                                | 7             | `output_list = FALSE`    | warns, inverts                               |
+| `method_cell = "wald"`                          | 3             | `ci_method = c(cell = )` | warns                                        |
+| `row_var =` / `col_var =`                       | 14            | `row_vars` / `col_vars`  | partial-matches, warns                       |
+| `tab_prepare()`                                 | 4             | `tab()` arguments        | warns                                        |
+| `fct_recode_helper()`                           | 85            | —                        | soft-deprecated                              |
+| `tab_pct()` `tab_tot()` `tab_ci()` `tab_chi2()` | 18            | the `tab()` pipeline     | **warns every call**                         |
+| `fmt(type = )`, `set_type()`, `get_type()`      | 27            | `scale` + `pct_type`     | warns; defunct in 2.1.0                      |
+| `fmt(in_totrow = )`                             | few           | `row_kind =`             | warns                                        |
+| `set_color_style()`                             | 2 (commented) | `set_color_palette()`    | warns, then does nothing                     |
 
 The `OR =` shim pins `ref = "first"` only when `ref` was still `"auto"`, so the corpus's explicit `ref = 4` at `01-Logits.Rmd:879` is preserved. The four legacy step functions are defunct in 2.1.0, as are `fmt(type = )` / `set_type()` / `get_type()`.
 
@@ -611,11 +611,11 @@ Also worth flagging for the port: `get_type()` is **lossy** — every effect sca
 
 Four hard errors, and they are load-bearing rather than incidental:
 
-| Site | Call | Failure |
-| --- | --- | --- |
-| `:1326` | `fmt0("pct", type = "row")` | `fmt0(display, digits, scale)` — **unused argument** |
-| `:1345` | `fmt0("or", type = "row")` | same |
-| `:1497` | `fmt(0, type = "OR", …)` | `"OR"` is not an accepted legacy `type` — **abort** |
+| Site         | Call                              | Failure                                                   |
+|--------------|-----------------------------------|-----------------------------------------------------------|
+| `:1326`      | `fmt0("pct", type = "row")`       | `fmt0(display, digits, scale)` — **unused argument**      |
+| `:1345`      | `fmt0("or", type = "row")`        | same                                                      |
+| `:1497`      | `fmt(0, type = "OR", …)`          | `"OR"` is not an accepted legacy `type` — **abort**       |
 | `:1137-1138` | `select(-3) | > rename_with(...)` | a Total column is always present now — **duplicate name** |
 
 Two of these have a second failure behind the first. `fmt(0, type = "OR", or = , diff = )` also cannot recycle: `n = 0` makes the reference size 1, so a length-*k* `or` has nowhere to go. And `select(-3)` fails because `tot` now defaults to `c("row", "col")`, so dropping the third column leaves **two** `fmt` columns for a `rename_with(.cols = where(is_fmt))` that expects one.
@@ -630,22 +630,22 @@ The file is also full of positional surgery on `tab_many()`'s output — `select
 
 ### 9.2 What `tab_reg()` covers
 
-| `tab_logit()` produced | `tab_reg()` |
-| --- | --- |
-| `pct` column | the observed column's bracketed level (`display = "est_base"`) |
-| `Empirical OR` column | `empirical = TRUE`, the **default** |
-| `OR model` column | the model column |
-| `n` column | `n = "range"`, the default |
-| marginal effects | `measure = "difference"` / `"ratio"`, `effect = "at_reference"` |
-| stars, as a character column | per-cell p-value, rendered at print time |
-| grouped by `var` | a `tabxplor_grouped_tab` grouped by predictor |
-| `subtext =`, `cleannames =` | same arguments |
-| `split_var =` | `tab_vars =`, plus `color = "between_groups"` |
-| several `dependent =` | `outcome = c(...)` |
-| `inverse_two_level_factors = TRUE` | `outcome_level =`, same default behaviour |
-| CI columns (`ci = TRUE`) | `display = "est_ci"`, `conf_level =` |
-| weights, incl. the `svyglm` branch | `wt =`, or a `svydesign()` as `data` |
-| `or_plot()` | `forest_plot()` |
+| `tab_logit()` produced             | `tab_reg()`                                                     |
+|------------------------------------|-----------------------------------------------------------------|
+| `pct` column                       | the observed column's bracketed level (`display = "est_base"`)  |
+| `Empirical OR` column              | `empirical = TRUE`, the **default**                             |
+| `OR model` column                  | the model column                                                |
+| `n` column                         | `n = "range"`, the default                                      |
+| marginal effects                   | `measure = "difference"` / `"ratio"`, `effect = "at_reference"` |
+| stars, as a character column       | per-cell p-value, rendered at print time                        |
+| grouped by `var`                   | a `tabxplor_grouped_tab` grouped by predictor                   |
+| `subtext =`, `cleannames =`        | same arguments                                                  |
+| `split_var =`                      | `tab_vars =`, plus `color = "between_groups"`                   |
+| several `dependent =`              | `outcome = c(...)`                                              |
+| `inverse_two_level_factors = TRUE` | `outcome_level =`, same default behaviour                       |
+| CI columns (`ci = TRUE`)           | `display = "est_ci"`, `conf_level =`                            |
+| weights, incl. the `svyglm` branch | `wt =`, or a `svydesign()` as `data`                            |
+| `or_plot()`                        | `forest_plot()`                                                 |
 
 Two of those rows are upgrades rather than equivalents. The observed column is computed on **exactly the model's complete cases**, which `tab_logit()`'s `tab_many()`-built version was not; and the marginal effects were never exposed by `tab_logit()`, which hard-codes `marginal_effects = FALSE`. Stars stop being a character column, so the `htmlEscape` hack at `logit_functions.R:1710` goes away.
 
@@ -700,13 +700,13 @@ mutate(across(where(is_fmt), ~ set_color(., "diff"))) |>   # sinon bug (no color
 
 **What lands with the modernised version:**
 
-| Function | Change |
-| --- | --- |
-| `HCPC_tab()` | rebuilt on `tab()`; see below |
-| `pca_interpret()` | grades a coordinate by size on the standardised ladder, not by sign |
-| `mca_interpret()` | **unchanged** — pure dplyr + kableExtra, still 8 columns |
-| `ggca()` | documented input becomes `as.matrix(tabxplor::tab(...))` |
-| `ggmca()` / `ggi()` | three tooltip bug fixes; plots otherwise unchanged |
+| Function            | Change                                                              |
+|---------------------|---------------------------------------------------------------------|
+| `HCPC_tab()`        | rebuilt on `tab()`; see below                                       |
+| `pca_interpret()`   | grades a coordinate by size on the standardised ladder, not by sign |
+| `mca_interpret()`   | **unchanged** — pure dplyr + kableExtra, still 8 columns            |
+| `ggca()`            | documented input becomes `as.matrix(tabxplor::tab(...))`            |
+| `ggmca()` / `ggi()` | three tooltip bug fixes; plots otherwise unchanged                  |
 
 `HCPC_tab()` keeps its final orientation and its column names (`variables`, `lvs`, the clusters, `Ensemble`), so `group_by(variables)` still holds. What changes: the **duplicated `n` row is gone**; `% of population` and `n` become declared display rows, so they are neither coloured nor counted as data; the `color` default is spelt `"difference"`; and `...` now forwards to `tab()` rather than `tab_many()`, so `add_n =` / `compact =` / `chi2 =` passed through it would warn. **The `set_color(., "diff")` workaround becomes unnecessary** — harmless if left, but it will not colour the mean rows either way.
 
@@ -724,17 +724,17 @@ mutate(across(where(is_fmt), ~ set_color(., "diff"))) |>   # sinon bug (no color
 
 Course text that is now factually wrong about what tabxplor prints. **No test catches any of this.** The remedy for now is to *flag the sites in place* — a `<!-- TODO 2.0.0: ... -->` at each — so they surface when the chapters are rewritten.
 
-| What the text says | 2.0.0 | Where |
-| --- | --- | --- |
-| "la colonne n" | folded into the Total cell, `100% (9 838)` | many |
-| `tabxplor.compact` merges tables | dead option; `tab()` merges by default (§6.1) | ~18 files |
-| the parenthesis holds `σ`, the SD | it holds `cv`, in percent (§7.5) | `M1S1_04.Rmd:740` + 2 twins |
-| `ci_print = "moe"` gives `± x` | the token is `{moe}`; option dead (§6.2) | `M1S2_01.Rmd:423-425` + 2 |
-| `tab(pe22, AGE)` gives one row per age | bands (§7.4) | `M1S1_03.Rmd:700` + twin |
-| `tab_plot()` exports an image | defunct (§4.2) | `M2_04.Rmd:833`, `RestesM1.Rmd:828` |
-| `tab_num()` tabulates a number | superseded; `tab()` does it | prose |
-| the `tab()` argument reference card | 5 arguments are deprecated spellings | `04-AC.Rmd:172-181` + 2 |
-| a figure quoted off an `after_ci` table | may have moved a decimal (§7.1) | many |
+| What the text says                      | 2.0.0                                         | Where                               |
+|-----------------------------------------|-----------------------------------------------|-------------------------------------|
+| "la colonne n"                          | folded into the Total cell, `100% (9 838)`    | many                                |
+| `tabxplor.compact` merges tables        | dead option; `tab()` merges by default (§6.1) | ~18 files                           |
+| the parenthesis holds `σ`, the SD       | it holds `cv`, in percent (§7.5)              | `M1S1_04.Rmd:740` + 2 twins         |
+| `ci_print = "moe"` gives `± x`          | the token is `{moe}`; option dead (§6.2)      | `M1S2_01.Rmd:423-425` + 2           |
+| `tab(pe22, AGE)` gives one row per age  | bands (§7.4)                                  | `M1S1_03.Rmd:700` + twin            |
+| `tab_plot()` exports an image           | defunct (§4.2)                                | `M2_04.Rmd:833`, `RestesM1.Rmd:828` |
+| `tab_num()` tabulates a number          | superseded; `tab()` does it                   | prose                               |
+| the `tab()` argument reference card     | 5 arguments are deprecated spellings          | `04-AC.Rmd:172-181` + 2             |
+| a figure quoted off an `after_ci` table | may have moved a decimal (§7.1)               | many                                |
 
 The argument reference card is the one that matters most for teaching: `chi2`, `add_n`, `OR`, `sup_cols` and `method_cell` all still work but all warn, at `04-AC.Rmd:172-181`, `M1S1_04.Rmd:599` and `M1S2_04-Analyse de données.R:155-231` — the last of which is the file handed to students.
 
@@ -833,36 +833,36 @@ Listed rather than asserted:
 
 ## Appendix A — evidence index
 
-| Claim | 1.3.1 (`b812c5f`) | 2.0.0 (`dev`) |
-| --- | --- | --- |
-| caption element | kableExtra `<caption>` | `R/tab-render-html.R:400-404` |
-| bookdown's rule | — | `bookdown:::parse_fig_labels()`, `tab` branch |
-| `df` / `num` precedence | `R/tab.R:2328` | `R/tab.R:2626-2634` |
-| `kable_tabxplor_style()` | exported | `R/tab_classes.R:769-770` (`deprecate_stop`) |
-| `tab_plot()` | exported | `R/tab_classes.R:1438-1439` (`deprecate_stop`) |
-| `get_chi2()` | exported internal | absent; `get_test()` at `R/tab_classes.R:113` |
-| test schema | `chi2 stats` wide frame | `new_test_tibble()`, `R/tab_classes.R:340-362` |
-| `n` column | `R/tab.R:1176-1188` | `R/tab-options.R:110-117`; shim `R/tab_classes.R:260-278` |
-| reserved levels | — | `R/row-model.R:232-267` |
-| `fmt` legacy `type` map | one `type` attribute | `R/tab-deprecate.R:264-286` |
-| `fmt0()` | `fmt0(display, type)` | `R/fmt_class.R:2823` |
-| `ci` field | one half-width field | `ci_inf`/`ci_sup`; `get_ci()` at `R/fmt_class.R:2895-2897` |
-| `rr` field | `rr` | `ratio`; comment at `R/fmt_class.R:4356` |
-| `tabxplor.compact` | `R/utils.R:62`, `R/tab.R:1440-1443` | absent |
-| `tabxplor.ci_print` | `R/fmt_class.R:1401` | absent; `R/fmt_class.R:3715-3717` |
-| `tabxplor.always_add_css_in_tab_kable` | `R/tab_classes.R:745-760` | absent; `R/tab-options.R:294-297` |
-| CI method defaults | `"ac"`, pooled t | `R/tab-agg.R:219-220` |
-| `color = "auto"` | `R/tab.R:186-190` | `R/fmt_class.R:4973, 4998` |
-| colour ladders | `R/utils.R:41-44` | `R/tab_classes.R:2685-2720` |
-| `na = "drop"` | `R/tab.R:348-351`, `:417-420` | `R/tab.R:321-326`, `R/tab-leaf.R:395-416` |
-| `ref` matching | regex only, `R/tab.R:5583-5588` | exact-first, `R/tab.R:2684-2685` |
-| `levels` | `R/tab.R:938-973` | `R/tab.R:1340-1375` |
-| `tab_html()` formals | — | `R/tab_classes.R:677-690` |
-| inert export args | — | `R/utils.R:188-207` |
-| tooltip markup | Bootstrap popover DOM | `R/tab-render-html.R:44-55` |
-| html dependencies | `includeCSS(tab.css)` | `tx_html_deps()`, `R/tab-render-html.R:510-521` |
-| `unbrk` / `sigma_sign` | `R/utils.R:1061-1062` (constants) | `R/utils.R:690-691` (constants) |
-| p-value rows | `R/tab.R:1446-1451` | `R/tab_classes.R:994-1002` (export only) |
+| Claim                                  | 1.3.1 (`b812c5f`)                   | 2.0.0 (`dev`)                                              |
+|----------------------------------------|-------------------------------------|------------------------------------------------------------|
+| caption element                        | kableExtra `<caption>`              | `R/tab-render-html.R:400-404`                              |
+| bookdown's rule                        | —                                   | `bookdown:::parse_fig_labels()`, `tab` branch              |
+| `df` / `num` precedence                | `R/tab.R:2328`                      | `R/tab.R:2626-2634`                                        |
+| `kable_tabxplor_style()`               | exported                            | `R/tab_classes.R:769-770` (`deprecate_stop`)               |
+| `tab_plot()`                           | exported                            | `R/tab_classes.R:1438-1439` (`deprecate_stop`)             |
+| `get_chi2()`                           | exported internal                   | absent; `get_test()` at `R/tab_classes.R:113`              |
+| test schema                            | `chi2 stats` wide frame             | `new_test_tibble()`, `R/tab_classes.R:340-362`             |
+| `n` column                             | `R/tab.R:1176-1188`                 | `R/tab-options.R:110-117`; shim `R/tab_classes.R:260-278`  |
+| reserved levels                        | —                                   | `R/row-model.R:232-267`                                    |
+| `fmt` legacy `type` map                | one `type` attribute                | `R/tab-deprecate.R:264-286`                                |
+| `fmt0()`                               | `fmt0(display, type)`               | `R/fmt_class.R:2823`                                       |
+| `ci` field                             | one half-width field                | `ci_inf`/`ci_sup`; `get_ci()` at `R/fmt_class.R:2895-2897` |
+| `rr` field                             | `rr`                                | `ratio`; comment at `R/fmt_class.R:4356`                   |
+| `tabxplor.compact`                     | `R/utils.R:62`, `R/tab.R:1440-1443` | absent                                                     |
+| `tabxplor.ci_print`                    | `R/fmt_class.R:1401`                | absent; `R/fmt_class.R:3715-3717`                          |
+| `tabxplor.always_add_css_in_tab_kable` | `R/tab_classes.R:745-760`           | absent; `R/tab-options.R:294-297`                          |
+| CI method defaults                     | `"ac"`, pooled t                    | `R/tab-agg.R:219-220`                                      |
+| `color = "auto"`                       | `R/tab.R:186-190`                   | `R/fmt_class.R:4973, 4998`                                 |
+| colour ladders                         | `R/utils.R:41-44`                   | `R/tab_classes.R:2685-2720`                                |
+| `na = "drop"`                          | `R/tab.R:348-351`, `:417-420`       | `R/tab.R:321-326`, `R/tab-leaf.R:395-416`                  |
+| `ref` matching                         | regex only, `R/tab.R:5583-5588`     | exact-first, `R/tab.R:2684-2685`                           |
+| `levels`                               | `R/tab.R:938-973`                   | `R/tab.R:1340-1375`                                        |
+| `tab_html()` formals                   | —                                   | `R/tab_classes.R:677-690`                                  |
+| inert export args                      | —                                   | `R/utils.R:188-207`                                        |
+| tooltip markup                         | Bootstrap popover DOM               | `R/tab-render-html.R:44-55`                                |
+| html dependencies                      | `includeCSS(tab.css)`               | `tx_html_deps()`, `R/tab-render-html.R:510-521`            |
+| `unbrk` / `sigma_sign`                 | `R/utils.R:1061-1062` (constants)   | `R/utils.R:690-691` (constants)                            |
+| p-value rows                           | `R/tab.R:1446-1451`                 | `R/tab_classes.R:994-1002` (export only)                   |
 
 ---
 
@@ -870,23 +870,23 @@ Listed rather than asserted:
 
 Which sections apply where. Twin files (right column) need the same edits; port the left one and propagate.
 
-| File | Applies | Twins |
-| --- | --- | --- |
-| `R/setup.R` | §4.5, §5.2, §5.3, §6.5, §7.2 | — |
-| `R/logit_functions.R` | §9 (whole file) | — |
-| `R/set_RStudio_prefs.R` | commented only; `tab_kable_multi()` never existed | its M2 copy |
-| `books/.../01-Logits.Rmd` | §4.6, §6.1, §9, §5.2 | `M2_06_07.Rmd` |
-| `books/.../04-AC.Rmd` | §4.3, §4.4, §4.8, §7.2 | — |
-| `books/.../08-Explo.Rmd` | §4.4, §4.8 | — |
-| `books/.../06-CAH.Rmd` | §10 | `07-Examen_blanc`, `AC-Correction`, `Examen_2025/*` |
-| `books/.../03-ACP.Rmd`, `05-ACM.Rmd` | §10, §4.5 (`select(-wn)`), §5.5 | — |
-| `books/.../index.Rmd` | §6.1 | — |
-| `M1S1_02.Rmd` | §4.1, §4.5, §4.6, §5.2, §5.5, §6.2, §8 | `L3S2_04.Rmd` |
-| `M1S1_03.Rmd` | §6.2, §7.4, §11 (the 7-errors exercise) | `M2_03.Rmd` |
-| `M1S1_04.Rmd` | §4.2, §6.1, §7.5, §11 | — |
-| `M1S1_01.Rmd` | §4.1, §5.2 | `L3S2_01/02/03.Rmd`, `M2_01.Rmd` |
-| `M1S2_01.Rmd` | §4.1, §5.1 (`\#tab:` captions), §6.1, §6.2 | `M2_04/05.Rmd`, `RestesM1.Rmd` |
-| `M1S2_02/03.Rmd` | §4.5 (`arrange(is_totrow(n))`), §6.1 | `M2_04/05.Rmd`, `RestesM1.Rmd` |
-| `M2_02.Rmd` | §4.3, §4.5, §6.2, §5.5 | — |
-| the exam files | §6.1, §8, §9 | each other |
-| `M1S2_04-Analyse de données.R` | §6.1, §11 (handed to students) | — |
+| File                                 | Applies                                           | Twins                                               |
+|--------------------------------------|---------------------------------------------------|-----------------------------------------------------|
+| `R/setup.R`                          | §4.5, §5.2, §5.3, §6.5, §7.2                      | —                                                   |
+| `R/logit_functions.R`                | §9 (whole file)                                   | —                                                   |
+| `R/set_RStudio_prefs.R`              | commented only; `tab_kable_multi()` never existed | its M2 copy                                         |
+| `books/.../01-Logits.Rmd`            | §4.6, §6.1, §9, §5.2                              | `M2_06_07.Rmd`                                      |
+| `books/.../04-AC.Rmd`                | §4.3, §4.4, §4.8, §7.2                            | —                                                   |
+| `books/.../08-Explo.Rmd`             | §4.4, §4.8                                        | —                                                   |
+| `books/.../06-CAH.Rmd`               | §10                                               | `07-Examen_blanc`, `AC-Correction`, `Examen_2025/*` |
+| `books/.../03-ACP.Rmd`, `05-ACM.Rmd` | §10, §4.5 (`select(-wn)`), §5.5                   | —                                                   |
+| `books/.../index.Rmd`                | §6.1                                              | —                                                   |
+| `M1S1_02.Rmd`                        | §4.1, §4.5, §4.6, §5.2, §5.5, §6.2, §8            | `L3S2_04.Rmd`                                       |
+| `M1S1_03.Rmd`                        | §6.2, §7.4, §11 (the 7-errors exercise)           | `M2_03.Rmd`                                         |
+| `M1S1_04.Rmd`                        | §4.2, §6.1, §7.5, §11                             | —                                                   |
+| `M1S1_01.Rmd`                        | §4.1, §5.2                                        | `L3S2_01/02/03.Rmd`, `M2_01.Rmd`                    |
+| `M1S2_01.Rmd`                        | §4.1, §5.1 (`\#tab:` captions), §6.1, §6.2        | `M2_04/05.Rmd`, `RestesM1.Rmd`                      |
+| `M1S2_02/03.Rmd`                     | §4.5 (`arrange(is_totrow(n))`), §6.1              | `M2_04/05.Rmd`, `RestesM1.Rmd`                      |
+| `M2_02.Rmd`                          | §4.3, §4.5, §6.2, §5.5                            | —                                                   |
+| the exam files                       | §6.1, §8, §9                                      | each other                                          |
+| `M1S2_04-Analyse de données.R`       | §6.1, §11 (handed to students)                    | —                                                   |

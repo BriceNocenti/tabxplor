@@ -78,7 +78,7 @@ render_kable_html <- function(rd, meta,
                               subtext  = character(0),
                               caption  = NULL,
                               tooltips = TRUE, popover = FALSE,
-                              get_data = FALSE) {
+                              get_data = FALSE, cells = NULL) {
   # a table that merely lost its class keeps its fmt columns and is not degraded; only
   # tab_export_prep()'s own `degrade` flag (a non-tabxplor input) takes this path.
   if (isTRUE(rd$vars$degrade)) {
@@ -87,7 +87,8 @@ render_kable_html <- function(rd, meta,
   }
 
   render_html_engine(rd, meta, subtext = subtext, caption = caption,
-                     tooltips = tooltips, popover = popover, get_data = get_data)
+                     tooltips = tooltips, popover = popover, get_data = get_data,
+                     cells_arg = cells)
 }
 
 
@@ -223,12 +224,41 @@ html_face_wrap <- function(html, bold, italic, underline) {
 }
 
 
+# === SECTION: the cells override =================================================================
+
+# `cells =` is the WRITE side of `get_data = TRUE`: the same frame, some cells edited. A value that
+# still equals the one format() produced means "keep", so handing the frame straight back renders the
+# table unchanged -- only a genuine edit takes the raw path. DESIGN: an edited cell is written
+# verbatim into its <td>, keeping the cell's classes (colour, alignment, borders) and its tooltip,
+# and losing the decorations that belong to the text it replaced -- the bold split, the background
+# pill, the sparkline. That is the point: the replacement is somebody else's markup, and escaping it
+# would defeat the only reason to ask. Its SHAPE is checked at the public boundary
+# (tx_cells_check), so an error names `cells` and not a purrr frame.
+tx_cells_override <- function(x, cells, nm) {
+  if (is.null(x)) return(NULL)
+  ovr <- stats::setNames(vector("list", length(nm)), nm)
+  for (name in names(x)) {
+    new <- as.character(x[[name]])
+    new[is.na(new) | new == as.character(cells[[name]])] <- NA_character_
+    if (any(!is.na(new))) ovr[[name]] <- new
+  }
+  if (all(vapply(ovr, is.null, logical(1)))) NULL else ovr
+}
+
+tx_cells_write <- function(html, ovr) {
+  if (is.null(ovr)) return(html)
+  hit <- !is.na(ovr)
+  html[hit] <- ovr[hit]
+  html
+}
+
+
 # === SECTION: the home-built HTML engine =========================================================
 
 # Returns the BARE <table> string; the <style> block is hoisted once by tab_kable_join(). Only a
 # palette's TYPOGRAPHY reaches this markup, read from the RESOLVED theme, never from `meta$theme`.
 render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data,
-                               cap_host = tx_caption_host()) {
+                               cells_arg = NULL, cap_host = tx_caption_host()) {
   # the model-fit block's first row draws a boundary across the whole table (2px), where a row_var
   # separator stops at the name column.
   foot_top <- if (length(rd$footer_rows)) min(rd$footer_rows) else NA_integer_
@@ -261,6 +291,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     names(df) <- nm
     return(df)
   }
+
+  # `cells =` is resolved against the text this render just produced, so "unchanged" is knowable.
+  ovr <- tx_cells_override(cells_arg, stats::setNames(cells, nm), nm)
 
   # (b) column-CONSTANT CLASSES, one string per column, never inline `style=`: `border-right:1px solid`
   # as a shorthand would reset border-color to the cell's own text colour (R/tab-css.R uses longhands
@@ -352,6 +385,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       cell_html[bg_left] <- paste0('<span class="tx-pill ', bgc[bg_left], '">',
                                    cell_html[bg_left], '</span>')
     }
+    if (!is.null(ovr)) cell_html <- tx_cells_write(cell_html, ovr[[name]])
     paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
   })
 
@@ -380,8 +414,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     cls   <- gsub(" +", " ", paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""),
                                    ifelse(named, "tx-b", ""),
                                    ifelse(named & !nzchar(bot), "tx-nb", ""), bot))
-    td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
-                   html_escape_br(cells[[j]]), '</td>')
+    lbl  <- html_escape_br(cells[[j]])
+    if (!is.null(ovr)) lbl <- tx_cells_write(lbl, ovr[[nm[[j]]]])
+    td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">', lbl, '</td>')
     td[!run$show] <- ""
     td_html[[j]]  <- td
   }

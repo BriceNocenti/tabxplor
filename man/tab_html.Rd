@@ -17,6 +17,7 @@ tab_html(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -36,6 +37,7 @@ tab_kable(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -100,6 +102,13 @@ the col-percentages-with-several-row-variables use case.}
 are the spanning row above their level columns. Level headers always keep their name.}
 
 \item{get_data}{Get the transformed data instead of the html table.}
+
+\item{cells}{The write side of \code{get_data}: the same data.frame, with the cells you want to
+replace edited. A value still equal to the one the table renders means "keep", so handing the
+frame straight back changes nothing; anything else is written verbatim into that cell, markup
+and all. The cell keeps its classes and its tooltip, and loses the decorations that belonged to
+the text it replaced (the bold split, the background pill, the sparkline). Pass a list of one
+data.frame per table when several are rendered at once.}
 
 \item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
 

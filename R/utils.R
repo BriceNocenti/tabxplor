@@ -751,3 +751,48 @@ wtd_sd <- function(x, w = NULL) {
   m  <- sum(ww * xw) / sum(ww)
   sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
 }
+
+
+# `tab_html(cells = )`: one data.frame, or one per rendered table. Normalised here so the engine
+# only ever sees a single frame. `get_data` returns what `cells` writes, so asking for both is a
+# mistake worth naming rather than silently resolving.
+#' @keywords internal
+#' @noRd
+tx_cells_arg <- function(cells, get_data) {
+  if (is.null(cells)) return(NULL)
+  if (isTRUE(get_data)) {
+    cli::cli_abort(c("{.arg cells} and {.arg get_data} are the two directions of one door.",
+                     "i" = "Read with {.code get_data = TRUE}, write with {.arg cells}."))
+  }
+  parts <- if (is.data.frame(cells)) list(cells) else cells
+  ok <- is.list(parts) &&
+    all(vapply(parts, function(z) is.null(z) || is.data.frame(z), logical(1)))
+  if (!ok) {
+    cli::cli_abort(c("{.arg cells} must be a data.frame, or a list of one per rendered table.",
+                     "x" = "It is {.cls {class(cells)[[1]]}}."))
+  }
+  parts
+}
+
+# The shape half of `tab_html(cells = )`, run against the table as prepped so the message names
+# the argument rather than the purrr frame that would wrap it inside the engine.
+#' @keywords internal
+#' @noRd
+tx_cells_check <- function(x, tab, i, n_parts) {
+  if (is.null(x)) return(invisible(NULL))
+  where <- if (n_parts > 1L) paste0(" (table ", i, ")") else ""
+  if (!is.data.frame(x)) {
+    cli::cli_abort(c("{.arg cells}{where} must be a data.frame.",
+                     "i" = "Edit the one {.code tab_html(get_data = TRUE)} returns."))
+  }
+  if (nrow(x) != nrow(tab)) {
+    cli::cli_abort(c("{.arg cells}{where} must have one row per table row.",
+                     "x" = "It has {nrow(x)}, the table has {nrow(tab)}."))
+  }
+  unknown <- setdiff(names(x), names(tab))
+  if (length(unknown)) {
+    cli::cli_abort(c("{.arg cells}{where} names {length(unknown)} column{?s} the table does not have.",
+                     "x" = "{.val {unknown}}"))
+  }
+  invisible(NULL)
+}

@@ -50,6 +50,7 @@ The fields a \code{\{\}} template may name, and \code{display} may name on their
 \item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
 \item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
 \item \code{or} --- the odds ratio. Needs pct = "row" / "col"  (an odds ratio needs a percentage base).
+\item \code{odds} --- the odds --- \code{pct / (1 - pct)}, the quantity an odds ratio is a ratio of. Printed on the odds ratio's own ladder, so a cell below 1 reads its inverse ("1/2.60") unless \code{options(tabxplor.ratio_print = "raw")} asks for the plain number. Void where the percentage is 1 and the odds infinite. Needs pct = "row" / "col"  (odds need a percentage base).
 \item \code{ctr} --- the cell's contribution to the chi-squared. Needs test = TRUE  (the contributions come from the chi-squared).
 \item \code{var} --- the variance. Needs a numeric col_var.
 \item \code{sd} --- the standard deviation, in the variable's own unit. Needs a numeric col_var.

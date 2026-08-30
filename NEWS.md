@@ -1,3 +1,16 @@
+# tabxplor 2.0.0.9000 (development version)
+
+## New features
+
+* **`tab_html(cells = )` — write back what `get_data = TRUE` reads.** Hand back the same data.frame
+  with some cells edited and each edit is written verbatim into its `<td>`: the cell keeps its
+  classes (colour, alignment, borders) and its tooltip, and loses only the decorations that belonged
+  to the text it replaced (the bold split, the background pill, the sparkline). A value still equal
+  to the one the table renders means "keep", so the round trip
+  `tab_html(x, cells = tab_html(x, get_data = TRUE))` renders `x` unchanged. This is the supported
+  way to splice foreign markup — an input box, a link, a badge — into a tabxplor table, in place of
+  parsing its html back out.
+
 
 # tabxplor 2.0.0
 
@@ -36,7 +49,8 @@
 * **One display grammar for both producers.** Named layouts (`"est"`, `"est_ci"`, `"est_base"`, …)
   built on `{}` tokens — `display = "{pct} (n={n})"` — where `{est}` is whatever the column estimates
   and `{base}` the level it sits on. It is post-hoc: `set_display()` on a finished table gives the
-  same table as asking at build time. Every cell of a percentage table now carries its odds ratio.
+  same table as asking at build time. Every cell of a percentage table now carries its odds ratio,
+  and `display = "odds"` prints the odds it is a ratio of.
 * **`shape =` decides how a number enters a table**: quantile groups, bands at the mean and one
   standard deviation either side, one level per value, or a `"log"` / `"sqrt"` transformation. A
   numeric `row_vars` / `tab_vars` is grouped rather than exploded; a mean cell shows `49 (cv 36%)`.

@@ -392,3 +392,38 @@ testthat::test_that("a <caption> is pinned to the top and unpadded", {
   # the width guard needs a block box to hang off, which a <span> is not by default
   expect_match(css, ".tabxplor-caption{display:block;", fixed = TRUE)
 })
+
+
+# === SECTION: cells = , the write side of get_data ================================================
+
+testthat::test_that("cells = renders identically when nothing was edited", {
+  # THE invariant: `get_data` reads what `cells` writes, so the round trip is lossless. Without it,
+  # handing the frame back would silently strip every bold split, pill and sparkline.
+  t <- tab(gss, race, marital, pct = "row", color = "difference")
+  expect_identical(as.character(tab_html(t, css = FALSE, cells = tab_html(t, get_data = TRUE))),
+                   as.character(tab_html(t, css = FALSE)))
+})
+
+testthat::test_that("cells = writes markup verbatim and keeps the cell's classes", {
+  t  <- tab(gss, race, marital, pct = "row", color = "difference")
+  gd <- tab_html(t, get_data = TRUE)
+  gd[2, 2] <- '<input class="probe" size="5">'
+  h  <- as.character(tab_html(t, css = FALSE, tooltips = FALSE, cells = gd))
+  expect_match(h, '<input class="probe" size="5">', fixed = TRUE)   # not escaped
+  expect_false(grepl("&lt;input", h, fixed = TRUE))
+  expect_match(h, "tx-r tx-num", fixed = TRUE)                      # the <td> is still tabxplor's
+
+  # a rowspanned label cell takes the same route
+  gd2 <- tab_html(t, get_data = TRUE); gd2[1, 1] <- "<b>EDITED</b>"
+  expect_match(as.character(tab_html(t, css = FALSE, cells = gd2)), "<b>EDITED</b>", fixed = TRUE)
+})
+
+testthat::test_that("cells = refuses a frame that is not the table's", {
+  t  <- tab(gss, race, marital, pct = "row")
+  gd <- tab_html(t, get_data = TRUE)
+  expect_error(tab_html(t, cells = gd[-1, ]),                  "one row per table row")
+  expect_error(tab_html(t, cells = stats::setNames(gd, c(names(gd)[-1], "nope"))), "does not have")
+  expect_error(tab_html(t, cells = "x"),                       "must be a data.frame")
+  expect_error(tab_html(t, cells = gd, get_data = TRUE),       "two directions")
+  expect_error(tab_html(list(t, t), cells = gd),               "one data.frame per rendered table")
+})

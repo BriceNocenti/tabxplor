@@ -20,7 +20,7 @@ five corrections to their measurements (§7.2).
 | `dev/tabxplor_ecosystem_simplification.md`      | round 1 (Phase 17) — the disease patterns                                                      |
 | `dev/tabxplor_architecture.md`                  | the **current** architecture — update it as phases land                                        |
 | `dev/release_checklist.md`                      | the release mechanics (the release phase, after Phase 22)                                      |
-| `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`     | the already-implemented phases' "DONE" summaries, including all of Phase 19                    |
+| `dev/tabxplor_roadmap_DONE_PHASES.md`     | the already-implemented phases' "DONE" summaries, including all of Phase 19                    |
 
 ⚠ Every `file:line` in 19o, 19p and here is an anchor from **2026-08-15**. `tab.R`, `tab_reg.R`,
 `fmt_class.R` drift by ±20 lines per phase. **Re-grep before editing.**

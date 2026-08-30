@@ -15,7 +15,7 @@ measurement passes + the maintainer's rulings). That study is the **evidence**; 
 | `dev/tabxplor_ecosystem_simplification.md`  | round 1 (Phase 17) — the disease patterns this phase inherits               |
 | `dev/tabxplor_2.0.0_decisions.md`           | the architecture decisions of the whole 2.0.0 cycle                         |
 | `dev/tabxplor_architecture.md`              | the **current** architecture — update it as phases land                     |
-| `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` | every landed phase's DONE record                                            |
+| `dev/tabxplor_roadmap_DONE_PHASES.md` | every landed phase's DONE record                                            |
 
 ⚠ Every `file:line` in the study and here is an anchor from **2026-08-13**. `tab.R`, `tab_reg.R`,
 `fmt_class.R` drift by ±20 lines per phase. **Re-grep before editing.**

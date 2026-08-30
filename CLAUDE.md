@@ -266,7 +266,7 @@ tab() / tab_many()                          [public; differ only in default outp
 
 ### The display grammar
 
-What a cell prints is a `{}` template over declared tokens (`DISPLAY_TOKENS`), resolved by one boundary `tab()`, `tab_reg()` and `set_display()` share, so a layout learnt on a crosstab means the same on a regression. `{est}` and `{base}` are **scale-relative** — the deviation a column estimates, and the level it sits on — which is what lets one named preset (`DISPLAY_PRESETS`) render an odds ratio, a mean difference and a percentage alike. A composite has a **primary** token, the first outside brackets: it carries the stars, it is what `get_num()` and Excel return, and it is the only part the colour paints — and its converse, a template with no token outside brackets, has no primary at all and renders whole as an aside. A token may also carry **its own precision** (`{base:1}`), which beats every declared default — digits are a display property, and the cell's one `digits` field cannot say that an estimate reads at three decimals and its aside at one. **A display is post-hoc** — every field a layout can print is populated at build, so choosing one triggers no computation and changes no number, and a token may be **derived** rather than stored (`resid`, `gap`, `sd`, `cv`). A numeric column's default layout is `mean_cv` — the spread as a percentage of the level, comparable between columns measured in different units — chosen per column and falling back to the bare mean where a mean is not positive. The **base count** is the display-time fact both producers share: folded into the Total cell when the table rests on one population, given one `n` column per block at the right when it rests on several (a spread, a regression's groups) — and the per-block Total columns then go, holding nothing but a repeated 100 %.
+What a cell prints is a `{}` template over declared tokens (`DISPLAY_TOKENS`), resolved by one boundary `tab()`, `tab_reg()` and `set_display()` share, so a layout learnt on a crosstab means the same on a regression. `{est}` and `{base}` are **scale-relative** — the deviation a column estimates, and the level it sits on — which is what lets one named preset (`DISPLAY_PRESETS`) render an odds ratio, a mean difference and a percentage alike. A composite has a **primary** token, the first outside brackets: it carries the stars, it is what `get_num()` and Excel return, and it is the only part the colour paints — and its converse, a template with no token outside brackets, has no primary at all and renders whole as an aside. A token may also carry **its own precision** (`{base:1}`), which beats every declared default — digits are a display property, and the cell's one `digits` field cannot say that an estimate reads at three decimals and its aside at one. **A display is post-hoc** — every field a layout can print is populated at build, so choosing one triggers no computation and changes no number, and a token may be **derived** rather than stored (`resid`, `gap`, `sd`, `cv`, `odds`). A numeric column's default layout is `mean_cv` — the spread as a percentage of the level, comparable between columns measured in different units — chosen per column and falling back to the bare mean where a mean is not positive. The **base count** is the display-time fact both producers share: folded into the Total cell when the table rests on one population, given one `n` column per block at the right when it rests on several (a spread, a regression's groups) — and the per-block Total columns then go, holding nothing but a repeated 100 %.
 
 ### The colour system
 
@@ -353,7 +353,7 @@ The docs form one hierarchy, general to specific. **Each fact is stated at exact
 - **`vignettes/tabxplor-reading-a-regression.Rmd`** — the most precise account of what tabxplor's *philosophy*, *vocabulary*, *usage* and *real-world regression use cases* really are; its words (deviation, observed vs adjusted, the base, the round trip) are the package's own.
 - **Roxygen man pages** (`?tab`, `?tabxplor-display`, `?tabxplor-vctrs`, `?tabxplor-options`, `?tabxplor-data.table`) — user-facing reference: *usage* and the main use cases, never build/internals/history. A `@param` states what the argument is, its values, and at most one sentence of when to change it; the rest is a link to the vignette that owns it. ⚠ The manual is LaTeX, so an Rd file is ASCII but for the few glyphs it can set (`— … × ÷`); `test-non-ascii.R` locks it.
 - **`dev/*.md`** (`.Rbuildignore`'d) — transversal or expert technical guides only, and there are seven: `dependencies.md` (the dependency policy), `release_checklist.md`, `french_glossary.md`, `jamovi_module.md`, `colors.md`, `inference.md`, `regression.md`. Each holds what an `R/` header is too short to derive — a foreign system, a cross-file policy, a statistical derivation — and the header that needs it points at it by section. ⚠ The 2.0.0 evidence base is `dev/archive_2.0.0/` (indexed by its own `README.md`): a `dev/<name>.md` named in a DONE summary lives there, unchanged.
-- **Roadmap "DONE" summaries → `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
+- **Roadmap "DONE" summaries → `dev/tabxplor_roadmap_DONE_PHASES.md`** — the ONLY place dev history lives.
 
 Inspect a built table at runtime through the accessors: `tab_structure()`, `tab_columns()`, `reg_measures()`, `reg_formulas()`, `fmt_attr()`, and the `get_*` / `set_*` family.
 
@@ -429,19 +429,15 @@ Five kinds go to `dev/tests/`: **source-tree lint** (reads `R/`, `jamovi/`, so i
 
 ## Jamovi module development
 
-tabxplor currently use jamovi `2.6.44.0` (solid). Version 2.0.0 will also be tested on jamovi current "solid" version `2.7.37` afterwards (Phase 7i confirmed 2.7.37 ✓).
+tabxplor's module targets both lines jamovi builds for: `jamovi/0000.yaml` declares `minApp: 2.4.0`, and the two dev machines cover the two channels — **Windows on *solid*** (2.6.44 verified, then 2.7.37 ✓ / 2.7.38), **WSL2 on *current*** (28.x). See the build-and-test policy below.
 
-✅ **jamovi IS installed on BOTH dev machines** — flatpak `org.jamovi.jamovi` **2.7.36**, bundled R **4.5.0**: the desktop WSL2 (migration Phase C3, 2026-07-16) and the **laptop WSL2 (Ubuntu 26.04, 2026-08-13)**. Launch it with **`jamovi`** (the `~/.local/bin/jamovi` wrapper — never bare `flatpak run`, see below). The module builds with `jmvtools::install(home = "flatpak")` in ~2 min (~33 s once jamovi's R has the dep tree), and Crosstables is verified running on real data.
+✅ **jamovi IS installed on BOTH dev machines** — flatpak `org.jamovi.jamovi`, launched with **`jamovi`** (the `~/.local/bin/jamovi` wrapper — never bare `flatpak run`, see below). The module builds with `jmvtools::install(home = "flatpak")` in ~2 min (~33 s once jamovi's R has the dep tree), and Crosstables is verified running on real data.
 
-⚠ **2.7.36 is PINNED and MASKED, and that is now load-bearing.** Flathub has moved jamovi to a **new version scheme**: the current stable is **28.x** (28.2 as of 2026-08-13) and only **one** 2.7.x commit is still retained — `56eb8de3d468e093ac25cf0bb6236c51e0828fb1b5e8e5bce7b3df110cf49240` = 2.7.36 (2026-06-28); 2.7.32 is the other. `flatpak install` has **no `--commit` option** (only `flatpak update` does), so the recipe is install → downgrade → mask:
+⚠ **This desktop WSL2 box runs jamovi 28.2, NOT 2.7.36 — measured 2026-08-30.** `jamovi --version` → **28.2.0.0**, `jamovi --r-version` → **4.6.0-x64**, commit `3cced0e1…` dated 2026-08-13, runtime and Sdk **25.08**. The installed `~/.jamovi/modules/tabxplor/jamovi.yaml` agrees (`rVersion: 4.6.0-x64`, rebuilt 2026-08-29), and `jmvtools` is **28.2**. This matches the decided policy — **Windows tests *solid*, WSL2 tests *current*** — because jamovi renumbered after 2.7.38 (the series is 28.x, not 2.8.x) and **Linux has no solid channel at all**. The series fixes the R version (2.7 → R 4.5.0, 28.x → R 4.6.0) and the frozen CRAN snapshot, so pin `jmvtools` to the app on each machine.
 
-```bash
-flatpak --user install -y flathub org.jamovi.jamovi
-flatpak --user update  -y --commit=56eb8de3d468e093ac25cf0bb6236c51e0828fb1b5e8e5bce7b3df110cf49240 org.jamovi.jamovi
-flatpak --user mask org.jamovi.jamovi     # else a routine `flatpak update` silently jumps to 28.x
-```
+⚠ **Nothing is masked here any more, and the version FIELD lies.** `flatpak list` / `flatpak info` report `Version: 2.7.27` — upstream stopped updating the appstream `<releases>` block after the renumbering — while `/app/lib/jamovi/version` and `jamovi --version` both say `28.2.0.0`. `flatpak mask` prints nothing and `flatpak remote-info flathub org.jamovi.jamovi` returns the installed commit, so the app is simply current. **Verify by mechanism, never by the version field**: `jamovi --version`, `jamovi --r-version`, and `--r-version` must equal the module's `rVersion`.
 
-The mask matters because 2.7.36 is the "solid" teaching target **and** because a 28.x jamovi would pair with a newer `jmvtools` whose compiler can emit a `jms` that 2.7.36 refuses (next note). Verify by mechanism, never by the version field — `flatpak info` reports a stale appstream `Version: 2.7.27`; `jamovi --version` reports the truth (`2.7.36.0`), and `--r-version` must equal the module's `rVersion` (`4.5.0-x64`).
+⚠ **`flatpak run --devel` needs the freedesktop *Sdk*, not just the Platform**, and an update pulls only the Platform. jamovi 28.2 moved to the **25.08** runtime, so `jmvtools::install(home = "flatpak")` dies with `runtime/org.freedesktop.Sdk/x86_64/25.08 not installed` until you run `flatpak install -y flathub org.freedesktop.Sdk//25.08`. Check with `flatpak info org.jamovi.jamovi | grep -i runtime` after any jamovi update.
 
 ✅ **The six "OPEN — maintainer step: regenerate `jmvtab.h.R`" items (Phases 7a, 7e, 7g-i, 7g-ii, 7g-iii, 7h) are CLOSED** — one `jmvtools::prepare()` covered all of them, and the compiled **`uijs` blob** means those UI changes are live in a running app for the first time.
 
@@ -451,34 +447,34 @@ The mask matters because 2.7.36 is the "solid" teaching target **and** because a
 
 ⚠⚠ **`ELECTRON_RUN_AS_NODE` — do not debug jamovi without knowing this.** Claude Code/Positron export `ELECTRON_RUN_AS_NODE=1`; flatpak passes it into the sandbox and jamovi's Electron runs as **plain node** → **exit 0, no window, no error**, and `jmvtools::install()` dies `"bad option: --install"` (rc=9). `flatpak run --unset-env=` is NOT enough (zypak re-spawns children via the host); only `env -u` on the host works — which is what the `jamovi` wrapper does. In R: `Sys.unsetenv("ELECTRON_RUN_AS_NODE")` before `jmvtools::install()`. ⚠ `jmvtools::check()` passes regardless — it never reaches Electron — so a green `check()` proves nothing here.
 
-⚠⚠ **`R_LIBS_USER` in `~/.Renviron` — the second environment trap, found on the laptop 2026-08-13.** jamovi's flatpak bundles **its own R** (4.5.0 for 2.7.36) and, having `filesystems=home`, it **reads your `~/.Renviron`**. A hard-coded library path there —
-
-```sh
-R_LIBS_USER=~/R/x86_64-pc-linux-gnu-library/4.6      # WRONG: pins one R version
-```
-
-— puts your **system R 4.6** packages on jamovi's R 4.5.0 `.libPaths()`, and `jmvtools::install(home = "flatpak")` dies at lazy-load with `data_table.so: undefined symbol: R_duplicateAsResizable` (a 4.6 symbol absent from 4.5.0). The assignment is **unconditional**, so **no env var passed to the child can override it** — `withr::with_envvar()` does not help; the file itself must be version-generic:
+⚠⚠ **`R_LIBS_USER` — jamovi's R reads your library, and the old fix no longer separates them.** jamovi's flatpak bundles **its own R** and, having `filesystems=home`, it reads your `~/.Renviron` and R's default `R_LIBS_USER`. The 2026-08-13 fix was to make the path version-generic —
 
 ```sh
 R_LIBS_USER=~/R/%p-library/%v      # R's own default: %p = platform, %v = major.minor
 ```
 
-Same resolved path for system R (verify with `.libPaths()` before/after), while jamovi's R falls back to its bundled `/app/lib/R/library`. Diagnose in one line: `flatpak run --devel --command=sh org.jamovi.jamovi -c '/app/bin/R --vanilla --no-echo -e ".libPaths()"'` — anything outside `/app` is contamination. ⚠ This bites on **any** second R version, not just jamovi's.
+— which worked while jamovi was on R **4.5.0** and the system on **4.6**. ⚠ **jamovi 28.x is on R 4.6.0 and system R is 4.6.1, so `%v` is `4.6` for BOTH and they now share one library.** Measured 2026-08-30 from inside the sandbox: jamovi's `.libPaths()` is `/home/dev1/R/x86_64-pc-linux-gnu-library/4.6` **before** `/app/lib/R/library`, and it resolves `jmvcore` **2.7.35** (system) in place of its own bundled **2.7.38**, plus system `data.table` and `Rcpp`. The old crash signature (`data_table.so: undefined symbol: R_duplicateAsResizable`) will not recur — both are 4.6, so the ABI matches — but **version skew is silent**: building this study's probes, a script that let the system `jmvcore` win failed with `could not find function "RProtoBuf_new"` and succeeded once the path was pinned to `/app` — mechanism not pinned down, but the fix is the pin. There is no env-var cure (the assignment is unconditional, so `withr::with_envvar()` does not help): to get a clean read, pin the path in the call itself —
+
+```r
+.libPaths(c("/home/dev1/.jamovi/modules/tabxplor/R", "/app/lib/R/library"))
+```
+
+Diagnose in one line: `flatpak run --command=/app/bin/Rscript org.jamovi.jamovi -e '.libPaths()'` — anything outside `/app` is contamination. ⚠ This bites on **any** second R sharing a minor version.
 
 ⚠ **WSLg is in COPY MODE** (known WSL 2.7.x bug [microsoft/WSL#40618](https://github.com/microsoft/WSL/issues/40618)): windows can be slow or render blank (taskbar entry + penguin icon, `[WARN:COPY MODE]` in the title). **Not a jamovi problem** — plain `xmessage` fails identically. One-time fix, persists across reboots: `sudo mkdir -p /mnt/shared_memory && sudo mount -t tmpfs tmpfs /mnt/shared_memory`. ⚠ The bug is *unstable* — it sometimes renders fine without the mount, then regresses; a working window is not evidence the mount is unneeded.
 
 ⚠ **There are now TWO build paths, and they are not interchangeable — `.jmo` bundles are platform-specific** (migration Phase A1):
 
-| Target                               | jamovi                                                  | Checkout                                                                    | Recipe                                                                                                                                                         |
-|--------------------------------------|---------------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi` **2.7.36 ✅ installed (C3)** | `~/github/tabxplor` — **authoritative for source**                          | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//24.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
-| **Windows `.jmo`** (release only)    | Windows jamovi, **kept forever**                        | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`                                     |
+| Target                               | jamovi                                           | Checkout                                                                    | Recipe                                                                                                                                                         |
+|--------------------------------------|--------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi` **28.2 ✅ installed** | `~/github/tabxplor` — **authoritative for source**                          | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//25.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
+| **Windows `.jmo`** (release only)    | Windows jamovi, **kept forever**                 | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`                                     |
 
 **A Linux jamovi cannot produce a Windows bundle**, so the Windows checkout survives *even if C3 fully succeeds* — this is not a C3-failure fallback. The rule that matters: **never edit tabxplor in both places.** Edit in WSL, pull on Windows, build there.
 
-✅ **`jmvtools` is pinned to 2.7.26** (C3). ⚠ Never `install.packages("jmvtools", repos="https://repo.jamovi.org")` — that index serves 2.7.26 **and** 28.0-28.3, so R takes **28.3**, whose newer compiler can emit a `jms` version 2.7.36 refuses. Reinstall with the explicit tarball: `install.packages("https://repo.jamovi.org/src/contrib/jmvtools_2.7.26.tar.gz", repos = NULL, type = "source")` (install `node` from that repo first — `repos = NULL` resolves no deps).
+✅ **`jmvtools` is pinned per machine, to the app it builds for** — **28.2** on this WSL2 box (measured), **2.7.26** on Windows. ⚠ Never `install.packages("jmvtools", repos = "https://repo.jamovi.org")` — that index serves 2.7.26 **and** 28.0-28.3 at once, so a bare install silently takes the newest. Use the explicit tarball, e.g. `install.packages("https://repo.jamovi.org/src/contrib/jmvtools_2.7.26.tar.gz", repos = NULL, type = "source")` (install `node` from that repo first — `repos = NULL` resolves no deps). The two toolchains do **not** conflict: the bundled `jamovi-compiler` in 2.7.26 and in 28.2 both hard-pin `jms: '1.0'` and both accept `jas` in `(1.1, 1.2]`, so the git-tracked `jamovi/*.yaml` stay valid for both.
 
-⛔ **The 2.6.44 flatpak is GONE** (C3): Flathub retains only ~5 commits; 2.6.44 was built 2025-03-06 and is long pruned. **2.6-solid compatibility is verified on Windows only** — via the build-only Windows checkout, which is kept forever regardless. ⚠ **The retention window is now the constraint on 2.7.x itself**: as of 2026-08-13 the log holds 28.2 / 28.1 / 28 / **2.7.36** / 2.7.32, so 2.7.36 is *two commits from being pruned*. Once it goes, a fresh machine can no longer install it from Flathub — check `flatpak remote-info --log flathub org.jamovi.jamovi` before assuming a reinstall is possible, and keep the installed copy masked.
+⛔ **Flathub keeps only ~5 commits, so old jamovis cannot be reinstalled.** 2.6.44 is long pruned, and 2.7.36 has since gone the same way — this box was updated to 28.2 on 2026-08-13. **2.6- and 2.7-solid compatibility is verified on Windows only**, via the build-only Windows checkout, which is kept forever for exactly that reason. Check `flatpak remote-info --log flathub org.jamovi.jamovi` before assuming any given version is still installable.
 
 To know the real structure of the final .html and .js, check at this live capture done from dev console (for a basic table) :
 - `dev/jamovi/dev_console_live_capture/Jamovi_tabxplor_1_3_1_basic_table.html` : the live html from tabxplor 1.3.1 jamovi module
@@ -514,19 +510,9 @@ Commits :
 
 
 
-## tabxplor version 2.0.0 roadmap : the current goal
+## tabxplor development roadmap
 
-Currently implementing tabxplor 2.0.0 (2.0.0 only if breaking changes land). **Update the sections below at the end of every work session.**
-
-This roadmap is the **plan of plans**: the phased implementation order plus every open question. A fresh session asked for a *part* of the work should read, in order:
-
-1. **This roadmap** — the phase your task belongs to, its bullets, and its pointers
-2. **`dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md`** – the detailed report of all the **already implemented phases of the roadmap**.  
-3. **Top of this CLAUDE.md** — Repository Map, Architecture.
-
-The performance harness lives in `dev/benchmarks/` (`.Rbuildignore`'d). Per the scope decision, save every phase's before/after runs under `dev/benchmarks/results_2.0.0/`.
-
-Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline here — read the matching ones before you start.
+Currently implementing tabxplor 2.0.1. **Update the sections below at the end of every work session.**
 
 #### Verification (every phase)
 
@@ -535,758 +521,30 @@ Other long-form 2.0.0 docs live in `dev/` (all `.Rbuildignore`'d), never inline 
 
 ---
 
+### v2.0.1 — Phase 1 — `display = "odds"` **DONE**
 
-### Phase 24 — About to release, last checks
+Asked for by `formations_stat`'s M2 logit lesson, which teaches percentages -> odds -> odds ratios and
+had no way to print the middle rung: 1.3.1 hijacked the `rr` field, retired in 2.0.0, and
+`set_display("rr")` now falls back silently and prints wrong numbers.
 
-#### Phase 24a — Unified theme framework ✓ DONE
+**Derived, not stored.** The odds ARE `pct / (1 - pct)`, computable from one field of one column, so
+`odds` joins `resid`, `gap`, `sd` and `cv` as a token with `field = NA` — no 22nd `fmt` field, no
+golden churn. Three insertion points: the `DISPLAY_TOKENS` row, one arm in `get_num()` guarded by
+`any()` so a display that never asks for odds pays nothing, and one entry in `fmt_mult_plan()`'s
+`tok` map. `settable = FALSE`: writing an odds back would mean writing a percentage.
 
-**The site is themed, and the theme lives in a package.** tabxplor's pkgdown site was themed by nothing at all — stock Bootstrap dark, stock highlighting, `_pkgdown.yml`'s `template:` two lines — while the whole design sat unused in `dev/` as preview tools and generated `.scss` fragments. It is now delivered by **`~/github/txtheme`**, a new small R package + Quarto extension where a colour is decided once, in one declared grid, and every consumer reads what a generator wrote from it. tabxplor is its first consumer, not its home.
+**It borrows the odds ratio's ladder** (`comparison = "odds_ratio"`) rather than naming a measure of
+its own — an odds is a level, not a comparison, so it is not `bare` and stays out of
+`DISPLAY_MEASURE_TOKENS`, whose `stopifnot` admits one token per measure. `geometry = "ratio"` gives
+the pillar header `<row%-odds>` for free. Void where `pct` is 1, declared like `cv`'s and `moe`'s
+voids rather than special-cased at render time.
 
-**What tabxplor's own YAML shrank to.** `_pkgdown.yml`'s `template:` gains one line, `package: txtheme` — no `bslib:` block, no `theme:`/`theme-dark:`, no brand file. `pkgdown/extra.scss` is back to the `.dropdown-menu` rule alone, and `DESCRIPTION` names `BriceNocenti/txtheme` in `Config/Needs/website` (never a Suggests: no R code of tabxplor's touches it, and `Config/Needs/*` never reaches CRAN).
+**Watch the `%`**: a `doc =` string reaches the Rd through `@eval`, where a bare `%` comes out
+double-escaped and `test-non-ascii.R` catches it. Say "the percentage is 1", not "100%".
 
-**Departures from the brief** (`dev/unified_theme_framework.md`, moved to `txtheme/dev/design.md` and rewritten from proposal to description):
 
-- **No `_brand.yml` for pkgdown, and no `brand.yml` dependency.** A template package's `extra.scss` arrives as a *rules* layer (`bslib::bs_add_rules()`), where a Sass variable is inert but a Bootstrap 5.3 **custom property** is not — and all eight chrome targets have `--bs-*` twins. The brand file bought pkgdown nothing; the brief's eight-line `bslib:` block became zero lines.
-- **⚠ The `-rgb` twins, which the brief did not mention.** Bootstrap derives `--bs-secondary-color`/`--bs-tertiary-color` from the *literal* body-colour channels and `pkgdown.scss` reads `var(--bs-body-color-rgb)` in eleven places; `a` reads **only** `--bs-link-color-rgb`, so setting the link hex alone does nothing at all. The generator emits each twin beside its hex plus the two derived `rgba()` rules, and `--bs-link-hover-color` derived by Bootstrap's own 20 % tint.
-- **One declared palette instead of a vendored 177-scope theme JSON + `overrides.yml`.** Four grids, split by the namespace each key belongs to: `TX_PALETTE` (colour), `TX_SLOTS` (where it is painted), `TX_TOKENS` (skylighting's 31, once each), `TX_BRAND` (Quarto role). Foreign keys checked at load, as in `zzz-fact-keys.R`.
-- **The heading ladder is derived, not typed.** Each rung's row carries `spec = "oklch 0.950 0.10 100"` and `.onLoad()` rebuilds the hex from it — `warm-95-10`, floored on the ink at L 0.840.
-- **The `.at` shim and the annotations sheet ship with the package**, through its own `inst/pkgdown/BS5/templates/in-header.html` (which keeps pkgdown's own line, and which a site can still shadow). ⚠ The annotation classes are **opt-in** (`template: params: txtheme: {annotations: true}`): `.non, .error {text-decoration: underline double}` would decorate every warned or errored example on a reference page, which emits `<span class="warning">` of its own. tabxplor does not opt in.
-- **`heading_ladders.R`'s maths became txtheme's exported API** — one true source. The file keeps the 64 ladder proposals and attaches `txtheme::oklch_hex()` / `hex_oklch()` / `max_chroma()` / `apca()` / `contrast()` under the names the three previews already call, so nothing else changed. Dev-only: `dev/` is `.Rbuildignore`d and stripped from the release branch.
-- **No recorded APCA column.** A slot knows the ground it is read on, a colour does not, so contrast is a report `build_theme()` prints per slot rather than a cell that could drift. `inst/prose/prose.scss` was dropped for the same reason: every prose rule is a `TX_SLOTS` row (colour + style), which beats a second hand-written file stating half of each rule.
+#### Phase xx — jamovi 2.0.0 release
 
-**Two findings that cost a render each, both now recorded in `txtheme/dev/design.md` Appendix A:**
-
-- ⚠ **libsass cannot compile CSS `min()` with mixed units.** The committed `max-height: min(80vh, 34rem)` in `pkgdown/extra.scss` aborted the whole site build with *"Incompatible units: 'rem' and 'vh'"* — a latent breakage found by this phase. Uppercase `MIN(...)` matches no Sass function and passes through; pkgdown's own `pkgdown.scss` writes `MAX(100%, 20rem)` for the same reason.
-- ⚠ **A Quarto `color.palette` entry named after a brand role is promoted to that role, in both modes and silently.** A palette key `link` put the dark accent blue on the *light* stylesheet at Lc 30. The colour is called `accent`, and `.onLoad()` refuses any name in `BRAND_ROLES`. (A role that names only one mode *is* correctly ignored in the other — verified, so the unified `{dark:}`-only brand file is safe.)
-
-**The acceptance test.** Stage 0 themed the site by hand as a golden file; stage 2 replaced it with `template: package: txtheme`. The compiled Bootstrap CSS carries the **identical 3112 rules**, the only difference being that `.dropdown-menu` moves from before to after the theme block — pkgdown's documented layering (a template package's `extra.scss` lands *before* the site's own, which is what keeps tabxplor an `!important`-free lever over txtheme). Verified further: 30 scoped token rules, `--bs-body-color-rgb: 205,203,188` (not Bootstrap's stock `222,226,230`), both assets copied, `txtheme-at.js` linked at the right relative root, the annotations sheet not linked, `check_pkgdown()` clean.
-
-**Removed from tabxplor:** `dev/highlight-starless-monokai-{atom,pro,one}.scss` (their own header said "copy this to `pkgdown/extra.scss`" — `template: package:` *is* that copy), `dev/annotation_classes.css` (moved to `txtheme/inst/prose/annotations.scss`, minus its `:root` block, which the generator now writes), `dev/unified_theme_framework.md` (moved). `dev/site_theme_preview.R` lost `starless()`, the three port definitions, the writer loop and the on-page YAML box (578 → 485 lines): it reads txtheme's shipped flat `.scss` through its own existing parser, and its job narrows from "choose the theme by eye" to "check the shipped theme against real markup".
-
-**txtheme itself:** `R CMD check` 0/0/0 in 12.6 s, 169 assertions. **No `Imports` at all** — pkgdown reads a shipped file rather than loading the namespace, so on a website build the package only has to install; `tx_tribble()`/`tx_grid()` reimplement the grid fold in ~25 lines of base R, and the JSON and YAML writers are hand-rolled for the same reason. `build_theme(check = TRUE)` rebuilds every output in memory and diffs it against disk (no dates in banners, sorted keys), and the suite asserts it. Verified on the Positron-bundled Quarto 1.10.18: a two-page project renders with `format: txtheme-html`, two syntax-highlighting stylesheets with different content as a `quarto-color-scheme`/`quarto-color-alternate` pair, and the brand hexes in the dark stylesheet from a bare `_brand.yml` at the root with no `brand:` key anywhere.
-
-**The workflow's prune call is now guarded.** `.github/workflows/pkgdown.yaml` ran `source("dev/site_prune.R")` unconditionally, which would have failed on `master` after the release, where `dev/` is stripped — and where the prune is unnecessary anyway, `CLAUDE.md` being stripped too. It is `if (file.exists("dev/site_prune.R"))` now.
-
-⚠ **One maintainer step remains**: rehearse tabxplor's change as a **PR** rather than pushing to a branch the workflow deploys from — `.github/workflows/pkgdown.yaml` runs on `pull_request` with its deploy step gated `if: github.event_name != 'pull_request'`, so a PR is a free full-fidelity check that pak resolves `BriceNocenti/txtheme` (a public repo: `secrets.GITHUB_TOKEN` cannot fetch a private one).
-
-#### Phase 24b — the regression teaching article, retitled and brought level with its French twin ✓ DONE
-
-**The French twin had moved ahead, and the English had not.** The maintainer manually rewrote `tabxplor-all-else-equal-fr.Rmd` over two commits (288 insertions / 213 deletions): a reorganisation into six sections, a dozen clarified approximations, two passages cut. This phase carried the meaningful half of that rewrite into the English — in English idiom, not translated back — and renamed both files, since the title no longer leads on "all else equal".
-
-**Both files are renamed, and every reference with them.** `vignettes/tabxplor-all-else-equal.Rmd` → **`vignettes/tabxplor-reading-a-regression.Rmd`**, titled *Reading a regression without losing sight of the percentages*; the French twin → `vignettes/articles/tabxplor-reading-a-regression-fr.Rmd`, keeping its own title *Interpréter un modèle de régression sans perdre de vue les pourcentages*. ⚠ **This breaks published URLs and the `vignette()` name users type.** Updated in one pass: `_pkgdown.yml` (both navbar entries — the French one was stale against its own file's title — plus both `articles:` index rows and the "Start here" blurb), `README.Rmd`/`.md`, `pkgdown/index.Rmd`/`.md`, `R/tab_reg.R` and `R/data.R` roxygen (`devtools::document()` rewrote `tab_reg.Rd`, `questionr_hdv.Rd`, `car_salaries.Rd`), the four sibling vignettes' cross-links in both languages, `dev/regression.md`, `dev/french_glossary.md`, `dev/tabxplor-the-shape-of-a-number.Rmd`, and this file's Repository Map and documentation-ecosystem entry. `dev/archive_2.0.0/` keeps the old paths, being frozen. `pkgdown::check_pkgdown()` clean.
-
-**The six-section progression, which is the reorganisation's whole point.** §1 is now the two cross-tables alone; §2 turns a percentage into a comparison and settles significance; §3 holds the other variables equal — choosing a model, the bridge, reading a row, then the numeric predictor and the reference profile, both moved down from §2; §4 comes back to a sayable sentence; **§5 is new**, gathering everything about adjustment (STROBE, the five things, block-by-block, colouring) which previously sat inside §3; §6 is what the model cannot settle. The gain: adjustment is now studied *after* the reader can say a number out loud, instead of before.
-
-**What was ported, and what it fixes.** The racetrack derivation of odds (6.1-to-1 against 2.8-to-1, ratio 0.46, printed `1/2.11`) replacing a run-on paragraph — Cibois' image, already credited in the bibliography but never actually used. The **four-row odds-ratio scale table** (5→10 %, 50→68 %, 74→86 %, 90→95 %, all at OR 2.11) and the rule it earns: *an odds ratio means nothing until you know which percentage it starts from*. The **logit paragraph**, the first place the article explains the word *link*, with its punchline that the commonest model for the commonest kind of social-science variable works natively in the hardest deviation to read. The clinical-trial contrast that makes "significance is a permission slip" land. The **Model fit** report card, which was missing two of the rows it actually prints (`Dispersion`, `LR vs null`). The two safe English ways to say an odds ratio. A dedicated `##` on marginal effects, with the Cibois false friend (*effet marginal* = in percentage points, vs the original sense, averaged over the sample). Simpson's paradox, which the English never named. `outcome_level = "No"` demonstrating that a ratio is not symmetric.
-
-**Two structural table changes.** The three `checks` families are now **one side-by-side `tab_reg()` call** on three copies of the column instead of three separate tables — the reader compares rather than scrolls, and it is one fit cheaper. The block-by-block model list now starts from `"colour" = "colour"` alone, so the progression runs −11.7 → −11.7 → −7.8 → −5.2 — and the repeated first number is the bridge shown twice, a univariable model *being* the cross-table.
-
-**Three passages are commented out, not deleted** (maintainer's call, matching the French): the `link` expert knob, the Table 2 fallacy, and the `display = "base"` demo. ⚠ Their chunks carry `eval=FALSE, include=FALSE`, because **knitr evaluates chunks inside HTML comments** — pandoc never sees them, but the fits still run. The French file paid that cost on its own commented `link` block; fixed there too. **Westreich and Greenland, 2013** left both bibliographies with the section it anchored.
-
-**Four errors found by rendering rather than by reading.** The English claimed a starless level was non-significant *at 95 %*; the star ladder is 90 / 95 / 99 % and the greying is decided at 95 %, so both are now stated. ⚠ The French said 90 % and **was right** — an earlier "correction" of it was reverted. The 2 SD step lands at 4.7 databases, not "about four". `reg_measures()`'s refusal message is suppressed by this article's `message = FALSE`, so the prose no longer promises it. And two search-and-replace scars — "of previous `car_arrests`, previous convictions" and "These are academic `car_salaries`" — plus a chunk passing `color = c(TRUE, "adjustment")` while its prose said `c("measure", "adjustment")`.
-
-**Measured**: English renders in **15.2 s**, French in **14.7 s** (down from before, the commented block no longer fitting models). Shipped suite **FAIL 0 | PASS 4376**. Every figure quoted in new prose was read off the rendered tables, not carried over from the French: observed range 61–91 % (OR 6.7), the 2 SD odds of 3.5, the binomial 1.55, the marginal 1.34 at `outcome_level = "No"`, the CVs of 28–37 %.
-
-#### Phase 24c — last manual review ✓ DONE
-
-Fourteen items from the maintainer's own read-through of finished tables. No new feature: every fix
-is a wrong number, a wrong emphasis, a clipped cell or a stale option, and each landed in a declared
-fact or a boundary that already existed.
-
-**The precision band, stated once.** `tab_reg(car_salaries, salary, …)` printed `(101 002.4)` and
-`+14 088.0` — one decimal of noise on a six-figure mean. The rule is now one sentence: **a column
-keeps between 2 and 3 significant figures of its own level unless the user says otherwise**, written
-with one primitive, `tx_sig_digits()` (`R/fmt_class.R`). It applies to **unit scales** alone — those
-whose level is in the outcome's own units, gated on the fact the grid already carries
-(`EST_SCALES$base_display == "mean"`) — and never to a percentage, a point, a ratio or an odds ratio,
-whose range is known and whose precision is declared. `reg_cell_digits(scale, level_mag)` clamps the
-declared default; `fmt_magnitude_cap()` stops format()'s **four** floors (`DISPLAY_MIN_DIGITS`,
-`est_digits`, `fmt_ci_digits`, the `diff_mean` 0→1 bump) putting the decimal back — measured, storing
-0 alone was invisible, `est_ci` still printing `[2 853.0; 12 396.0]`.
-
-⚠ **The magnitude is read once per SPEC, from the whole frame** (`reg_resolve_specs` →
-`new_reg_spec(level_mag =)` → the three existing stamping sites). A post-hoc pass over the finished
-table was designed first and is wrong three ways, each verified: grouping by *scale* merges two
-outcomes of unlike magnitude (`tab_reg(car_salaries, c(salary, yrs.service), …)` is one table, four
-`raw_diff` columns); grouping by `(scale, col_var)` splits a **model comparison** into singletons and
-separates the crude column from its twin (`R/tab_reg.R` — the crude companions share the model's
-`col_var` *except* in comparison mode); and `tab_vars` never reaches a shared finalize at all
-(`reg_build_group()` recurses into a full `reg_build()` per group), so one group would print a
-decimal the next did not. Read off the spec, a model column and its observed twin agree by
-construction. `num_digits_floor()` (the band's lower edge) is deliberately left as it is: its bounds
-are closed at the powers of ten, which is the one place the two edges do not line up.
-
-**`min_digits` is now scoped, which fixes two reports at once.** It was applied *only where the
-stored digits is 0*, and the stored value is the LEVEL's precision — so `{coef}`, an aside on
-another scale entirely, inherited a mean's one decimal and printed a log odds as `+0.1`. It is a
-**floor** for a token that is neither the column's estimate nor its level, and the old
-default-on-unset rule where it is. The ordinal `<sup%>` column printing `49.1%` is the same cause on
-the Excel side: `mat_aside_cols()` gives a split-off aside the display `"({base})"` and the test read
-`raw_display == "base"` *literally*, so `EST_SCALES$base_digits` never applied. Both now key on the
-template's own primary token (`prim_raw`), so `"base"` and `"({base})"` read alike.
-
-**The shape table is a note, and says only what it can stand behind.** Its outcome cell names the
-subject once and writes the formula on the letter — `p = %Married ; log(p/(1-p))` where it was
-`log(%Married / (1 - %Married))`, half the width — with **two syntaxes from one producer**
-(`rd_link_text(syntax =)`), the html one setting the qualifier as a real subscript. The header is
-`outcome`: the cell says "model scale" by showing it. The block wears the aside ink (`grey2`) at 90 %
-in every medium — a `.tx-shape` class in html, `cli::make_ansi_style()` on the console, a font colour
-one point down in Excel — with a noisy row one step dimmer (`grey`).
-⚠ **An ordinal or multinomial outcome now draws no curve here**: `rd_link_y()` reads it as
-`Y != first`, which is one of its K−1 readings and the least trustworthy — measured on
-`gss_cat$partyid` the reference category is **0.4 %** of the sample, so the row printed
-`99-100% (OR 7.0) ns` over a flat run. The row stays, names the outcome, and its shape cell reads
-`see reg_check_plots()`, which draws them all. In Excel the curve's merge went 2 → **3** columns and
-the block is no longer clamped to the table's width: it is laid *over* the sheet, so on a narrow
-table it runs one column past the right edge rather than cutting the one cell that cannot wrap.
-
-**Less bold under the table.** A regression footer row is black and **not** bold — colour is the only
-emphasis a model-fit number keeps, so a flagged check keeps its shade and a non-significant p-value
-its red. Two lines in `tab-export-prep.R` decide it for every backend at once; `Model fit` stays bold
-through the variable-name COLUMN, which html and Excel already bold in its own right. ⚠ Markdown
-keeps its own divergence (`tab_md()` opts label columns out of `bold_rows`, for crosstab row-variable
-names too): aligning it would move every Markdown golden for a change nobody asked for.
-
-**`comp = "all"` with several `row_vars`.** The stacking bind promoted **every** total row to a
-reference row, which bolded them all and — a reference row never being coloured
-(`gate_row = "refrow"`) — took the sub-totals' over/under colours away. That promotion is
-`comp = "tab"`'s rule and only its: under `comp = "all"` there is one reference per `row_var`, in the
-total table. One guard in `promote_totrow_to_refrow()`. The *numbers* were always right —
-`get_ref_field()` keys on `is_totrow & is_tottab`, never on `in_refrow`.
-
-**`ref` survives a `shape` cut.** `na = "keep_for_predictors"` forces `sd_bands` on a numeric
-predictor with missing values and `shape_apply()` makes it a factor — *before* `ref` is resolved,
-and the two `ref` vocabularies are disjoint by kind, so `ref = c(tvhours = "min")` reached the factor
-resolver and aborted (a bare `ref = "min"` aborted differently, for naming no eligible variable).
-`reg_ref_after_cut()` translates the anchor into **the band that value falls in**, at the one point
-where both readings of the column exist — exact for all four keywords and for a literal number,
-since `reg_anchor_value()` already turns each into one. A bare default is translated the same way and
-then dropped, having been honoured. The same failure under an explicit `shape = c(v = "quartiles")`
-goes with it.
-
-**Excel: `#####`, and the borders a merge swallowed.** Measured with `systemfonts` at the default
-10 pt, converted with the file's own px model (`width * 7 + 5`): the base font's digit is 7 px and
-**both** number fonts' is 8 px, so `XL_MONO_RATIO`'s `has_stars` gate was backwards — it
-over-provisioned the starred path and left the plain one 14 % short, which is the whole `100%`
-failure with no bold in sight. It is deleted for one `XL_NUM_RATIO` (1.15) on every figure column,
-plus `XL_BOLD_RATIO` (1.12) applied **per cell** — bold deltas measured at `0%` 20→22 px, `100%`
-36→40, `21 483` 44→50 — never per column, the Total row being bold and spanning every one of them.
-`XL_PAD` stays 1.0. A TEXT cell is measured with the string it is actually written with (`xl_code()`
-hoisted above the sizer), since an ordinary cell shows its numFmt and not `special_formatting`.
-⚠ **Excel draws a merged range from its top-left cell**, so a border painted per ROW is simply not
-drawn on a vertically merged label column: verified on a written workbook, `A3:A4` swallowed the rule
-under the column names, `A5:A20` the rule between two `row_vars`, and `A21:A36` the table's own
-closing rule — the label column "leaked" while every other column closed. Each range's edges are
-folded onto the cell Excel reads, and the final `new_group` boundary is no longer dropped, so the
-Excel bottom matches html's 2 px. `dev/xl_width_review.R` writes the eight edge cases as one workbook
-for the maintainer's visual pass; arithmetically every column now clears its widest **bold** string
-with ~1 character to spare.
-
-**`ci_method = "profile"`** is wired end to end and has no loop; three real defects fixed. A family
-whose dispersion is *estimated* (gaussian, every quasi-) has no profile interval and fell back to
-Wald **silently**, while `reg_wald_method_name()` stamped the word from the *argument* — so a footer
-claimed "profile" over Wald bounds. `reg_method_used()` reads the fit record's own `profile` flag
-(already stored), and the third refusal now informs like the other two. `confint.profile.glm` ends in
-`drop()`, so a **one-coefficient** fit returns a length-2 vector with no dimnames and `ci[idx, 1]`
-aborted (swallowed on the crude path, fatal on the model one) — coerced back to a matrix. The cost
-is by design and stays: the button says `profile = <i>(profile-likelihood ; not cached, long)</i>`.
-
-**jamovi.** `0` joins the numeric `ref` picker (glm's own anchor; `reg_anchor_value()` already parsed
-it); `ci` joins the `display` presets, before `est_ci`, needing nothing in R (`ci` is a bare token);
-and `outcome_level` is gated on the family in the build core, exactly as `trials` already was — the
-panel keeps a stored level across a family switch, so switching multinomial → ordinal used to abort
-`tab_reg()`. Gating in R protects every caller and keeps the choice for switching back.
-⚠ **One msgid carries one translation**: the working tree held `ref = <i>(reference)</i>` twice with
-different French, which `msgfmt` refuses — breaking the *whole* French UI, not one label. Fixed at
-the source, where it belongs: the regression panel's English now reads `(reference profile)`.
-⚠ `jmvtools::prepare()` **deletes** `inst/i18n/fr.json` without rebuilding it; only a full
-`install()` compiles the `.po` into it (285 → 288 entries, all four new strings translated).
-
-**Measured.** Shipped suite **FAIL 0 | PASS 4457**, in ~40 s. The goldens were regenerated for the
-working tree's `R/tab-palettes.R` re-tune of the eight light `bg` rungs, verified cell by cell first:
-0 fixtures where WHICH cells carry a colour changed, 0 non-hex substitutions, exactly 8 distinct hex
-moves, no text-ramp hex touched — the palette moved and the colour engine did not, which is what let
-the LOCKED `_color_golden` cases be rewritten. `_snaps/golden.md` takes the same eight plus this
-phase's four `.tx-shape` rules; the structural `_golden/*.rds` did not move at all. Both ledgers
-(`dev/make_golden.R`, `dev/make_color_golden.R`) carry the argument. ⚠ The shipped fixtures clear
-the new digits rule **by luck** (`age` ≈ 47, `tvhours` ≈ 3, `n_mean_w` max 10.23), so a green suite
-was no evidence: 15 new assertions were added in their subsystem homes — `test-reg-estimand.R` (the
-band's boundaries), `test-tab-reg.R` (the three shapes that break a post-hoc grouping),
-`test-tab-display.R` (the foreign-token floor, the Excel `{base}` split, the six interval geometries,
-the console `on_fill` ink and the background-only footer), `test-reg-resolve.R`
-(`ref` across a cut), `test-tab-export-prep.R` (footer bold, `comp = "all"`), `test-tab-xl.R` (a
-width regression asserted against the ratios, never a hard-coded number), `test-reg-assumptions.R`
-(the two shape syntaxes, the rank-family pointer) and `test-i18n.R` (the shape table, both readings).
-
-**Three more from a second read-through.**
-
-*A fill with no text colour takes the theme's `on_fill` ink — in the CONSOLE too.* The rule is stated
-once (`tx_chrome_hex()`) and was honoured by the exports and the footer legend but not by the cells:
-the console paints a background channel as an ANSI fill, so a cell coloured on background alone kept
-the TERMINAL's own foreground — light, on the dark theme whose fills are light panels, hence
-unreadable. `pillar_shaft.tabxplor_fmt()` now composes it exactly as `fmt_get_color_code()` does.
-`on_fill` is NA on the light theme, so that output is byte-identical.
-
-*Found while testing it: a background-only colour crashed its own footer.* `color = c("no", ratio)`
-has no TEXT measure, and `legend_ref_info()` read that absent one for its baseline — `ref_kind` came
-back NULL and the whole legend aborted, taking the table's print with it. It reads the colouring
-measure of whichever channel carries one, the same fallback the `policy` line beside it already made.
-
-*An interval bound is now written in the same notation as the estimate it brackets* — `[+35;+45]%`
-where it printed `[35;45]%` beside an estimate reading `+35`, and `[÷1.00;×1.37]` where the fold
-showed but the multiply did not. ONE rule, no per-measure arm, composed from two facts already
-declared: `EST_SCALES$neutral` says whether a bound names a SIDE at all — it is `NA` on a LEVEL
-scale, where a bound is a percentage or a mean and must stay bare, and that NA is the whole gate —
-and `MEASURES$break_over` / `$break_under` name it, the very pair the colour legend prints. A bound is
-then (glyph for its side) + (its magnitude in the scale's own geometry). ⚠ That is also why the ODDS
-RATIO is untouched, as it should be: it declares an EMPTY over-glyph, so `[1/4.45;1/2.19]` and
-`[1/1.15;1.75]` come out of the same rule unchanged — the table is read, never a sign hard-coded.
-`tabxplor.ratio_print_raw` switches every glyph off, estimate and bounds alike. No golden moved
-(none displays a `{ci}` on an effect scale), which is precisely why the six geometries are asserted
-directly in `test-tab-display.R`.
-
-**A spread narrows a layout nobody named.** `spread_vars` multiplies the columns by the spread
-variable's level count, so a cell has a fraction of the width it had — and a numeric column was
-still spending it on a coefficient of variation. The rule is stated once
-(`tab_narrow_default_display()`, `R/tab-display.R`): *a column still wearing the DEFAULT layout its
-leaf chose falls back to the bare estimate its own scale declares* (`EST_SCALES$default_display`).
-⚠ The test is **"is this still the leaf's own choice?"**, recomputed from the column's own values
-(`num_default_display()`) rather than recorded — which is what keeps the rule out of every other code
-path: nothing is stored, no flag is threaded, and `display =`, `ci =` and a post-hoc `set_display()`
-each keep their layout by simply not matching. And it runs at the SPREAD, which `tab()` performs
-BEFORE `tab_apply_display()`, so the ordering alone is what makes an explicit `display =` win. It
-lives in `tab_spread()`, which is public, so a spread a user performs themselves reads the same.
-Percentages are untouched: only a COMPOSITE default has an aside to drop.
-
-**One line of air under a finished table, in every medium.** A table is a block of its own, and a
-host that gives a `<table>` no bottom margin (`html_vignette`, jamovi, the Viewer page) welded the
-next paragraph to the legend — so a document had to write its own line break after every table. One
-declared value, `TX_TAIL_SPACE` (`R/tab-css.R`), read by both stylesheets: `.tabxplor-tab` (the
-`<table>` of the html engine, the fenced `<div>` of `tab_md()`) carries `margin-bottom`, and the
-legend rides in `<tfoot>` so the gap falls below it. Three things make it a rule rather than a nudge:
-it is a **margin**, so adjacent vertical margins COLLAPSE and it is a FLOOR — where a host already
-spaces its paragraphs more generously nothing moves; the `.tabxplor-tab table` half of the base rule
-still zeroes the INNER table and out-specifies it at (0,1,1), so a markdown div adds no second gap;
-and `tab_kable_join()` **drops its `<br>`**, the margin now separating two stacked parts as well as
-trailing the last — one mechanism where there were two, which is what stops a table and its own
-shape table drifting two lines apart. ⚠ jamovi moves the gap onto `.tx-scrollbox` and gives it up on
-the last table inside (`jmv_results_style()`): `overflow-x:auto` makes the box a formatting context,
-so the table's own margin would sit *above* the horizontal scrollbar instead of below everything.
-
-⚠ **One maintainer step remains**: the Excel width workbook is a visual judgement — say where a
-column reads too tight or too generous and the three constants move.
-
-#### Phase 24d — the Reference page, read top to bottom ✓ DONE
-
-**The index is now ordered by what a user reaches for first**, and a section says only what its
-entries' titles cannot. Twelve visible groups: the two producers (`tab()`, `tab_reg()`, and
-`tab_counts()` beside them), the jamovi analyses, then what can be DONE to a finished table
-(reshape, export, chart), the small helpers, the superseded entry points, and last the vocabulary
-and programming surface (display/colour, model estimands, options, introspection, the `fmt` type).
-The `Variants of tab()` group is dissolved. Every `desc:` that renamed the functions listed under it
-was cut — `Charts` now reads `Both need **ggplot2**`, which is the one thing two titles could not
-say — and four groups whose title is already the whole sentence carry no `desc:` at all.
-
-**Seventeen titles rewritten**, the index line being the only description most readers see:
-`tab_reg()` "All-in-one tables for regressions, with each modelled effect beside its observed one"
-(was 12 words of jargon), the four exporters down to a verb and an object ("Render a table as html",
-"Write a table to an Excel workbook"), `tab_spread()` "Turn a sub-table variable into columns",
-`new_tab()` and `fmt()` naming what they build rather than their class. `tab()` keeps its own title;
-`tab_reg()`'s is written to sit under it.
-
-**`tab_num()` is superseded**, badge and all, and moves beside `tab_many()` and `tab_plain()`:
-`tab()` builds the same table whenever `col_vars` holds numeric variables. Nothing in `R/` ever
-called it — the build reaches `num_core()` directly — so this is documentation, not a behaviour
-change: no warning, no signature change. `tab()`'s `@seealso`, the `fmt` topic's example and the two
-programming vignettes stop teaching it. ⚠ The `fmt` example gained `color = "auto"`: that is the one
-place the two differ, `tab_num()` alone starting `color` at `"auto"` where `tab()` starts at `"no"`.
-
-**`tab_supports()` is internal.** The predicate had no call site in `R/`, no test, and one user:
-the programming vignettes. `TAB_OPS` and `tab_check_structure()` are untouched — the rules stay
-declared, only the public predicate goes — and `tab_structure()`'s page stops advertising it.
-
-**Three `experimental` badges removed** (`reg_check_plots()`, `shape_numeric_var()`, `fmt_attr()`);
-`tab_structure()` and `tab_columns()` keep theirs, and `tab_transpose()` keeps its accurate
-`deprecated` one in the reshape group where users look for it.
-
-**The five example-data topics leave the index** through a section literally titled `internal` —
-pkgdown's documented way to build a topic's page and keep it off the index — so `?car_salaries`, the
-site search and every `\link{}` from an example still resolve.
-
-⚠ **`forest_plot()` / `reg_check_plots()` were never duplicated**: one `contents:` entry and one
-`\alias{}` each. What read as a duplicate was the section `desc:` naming both functions in prose
-directly above the two entries that name them again — the redundancy this phase removed. (pkgdown
-2.2.1 also emits a section's heading and its entry list as two sibling `<div class="section
-level2">`, which widens the gap between them; that is stock markup.)
-
-⚠ **`man/` was stale for three index titles** (`tab`, `tab_reg`, `tab_counts`): `R/` had been edited
-without a `document()`, so the built site showed the previous wording. The rebuild fixes it.
-
-**The two home pages are generated again, by one script.** `dev/build_readmes.R` knits both
-`README.md` (GitHub, black-and-white) and `pkgdown/index.md` (the site, in colour) from their
-`.Rmd` twins, against the WORKING TREE (`load_all(export_all = FALSE)`) rather than whatever
-tabxplor is installed. `dev/build_site.R` runs its `index` half before every build, so the home
-page cannot be stale. ⚠ It shells out to a subprocess rather than sourcing: each source pins
-tabxplor options and `LANGUAGE` so the page cannot depend on who builds it, and those pins would
-otherwise leak into every example and article rendered afterwards. Both `.Rmd` gained
-`md_extensions: -implicit_figures` — pandoc turns a lone `![alt](src)` into a `<figure>`, which
-would promote the hero image's alt text into a visible caption. `README.md` had drifted from its
-own source (it still carried the pre-2.0.0 feature list), so the rebuild is a catch-up.
-
-**The site opens light, whatever the reader's OS says.** The switch stays and a chosen mode is
-still honoured for good — dark is opt-in, its ramps keeping less separation than the light ones,
-and a coloured table being read on a white page by convention. One file does it,
-`pkgdown/extra.js`: pkgdown links it from `<head>` right after its own `lightswitch.js` and
-before the page paints, and it seeds the very `localStorage` key that switch reads. ⚠ Seeding
-rather than only setting the attribute is the point: the attribute alone would leave the button
-claiming *Auto* over a light page, and pkgdown's `prefers-color-scheme` listener would flip it
-back on the next system change. It also keeps the TABLES in step — `tab_css(theme = "auto")`
-emits an `@media (prefers-color-scheme: dark)` layer, which the `[data-bs-theme=light]` layer
-after it out-specifies, so a dark-OS reader gets a light page AND light tables.
-
-**More air between sections, in proportion to the heading's rank** (`pkgdown/extra.scss`, the
-articles only — a reference page is looked up, not read through): 4 / 2.5 / 1.75 / 1.25 rem from
-`h2` down to `h5`, where pkgdown stops at 1.5 and 1 and gives `h4` and below nothing at all. A
-sub-section opening its parent keeps the small gap. Margins collapse, so each value is the whole
-gap rather than an addition to the paragraph above.
-
-**Measured.** `pkgdown::check_pkgdown()` clean; shipped suite **FAIL 0 | PASS 4468**. One NEWS edit,
-approved: the *Introspection accessors* bullet no longer names `tab_supports()`. The jamovi titles
-stay `Crosstables` / `Regressions` — they are generated from `jamovi/*.a.yaml` `title:`, the field
-that also labels the ribbon item and the results heading, so renaming them would cost a
-`jmvtools::install()` regeneration and a new msgid for a line the section heading already carries.
-
-#### Phase 24e — ggfacto reverse dependency ✓ DONE
-
-**The visible failure was the first of three.** `R CMD check` of CRAN `ggfacto` 0.3.2 stopped at
-`'set_type' is not an exported object`; behind it sat `fmt(type = )` in `pca_interpret()` (exported
-in 0.3.2, live example) and in `benzecri_mrv(fmt = TRUE)`, and behind those two real tabxplor
-defects the revdep exposed. Everything below was measured, never assumed.
-
-**The `type` vocabulary is translated, not refused** (`R/tab-deprecate.R`, whose scope line now says
-so). `type` conflated two facts; the map back onto the `(scale, pct_type)` pair is stated ONCE, in
-`fmt_type_legacy()`, and read by all three entry points that still admit the old word:
-`set_type()`, `get_type()` and `fmt(type = )` — soft-deprecated, defunct in 2.1.0, on the Superseded
-group of the Reference page (`?tabxplor-type`). `set_type()` writes through the validating setters,
-never `attr<-`, so a shim cannot become a laxer way in; `"mean"` / `"n"` / `"coef"` also reset
-`pct_type` to `"none"`, since 1.x, having one attribute, could not have claimed a percentage there.
-`get_type()` is the LOSSY way back and says so in its own description: every effect scale reads
-`"coef"`, a distinction 1.x could not make. ⚠ `ci_type` still aborts — the interval is always on the
-estimate's own scale, so there is nothing to route — and `fmt()` refuses `type` alongside an explicit
-`scale`/`pct_type` rather than silently picking one. The translation happens BEFORE `display` is
-forced, `display`'s default being a promise reading `scale[1]`, which is what makes
-`fmt(pct = , type = "all")` still come out as a percentage.
-
-**Release blocker: an NA cell crashed the colour engine.** `dplyr::bind_rows()` NA-fills a `fmt`
-column absent from one of its inputs, and EVERY field of those cells comes back NA — 4 lines to
-reproduce, nothing to do with ggfacto. `fmt_color_slots()` then evaluated `any(is_wn)` on an NA and
-the whole print aborted. The two display comparisons are guarded, and the sweep for siblings found
-the real root: `is_totrow()` / `is_refrow()` / `is_tottab()` returned NA, poisoning the masked
-assignments in `format()` and the `bold`/`keep_black` masks in `tab_export_prep()`. **An unknown row
-is not a total row**, so the three predicates fold NA to FALSE at the source — one fix instead of
-one per consumer, and it is the invariant `leaf_totrow_tottab()` already stated.
-
-**A `mixed` column no longer grades a cell it cannot read.** `mixed` is what reconciling unlike
-columns gives. It carries ONE ladder, so a mean difference was read on the percentage-point ladder
-and a −1.9 landed at the deepest slot. A MULTIPLICATIVE measure needs nothing — `pct_ratio` and
-`mean_ratio` carry the same over-breaks, so a ratio is the one comparison unlike quantities state
-alike; an ADDITIVE one gates out the cells that are not on its ladder (the same per-cell lever the
-blank/gof cells already use), keeping their number and losing only the shade, and
-`tx_inform_once()` names `color = "ratio"`. ⚠ Data is never touched: the `diff` field is read by the
-tooltip, `get_num()` and Excel. The 2.1.0 follow-up is recorded at the line: build the plan once per
-family and pick per cell, which also needs the footer legend to print two measure lines for one
-column.
-
-⚠ **A latent trap in `tx_inform_once()`, found writing that message**: its `id` formal sits before
-`...`, so `tx_inform_once("id", "i" = ...)` had the `"i"` bullet **partial-matched as the id** —
-the line silently dropped and the id printed in its place. The formal is `.id` now, which no bullet
-name can reach. The 20 existing call sites all passed one `c(...)` vector and were unaffected.
-
-**`tab_transpose()` is a supported reshape operation again**, no badge, no warning. It has a job
-nothing else does: a **profile table** (many variables down the page, few groups across it), and it
-is the ONLY way to put a mean on a row — a number given to `row_vars` is always cut into levels.
-Its `@description` says what it IS rather than what to use instead, with a section on columns of
-unlike kinds; `tab_export(transpose = )` stays the recommendation where only the output matters.
-⚠ **A transposed column IS a bind** — it stacks one cell from each source column — so it now claims
-only what its parts agreed on, through the SAME declared reconcile every `bind_rows()` uses
-(`fmt_attrs_merge()`, driven by `fmt_attr_rules`), instead of copying one representative column's
-attributes onto all of them. That is what used to hand a mean cell a percentage column's scale and
-ladder, and it is what makes the gate above fire. `old_base` is still read from the representative:
-which percentage the table held is a fact about its AXIS, and merging with a mean column
-(`pct_type = "none"`) would lose the row% ↔ col% flip. Measured: a homogeneous transpose is
-byte-identical to the native table it mirrors.
-
-**`as.matrix()` / `as.table()` hand a table to base R** (`R/tab_classes.R`). One shared internal,
-two thin methods, and one decision the user should not have to remember: **a table's own margins are
-not data**. A row survives iff at least one of its cells says `row_kind == "data"` — which drops the
-Total row AND the display-time n / pct / p-value / gof rows in one test, and keeps an ordinary row
-whose cells are partly NA — plus `!is_tottab()`, since `totaltab = "table"` writes a total table's
-rows as ordinary ones. Total columns go, every cell contributes the number it SHOWS (`get_num()`),
-and the label columns become dimnames through the same `as_df_merge_rownames()` the `df = TRUE`
-leaves use, so a stacked several-`row_vars` table degrades predictably (`race_Other`). `totals =
-TRUE` keeps everything. ⚠ `as.data.frame()` is deliberately NOT given a method: tibble and dplyr
-call it internally on their own objects, and nothing in the tidyverse calls `as.matrix()`/
-`as.table()` on a data frame in a load-bearing way.
-
-**Measured.** Shipped suite **FAIL 0 | PASS 4548** (+80), in ~40 s. New assertions in their
-subsystem homes: a new `test-tab-deprecate.R` (the seven `type` round trips as a declared map, the
-three retired spellings of "no type", the `ci_type` refusal, the conflict, and the `.id` formal),
-`test-fmt.R` (an NA-filled cell through `format()`/`print()`/html/tooltips/markdown, and the three
-predicates), `test-tab-color.R` (the mixed column under both measures, and a homogeneous one
-untouched), `test-tab-transpose-render.R` (not deprecated; a mixed round trip; a homogeneous mean
-profile keeping `level_mean`) and `test-tab-classes.R` (the two coercions, `totals = TRUE`, the
-display rows, the total table, several label columns, the empty case). **No golden moved.**
-
-**The revdep, end to end.** CRAN ggfacto 0.3.2 built from its own release commit and checked against
-this tabxplor in a throwaway library: **Status: OK** — `HCPC_tab()`, `pca_interpret()` and
-`benzecri_mrv()` all run.
-
-**ggfacto modernised for its next version** (a separate repo, `Imports: tabxplor (>= 2.0.0)`).
-`HCPC_tab()` is built the way round it is READ — the variables' levels down the page, the clusters
-across it — because `tab()` stacks several `row_vars` into one table by itself; the vendored
-`tab_transpose()` copy, `set_type()`, the `n`-column surgery, the `Total_` rename and the
-`$display == "mean"` branch are all gone, and so is the duplicated `n` row they produced. Numeric
-variables keep a transpose, in their own homogeneous block. The two summary rows come from their own
-one-variable table (`tab(data, clust, pct = "all") |> tab_transpose()`) and are declared as DISPLAY
-rows carrying the table's own scale and colour — ⚠ a block claiming anything else reconciles BOTH
-away on the bind, which is how every column came out `mixed` and uncoloured in the first attempt.
-`pca_interpret()` colours a coordinate by its SIZE on the standardized ladder instead of the old
-`diff = 3` / `1/9` sign hack. Three ggfacto bugs fell out of the testing: `ggmca(active_tables = )`
-gave every level an empty tooltip; a level named like its own variable lost its tooltip (tabxplor
-appends `_lv` to it, and the plot never sees that rename — undone through `fct_relabel()`, ⚠ because
-everything downstream picks the tooltip pieces out by `is.character()` and a character `lvs` is
-nested away with them); and a tooltip's `Frequency` line could read above 100 %, being divided by the
-last row of the last table instead of by the population. 25 of 25 example paths green; its own
-`R CMD check` is clean but for the pre-existing NEWS-heading NOTE.
-
-⚠ **One maintainer step remains**: ggfacto's own release (version bump, `README.md` re-knit from
-`README.Rmd`, CRAN submission) is not part of this phase.
-
-#### Phase 24f — rhub and win-builder.r-project.org failures ✓ DONE
-
-**The rhub red was never ours, and the evidence is one column of the log.** `clang19` / `clang20`
-died at `.onLoad failed in loadNamespace() for 'vctrs' — symbol bindings not supported yet`, inside
-vctrs's own `.onLoad`, during `R CMD build`'s install step, before any tabxplor code runs. Those two
-images carry **R-devel r89629 (2026-03-15)** while every job that passed — `ubuntu-clang`,
-`ubuntu-gcc12`, `ubuntu-release` — runs **r90452 (2026-08-27)**; the binary they install is
-`vctrs 0.7.2`, released *after* that snapshot, and the error string exists in neither local R 4.6.1
-nor R-devel r90246. So every package importing vctrs fails there identically. ⚠ The wider point,
-now in `dev/release_checklist.md`: **tabxplor has no `src/`**, so `clang*` / `gcc*` / `c23` / `lto` /
-`*-asan` / `valgrind` / `rchk` exercise a toolchain the package never uses. The platforms that vary
-the RUNTIME are the ones worth spending: `nosuggests` (25 Suggests behind `tx_need_pkg()`), `nold`,
-`atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`. ⚠ On the run that followed, five of
-those passed and `nosuggests` sat silent for **5h57m** and died at GitHub's 6 h limit — infrastructure
-again, and provably: its mechanism is `_R_CHECK_DEPENDS_ONLY_=true`, which `tools:::.check_packages`
-ALONE reads, so it is inert during the `R CMD build` the job hung in — the very build its twin image
-`atlas` (same Fedora 42, same R-devel r90185) finished in **89 s**. But the variable bites at CHECK
-time and so rehearses locally in one `withr::with_envvar()` -- and doing that found **three real
-gaps the stalled job would have reported**, now fixed and the run **0/0/0**. What it hides is
-`Depends + Imports + VignetteBuilder`, plus testthat for the tests step (`tools:::setRlibs`), so:
-`VignetteBuilder: knitr` whitelisted knitr but not **rmarkdown**, which every vignette's
-`output:` needs -- it is `knitr, rmarkdown` now, that field being R's own list of what a vignette
-build may reach; two tests called the Excel exporter with no `skip_if_not_installed("openxlsx2")`
-while their 26 siblings had one; and the ANSI-to-html knitr hook all five vignettes install called
-`fansi::` unguarded, so four of them died on their first console table -- it now degrades to
-stripped ASCII through one `ansi_html()`, and the one `forest_plot()` chunk that actually evaluates
-takes `eval = requireNamespace("ggplot2")`, the idiom every Rd example already used. Every Rd
-example passed untouched. The rehearsal is now a checklist step.
-
-**win-builder's ERROR and WARNING were one cause: the manual is LaTeX.** Seven `Unicode character
-not set up for use with LaTeX` — σ once, ⚠ six times — and nothing else in `man/` was at fault
-(`—`, `…`, `×`, `÷` are all set by utf8 inputenc). It had never been seen locally because
-**`devtools::check()` defaults to `manual = FALSE`**; with tinytex on this box the failure and its
-fix both reproduce in one `R CMD Rd2pdf` (before: the same 7 errors, `Error in running
-tools::texi2pdf()`; after: **103 pages, 0 errors**).
-
-The two glyphs are not the same kind of thing, so they are not treated alike. **⚠ is decoration**:
-dropped from the six user-facing Rd sites (five `@param` in `R/tab_reg.R`, the `tabxplor.shape_table`
-`doc` string in `R/tab-options.R`, whose field `tab_options_rd()` alone reads), capitalising what
-followed — the sentences already carried their own bold. Comments, `dev/` and this file keep it.
-**σ is content**: `mean_sd` really prints `3.5 (σ1.2)` and `sd_bands` labels the same glyph, so
-`display_presets_rd()` writes the template twice, `\ifelse{latex}{\code{… (SD{sd})}}{\code{… (σ{sd})}}`.
-⚠ Verified in `tools:::Rd2latex` rather than assumed: it honours `\ifelse`, while **`\enc{}{}` falls
-back only when the whole output encoding is ASCII** — the obvious mechanism, and the wrong one here.
-⚠ And the split goes **around the code span, not inside it**: `\ifelse` is a text tag, so the first
-attempt (`\code{… \ifelse{latex}{SD}{σ} …}`) built the PDF but traded the ERROR for
-`checkRd: (7) Tag \ifelse is invalid in a \code block` — caught by running the gate, not by any
-grep over the Rd.
-
-**Three defects behind the HTML NOTE, all in `jamovi/jmvtab.a.yaml`.** A `description: R:` block is
-**Rd**, and jmvtools reflows it. `ci` was written with a raw `<b>`, which roxygen turns into
-`\if{html}{\out{<b>}}` and `Rd2HTML` opens *before* the paragraph — tidy's three warnings at
-`man/jmvtab.Rd:165`; it is `\strong{}` now. `conf_level`'s reflow put `1.` at a line start, so
-roxygen markdown made a numbered list of it: the param read *"between 0 and 1"* then a bullet, with
-a stray `\%` — reworded so no wrapped line can begin `<digit>.`. And `R/tab.R:87` wrote `\%` in
-HAND-WRITTEN roxygen, which escapes the backslash in turn and printed `10\% level` in `?tab` and
-`?tab_ci` (one line, both pages, since `tab_ci` inherits the param). ⚠ **The opposite rule holds
-inside an `@eval` doc string** (`R/tab-args.R:340`), inserted as raw Rd, which correctly writes
-`\\%` — `man/tab.Rd:221` already rendered right. `jmvtools::install(home = "flatpak")` regenerated
-`R/jmvtab.h.R` (3 lines) and left `inst/i18n/fr.json` byte-identical, the reworded prose being R
-documentation and not a msgid.
-
-**The URL NOTE is half a bug and half a schedule.** Measured: `www.jamovi.org/download` is **404**
-and `/download.html` a **302 to the homepage** — the page is gone — so all eight links (5 vignettes,
-`_pkgdown.yml`) now point at `https://www.jamovi.org/`, 200 with no redirect. The eleven
-`bricenocenti.github.io` 404s are not fixable in code: `gh api …/pages` returns 404 and there is no
-`gh-pages` branch, so the site has simply never deployed. ⚠ Submit only after the merge has
-deployed it — now a Notes bullet in the release checklist.
-
-**The guard is in `test-non-ascii.R`, whose rule this is the second half of.** Two blocks scan
-`man/*.Rd` — an allow-list of the four glyphs LaTeX sets, and a ban on the double-escaped percent
-R CMD check never mentions — both skipping where `man/` is not next to the tests, exactly as the two
-R-source blocks do. ⚠ What must be ASCII is **what LaTeX is handed**, not what the file contains, so
-the scanner asks `tools::Rd2latex` rather than imitating it: a regex resolving `\ifelse{latex}{A}{B}`
-worked until the arms grew braces of their own, and would have had to grow `\if{html}` and `\enc`
-too. The converter settles all three, and costs 0.9 s over 114 files. A third block proves it is not
-vacuous, mirroring the file's existing scanner self-test: a bare σ and a ⚠ are caught, the wrapped
-σ and the four allowed glyphs are not.
-
-**Measured.** `devtools::check(manual = TRUE)` **0 errors, 0 warnings, 0 notes** in 3m11
-(`checking Rd files`, `checking PDF version of manual`, `checking examples with --run-donttest` and
-`checking HTML version of manual` all OK). `R CMD Rd2pdf` alone: 103 pages, 0 LaTeX errors, against
-the same 7 before. ⚠ The HTML NOTE needed **HTML Tidy installed** to be verifiable at all — without
-it R CMD check skips that step and says so, which is why it was checked directly too: `Rd2HTML` +
-`tidy` over the whole manual, **0 findings on 114 pages**. `pkgdown::check_pkgdown()` clean; shipped
-suite **FAIL 0 | PASS 4554** (+6, the new blocks) in ~40 s, the one WARN and two SKIP pre-existing
-and environmental. No golden moved, and none could: every edit is roxygen prose, a doc generator, a
-YAML description, a URL or a test — no number and no rendered cell is reachable from any of them.
-
-⚠ **Maintainer steps remain**: `devtools::check(manual = TRUE)`; merge PR #3 and enable Pages;
-re-run win-builder and rhub (without the compiler containers); then finish `cran-comments.md`, which
-still claims "no NOTEs" everywhere and needs the real run links and whatever the fresh runs say.
-
-
-
-#### Phase 24g — what the courses' migration audit asks of the package ✓ DONE
-
-A 1.3.1-era corpus of university courses was audited against 2.0.0 (`dev/formations_stat_migration.md`,
-a one-off audit that moves to `dev/archive_2.0.0/` once the port is done). Most of what it found is
-the courses' to fix. This phase was the package's part — seven places where 2.0.0 broke a contract
-1.3.1 honoured or said something in a comment the code did not do — plus **Quarto citizenship**,
-because the courses are moving to `.qmd`. No redesign: every item landed in a declared table or a
-boundary that already existed, and two of them REMOVED an inconsistency rather than adding a lever.
-
-**A caption is a fact about the table, so a producer states one.** `caption` was an `EXPORT_ARGS` row
-only, so the sole way to attach one at build time was `set_caption()` — backwards, `subtext` being a
-`tab()` argument. One new `TAB_ARGS` row beside `subtext` (`producers = c("tab", "tab_reg",
-"tab_counts")`) and one write per producer, through the existing `set_caption()`, which stays the only
-writer of `meta$spec$vars$caption`; `rd_caption()` is untouched, so an exporter's own `caption =` keeps
-precedence. `tab()` and `tab_reg()` gain a formal, `tab_counts()` **none** — it binds its whole surface
-off `...` through `tab_dots_expand()`, so declaring the producer is the entire wiring. ⚠ The write sits
-**before** `as_tabxplor_tabs()` / `new_tabxplor_tabs()` in all four returns: `set_caption()` maps over a
-list and `purrr::map()` hands back a bare one, so the re-class after it is what keeps `output_list =
-TRUE` and a multi-outcome `tab_reg()` their class. It is skipped on `.return_armed`, the jamovi
-live-cache seam, which returns mid-build and never passes one. `set_caption(x, NULL)` is
-attribute-identical to no call at all, so the unconditional call costs nothing and moved no golden.
-
-**The caption's markup is host-aware — one rule, three hosts.** `bookdown:::parse_fig_labels()` numbers
-a table only where a line matches `^\s*<caption`, and 2.0.0 emitted the title as a `<div>` sibling: so
-**every captioned table in a bookdown document kept the raw label in its title, registered no anchor,
-and every `\@ref(tab:…)` rendered `??`** — while tabxplor's own instructions name
-`bookdown::html_document2()` as the required target. `tx_caption_host()` (`R/tab-render-html.R`) now
-reads the two flags the ecosystem itself uses, through the existing `tx_knitr_opt()`: a real
-`<caption>` under bookdown (`bookdown.internal.label`), **nothing** under Quarto when the cell wrote
-`tbl-cap` (`quarto.version` + the cell option), the `<div>` everywhere else — including the Viewer,
-`tab_export(file =)` and jamovi, where `tx_knitr_opt()` answers NULL.
-
-⚠ **Three facts measured by rendering, not read off docs, and each now a `# WARNING:` at its line.**
-(1) **The inner element must be a `<span>`, never a `<div>`** — the obvious shape, and the wrong one:
-bookdown's scan runs on the POST-pandoc html, and pandoc's writer gives every *block* tag a line of its
-own, pushing the label two lines below `<caption>` and out of the `content[i - 0:1]` window; a `<span>`
-stays on the text's line and still carries the width guard, `display:block;width:0;min-width:100%` (the
-`.tx-foot` idiom) being what stops a long title sizing a narrow table. (2) **`caption-side:top` is
-load-bearing**: Bootstrap puts a caption at the BOTTOM and `tx_html_deps()` injects Bootstrap into every
-knitted document, so without `.tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}` the bookdown
-arm's title would sit under its table. (3) Pandoc **unescapes** `\#` → `#`, which is why the token
-bookdown greps for is `(#tab:x)` and nothing in R must touch it (`tx_html_escape()` cannot: it holds no
-`& < >`). ⚠ A bare `label: tbl-x` with no `tbl-cap` still numbers a Quarto table, so tabxplor's own
-title is kept there — only `tbl-cap` stands us down.
-
-**Quarto citizenship.** Every `<table>` tabxplor emits opens through one `tx_table_open()` carrying
-`data-quarto-disable-processing="true"` — the engine, the shape table and the degrade path, so a fourth
-site cannot forget it. Measured on **Quarto 1.10.18 + knitr 1.51** through the real `asis_output` path:
-without it the class comes back `tabxplor-tab cell caption-top table table-sm table-striped small` with
-a `<tr class="odd">`, `table-striped`'s zebra fill fighting colour-coded cells; with it the markup
-passes through byte-for-byte and cross-references still resolve. ⚠ It reproduces only on that path, not
-on `cat()` under `results: asis` — and it reaches the html engine only: `tab_md()`'s table is generated
-by pandoc from a pipe table, where `html-table-processing: none` is the user-side lever. The **raw-HTML
-fence** is a `# WARNING:` at `tab_kable_join()`, the one producer of the final string: Quarto fences
-asis output as `{=html}` only when it matches `^<\w+[ >]` and ends `</\w+>\s*$`, and a leading HTML
-comment would be enough to have the whole thing parsed as markdown instead.
-
-**The exporters refuse what they cannot use.** `tab_html()`, `tab_md()`, `tab_xl()`, `tab_css()` and
-`forest_plot()` each called `tx_deprecate_inert()` and **discarded its return value**, then never looked
-at `...` again — so `position =` (519 sites in one corpus), `n_min =` and every typo were accepted in
-silence, while `tab()` errored with a did-you-mean. All five now go through one named operation,
-`tx_export_dots()` — filter the retired names, then hand what is left to the same `tab_check_dots()`
-the producers use. It is one call because doing either half without the other is exactly what went
-wrong, and the error names the user's own call
-(*Unknown argument `colwith` in `tab_xl()`. i Did you mean `colwidth`?*). Its `known` set widens from the declared rows to **the declared rows PLUS the
-producer's own formals**: neither is the whole answer on its own, the grid being wider on `tab_counts()`
-and the signature wider on an exporter, where `EXPORT_ARGS` declares only the rows whose prose it needs.
-It is provably a no-op on the five crosstab producers, whose formals `tx_check_tab_args()` already
-asserts are declared. ⚠ `tab_export()` is deliberately left permissive — its `...` really is a
-pass-through and the leaf validates it; a check of its own would refuse a legitimate `css =`. ⚠ And an
-ABBREVIATION still partial-matches on an exporter, whose `...` is written last, so only a real typo
-lands in the dots — the opposite of `tab()`. The change caught **four latent typos** on its first run,
-all in `dev/tests/` (`tab_kable(tooltip =)`, three `tab_html(print =)`), plus one in the shipped suite.
-
-**Deprecations that fire, and a promise the code keeps.** `tx_deprecate_inert()` now takes `user_env`,
-**with no default** — because no default is right: lifecycle's own lands on that function's frame, an
-obvious one would land on the exporter's, and for either lifecycle sees an internal caller and says
-NOTHING AT ALL. That is how five retired arguments went a whole release without ever warning. It has to
-be `rlang::caller_env()` read in the exporter's own body, the one frame that names the person who typed
-the argument — and **having no default is the guard**, since a caller then has to decide. ⚠ The silent
-half is not assertable in the suite: under testthat, `deprecate_soft()` warns for the package under test
-whatever frame it is given, so what the test locks is that a frame must be given at all. `position`, `n_min` and `hide_near_zero` join
-`TX_INERT_EXPORT_ARGS`. `$rr` gains the read branch its own comment at `R/fmt_class.R` already promised,
-beside `ci` / `tot_wn` / `in_totrow`; `mutate()` stays permissive. ⚠ `normalize_color_spec()`'s
-`caller_env(2)` **stays two frames short on purpose** — a `# WARNING:` at the line says so: the colour
-aliases it remaps compute identical numbers, so a message on the commonest argument there is would be
-pure noise.
-
-**`get_test()` is public, `get_chi2()` is shimmed.** `get_chi2()` was 1.x's only programmatic route to a
-table's test and the one removal in the release with neither a shim nor a `NEWS.md` line; it is back as
-an unexported soft-deprecated alias returning `get_test(x)` — the spelling the corpus uses is `:::` —
-naming the two fields that moved (`df` → `df1`, `count` → `statistic`) and pointing the per-cell rows at
-the cells' own `ctr` field, `get_ctr()` being internal. `get_test()` gains `@export` and a page stating
-what the attribute IS — one tidy row per test, keyed `var` / `col`, a new kind of test being new ROWS —
-without restating the column list `new_test_tibble()` owns. ⚠ A table that ran none carries the **empty**
-tibble, same columns, not `NULL`. `set_test()` stays internal: `test` is row-bound and the vctrs
-reconcilers `vec_rbind` it, so `new_tab(test =)` is the validating writer. `_pkgdown.yml`: `get_test`
-joins *Inspect a table*, "Captions and options" becomes **Options**, and `set_caption` joins the block
-beside `new_tab` / `fmt_attr`, retitled *The type system* to cover the table's own attributes.
-
-**`NEWS.md` accuracy pass** — corrections only, no new bullet. `broom` is not a dependency at all;
-`get_n()` is internal in both versions, so the base count reads `Total$n`; of the six functions listed as
-removed only `tab_plot()` and `kable_tabxplor_style()` were ever exported in 1.3.1 (checked against
-`b812c5f:NAMESPACE`), the other four being `master`-only non-events; `print.tabxplor_kable()`, not
-kableExtra's, is what opens the Viewer page; and the inert export arguments move out of *Removed (now an
-error)*, where none of them ever belonged, into *Soft-deprecated* with the three new names and the
-strict-dots rule beside them. `caption =` replaces the `set_caption()` mention on the html line, so the
-new argument is stated without a new bullet.
-
-**Measured.** Shipped suite **FAIL 0 | PASS 4632** (+78) in ~40 s, the one WARN and two SKIP
-pre-existing and environmental. Two snapshots moved, each verified line by line before acceptance:
-`_snaps/tab-render-html.md` for exactly four `<table>` tags, `_snaps/golden.md` for exactly the two new
-CSS rules across its 16 style blocks. The structural `_golden/*.rds` did not move and could not — no
-number is reachable from any of this. New assertions in their subsystem homes:
-`test-tab-render-html.R` (the three hosts, bookdown's own line-shape predicate, the attribute on all
-three emit sites, the fence invariant over five shapes, the two CSS rules), `test-tab-args.R` (the row,
-the three producers, `NULL` as a no-op, the class kept through a list, the widened `known` proven a
-no-op on the producers), `test-tab-export-prep.R` (the fallback chain), `test-tab-deprecate.R`
-(`get_chi2()`, all five exporters refusing and warning, `tab_export()` still forwarding),
-`test-utils.R` (`tx_deprecate_inert()`, which had no test at all — which is how the `user_env` bug
-stayed invisible) and `test-fmt.R` (`$rr`). ⚠ Two of them had to be rewritten once the run was
-parallel: `deprecate_soft()` warns once per session per message, so a test naming a real exporter's
-retired argument passes or fails on which file ran first — the probes use a label of their own. ⚠ **Verified by rendering, twice**: a
-`bookdown::html_document2` document where a `tab(caption =)` and a `set_caption()` table both get
-`Table 1.1:` / `Table 1.2:`, resolving `\@ref(tab:…)` and leaving no raw token; and a `.qmd` through
-the Positron-bundled Quarto where the `tbl-cap` cell shows exactly one caption, the `label`-only cell
-keeps tabxplor's title and is still numbered, and neither table is restyled.
-
-⚠ **Out of scope, recorded so it is not re-derived**: whether `tx_html_deps()`'s bootstrap-cosmo
-restyles a `bookdown::gitbook` book (`dev/formations_stat_migration.md` §5.7), and shipping the
-stylesheet as an `htmlDependency` instead of a `<style>` per table — a dependency is per DOCUMENT and
-`theme =` is per CALL, so it needs a design, not a patch.
-
-#### Phase 24h — PR to master and pkgdown site online ✓ DONE
-
-**`master` carries the release, and the site is live.** `master` is `725cc6c`, the merge commit of
-PR #5 (`release/2.0.0` → `master`); https://bricenocenti.github.io/tabxplor/ answers from the
-`gh-pages` branch the pkgdown workflow wrote on that push. The whole phase is `dev/release_checklist.md`
-steps 1–4 plus the once-per-repo Pages setup — no package code changed, and no golden moved.
-
-**The July branch was unusable, so it was re-cut rather than refreshed.** `release/2.0.0` dated from
-2026-07-23, sat 168 commits behind `dev`, and its tree **predates `data/`** (the four example data sets
-arrived in Phase 22l), so the package on it could not build its own examples; every check on PR #3 was
-red from July. PR #3 was closed with that reason recorded, the remote branch deleted, and the branch
-cut afresh from `dev` — one strip commit (`71d6f1b`, 465 deletions), exactly the checklist's step 2.
-⚠ Re-cutting costs a `git branch -D` in the maintainer's own terminal, twice (the name is held by the
-stale local branch before, and by the merged one after), and the second one fails with
-`cannot delete branch used by worktree` unless the checkout is moved off it first.
-
-**Two proofs replace reading the diff.** `git diff --name-only refs/heads/dev HEAD --` filtered of the
-strip list must be empty, and `git ls-files -- dev .claude .vscode CLAUDE.md air.toml` must be empty:
-together they say the release tree IS `dev` minus the strip list, which is what makes "dev-green means
-release-green" a fact rather than a hope. Both held on the strip commit and again after the mid-flight
-merge, with the tree objects of `R/ man/ tests/ vignettes/ data/ inst/ po/ jamovi/ pkgdown/` byte-identical
-to `dev`'s and `.Rbuildignore` identical on both branches. ⚠ The first proof needs `refs/heads/dev`, not
-`dev`: on a release branch the name is a revision AND the directory just stripped, and git refuses the
-ambiguity.
-
-**The second suite had never been updated after 24c/24e/24g — 23 failures, every one stale.** It is not
-run per-edit, so three phases of deliberate change had accumulated in it while `tests/testthat/` was kept
-current: the signed CI bounds (`[-12;+0]%`, 3 sites), `min_digits` as a floor on a foreign token,
-`rd_link_text()`'s two-syntax rewrite and the ordinal shape row (5 sites), regression footer rows no longer
-bold, the Excel width constants (2 sites), `data-quarto-disable-processing` on every `<table>` (2 sites),
-the `width:0;min-width:100%` idiom moving from `.tx-foot` to `.tabxplor-caption` (2 sites), the dark-theme
-ground rule, `quarto` now appearing in the light stylesheet, the `tx-sec` aside rule, and `tab_transpose()`
-no longer deprecated. All deleted (35 lines, 10 files) rather than updated — the shipped suite already
-locks each of those facts in its subsystem home. Two exceptions: `tab_transpose()`'s block kept its live
-`expect_error(xpose(42))` and was retitled, the shipped suite covering only the not-deprecated half; and
-one comment was rewritten where the assertion it described was the one deleted. ⚠ The `pvalue` case is
-**not** a defect — `po/R-fr.po` translates `pvalue (%s%s)` to itself, the field name kept as notation by
-translator choice, exactly as the tooltip's words are. Result **FAIL 0 | PASS 5885**.
-
-**The shipped suite's one WARN was a warning leaking out of a test that was not about it.**
-`test-tab-reg.R:370` asserts `reg_formulas()$fit`, and `tvhours ~ race` under Poisson genuinely is
-over-dispersed — the package was right and the test wrapped only `suppressMessages()`, which does nothing
-to a warning. Its two siblings making the identical fit (`test-tab-reg.R:96`, `test-tab-color.R:277`)
-already had `suppressWarnings()`; line 370 was the one that missed it. **FAIL 0 | WARN 0 | PASS 4632**.
-The two SKIPs stay: one needs a 24-bit-ANSI terminal, the other is the `svyVGAM`-not-installed fallback
-and so can only run where the package is absent.
-
-**The pkgdown PR check found the one thing nothing else could.** `R CMD check` never sees
-`vignettes/articles/` (`.Rbuildignore`d) and pkgdown never runs on a `dev` push, so the PR was the first
-build of the five French articles since the 24b rename — all 11 built, `txtheme 0.1.0` resolved from
-GitHub (`@14f0c99`), both its assets copied, `site_prune.R` correctly skipped, deploy correctly gated off.
-It also surfaced **three shipped vignettes whose `\VignetteIndexEntry{}` no longer matched their title**:
-Phase 24d retitled `tabxplor.Rmd`, `tabxplor-reg.Rmd` and `tabxplor-reading-a-regression.Rmd` and updated
-`_pkgdown.yml`'s navbar, but not the index entries. `R CMD check` does not fail on it — which is why all
-five platforms and `check(manual = TRUE)` were green — yet `\VignetteIndexEntry{}` is exactly what
-`vignette(package = "tabxplor")` and CRAN's package page display, so 2.0.0 would have shipped two names
-per document. Fixed on `dev`, merged into the release branch, CI re-run: the 8 title warnings became 5,
-and those five are the French articles correctly having no index entry at all, being articles and not
-vignettes.
-
-**Pages: deploy from a branch, `gh-pages` at root.** That is what the workflow already writes
-(`JamesIves/github-pages-deploy-action`, `branch: gh-pages, folder: docs, clean: true`) and what the r-lib
-template regenerates, so it costs no workflow change; the "GitHub Actions" source would mean rewriting
-`pkgdown.yaml` around `upload-pages-artifact`/`deploy-pages` with a `github-pages` environment, and
-`master`/`docs` cannot work at all — `docs/` is git-ignored by design. ⚠ The branch only exists AFTER the
-first deploy, so Pages is enabled after the merge, never before. The site is then stable by construction:
-the deploy step is gated `if: github.event_name != 'pull_request'`, so a `dev` push and a PR never touch
-it — only a push to `master`, a published release, or a manual dispatch — and `clean: true` means each
-deploy fully replaces the branch, so nothing stale accumulates.
-
-**Verified live, and this is the gate Phase 25 cites.** All 11 `bricenocenti.github.io` URLs in the files
-CRAN reads (`DESCRIPTION`, `README.md`, `man/`, `vignettes/`) answer **200 with no redirect** — checked
-without `curl -L`, since a 301 is also a NOTE — where 24f recorded every one of them as 404. Nine core
-pages, five English and five French articles all 200; `/CLAUDE.html` **404** and zero CLAUDE entries among
-the sitemap's 132 `<loc>`s, the guarded prune having had nothing to do because `master` carries no root
-`*.md` outside the four `pkgdown:::package_mds` already spares. The deployed content is post-24g, not a
-stale build: `tabxplor-type`, `get_test`, `tabxplor-base-coercion` and `set_caption` are on the reference
-index, `tab_num()` wears its superseded badge, and the example data sets are off the index while
-`reference/car_salaries.html` still resolves — 24d's `internal`-section trick working as designed. Both
-palettes render (62 colour-slot classes and 33 print-ready marks on the home page), every table carries
-`data-quarto-disable-processing`, `extra.js` seeds `theme=light` so the site opens light whatever the
-reader's OS says, and the two reworked articles each render 34 tables / 504 coloured cells / 39 legend
-blocks in both languages, French accents served as UTF-8. The repo `homepage` field now points at the site.
-
-⚠ **A `dev` branch cannot be private.** GitHub has no per-branch visibility — access follows the
-repository — so `dev/`, `CLAUDE.md` and `.claude/` are public on `dev` and always have been. The strip
-keeps `master` user-facing and keeps development files out of the CRAN tarball and off the site; it is not
-concealment, and only a separate private repository would be.
-
-
-### Phase 25 — CRAN submission
-
-**DONE**.
-
-#### Phase 6 — jamovi release
-
-#### Phase 6a — jamovi release preparation
 
 
 
@@ -1306,7 +564,7 @@ concealment, and only a separate private repository would be.
 - If you use a plan, do a real **documentation planning work** : define what goes where, avoid duplication, state what level of details and what focus the lines written in each document should have.
 
 1. **File-header + inline comments** of every module you touched — make them state the CURRENT design, caveats and "why", never how it got there; add or adjust `# DESIGN:` / `# WARNING:` tags next to changed logic. *Cut, don't accrete.*
-2. **Phase "DONE" summary** — under its own `#### Phase <x> — <title>` header in the roadmap. This is the ONE place dev-history detail belongs (what changed, why, measurements). CLAUDE.md is the ONLY place it goes; the maintainer moves finished phases to `dev/tabxplor_2.0.0_roadmap_DONE_PHASES.md` once the roadmap gets cluttered.
+2. **Phase "DONE" summary** — under its own `#### v2.<x.x> — Phase <x> — <title>` header in the roadmap. This is the ONE place dev-history detail belongs (what changed, why, measurements). CLAUDE.md is the ONLY place it goes; the maintainer moves finished phases to `dev/tabxplor_roadmap_DONE_PHASES.md` once the roadmap gets cluttered.
 3. (**Repository Map** in this file — refresh a file's role line only if you added, removed or repurposed a file; keep it absolutely and utterly brief, *never* add clutter here, *cut, don’t accrete*; otherwise skip.)
 4. (**`NEWS.md`** — user-facing / CRAN-facing only, new or changed functions/arguments, deprecations, important user-facing fixes; radically minimalistic, usually skipped.)
 5. (**`README.Rmd`** — only before a CRAN release.)

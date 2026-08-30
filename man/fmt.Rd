@@ -313,6 +313,7 @@ the last few are not meant to be typed:
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
 \item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
 \item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
+\item \code{odds} --- the odds --- \code{pct / (1 - pct)}, the quantity an odds ratio is a ratio of. Printed on the odds ratio's own ladder, so a cell below 1 reads its inverse ("1/2.60") unless \code{options(tabxplor.ratio_print = "raw")} asks for the plain number. Void where the percentage is 1 and the odds infinite.
 \item \code{sd} --- the standard deviation, in the variable's own unit.
 \item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.

@@ -681,6 +681,12 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' with `caption{}`in rmarkdown.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param get_data Get the transformed data instead of the html table.
+#' @param cells The write side of `get_data`: the same data.frame, with the cells you want to
+#' replace edited. A value still equal to the one the table renders means "keep", so handing the
+#' frame straight back changes nothing; anything else is written verbatim into that cell, markup
+#' and all. The cell keeps its classes and its tooltip, and loses the decorations that belonged to
+#' the text it replaced (the bold split, the background pill, the sparkline). Pass a list of one
+#' data.frame per table when several are rendered at once.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
 #'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`, `position`. The table is
 #'  rendered by one dependency-free `<table>` engine whose every look is a CSS class you can restyle
@@ -707,6 +713,7 @@ tab_html <- function(tabs,
                      transpose = FALSE,
                      var_names = NULL,
                      get_data = FALSE,
+                     cells = NULL,
                      wrap_rows = 35, wrap_cols = 15,
                      whitespace_only = TRUE,
                      css = NULL,
@@ -716,6 +723,7 @@ tab_html <- function(tabs,
   # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
   # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
   caption <- caption %||% tx_knitr_opt("tab.cap")
+  cells_parts <- tx_cells_arg(cells, get_data)
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE,
@@ -737,7 +745,16 @@ tab_html <- function(tabs,
     color_legend = color_legend, what = "tab_html()"
   )
 
-  parts <- purrr::map(prep$tables, function(rd) {
+  if (!is.null(cells_parts)) {
+    if (length(cells_parts) != length(prep$tables)) {
+      cli::cli_abort(c("{.arg cells} must carry one data.frame per rendered table.",
+                       "x" = "It carries {length(cells_parts)}, the render has {length(prep$tables)}."))
+    }
+    for (i in seq_along(cells_parts))
+      tx_cells_check(cells_parts[[i]], prep$tables[[i]]$tab, i, length(cells_parts))
+  }
+
+  parts <- purrr::imap(prep$tables, function(rd, .i) {
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
       src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
@@ -747,7 +764,8 @@ tab_html <- function(tabs,
     }
     cap <- rd_caption(rd, caption)
     render_kable_html(rd, prep$meta, subtext = subtext, caption = cap,
-                      tooltips = tooltips, popover = popover, get_data = get_data)
+                      tooltips = tooltips, popover = popover, get_data = get_data,
+                      cells = if (is.null(cells_parts)) NULL else cells_parts[[.i]])
   })
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)

@@ -508,3 +508,32 @@ test_that("a percentage column is untouched by the rule", {
   t <- tab(tea, SPC, tea.time, tab_vars = sex, spread_vars = sex, pct = "row", na = "drop")
   expect_equal(unique(unlist(lapply(purrr::keep(t, is_fmt), get_display))), "pct")
 })
+
+test_that("`odds` is derived from pct, read-only, and void where odds are infinite", {
+  t <- tab(forcats::gss_cat, race, marital, pct = "row")
+  p <- t$Married$pct
+  expect_equal(get_num(set_display(t$Married, "odds")), p / (1 - p))
+  # nothing is stored: the record gains no field, and the number cannot be written back
+  expect_false("odds" %in% names(vctrs::vec_proxy(t$Married)))
+  o <- set_display(t$Married, "odds")
+  expect_equal(get_num(set_num(o, rep(99, length(o)))), get_num(o))
+  # void at 100% (infinite odds), like `cv` where the mean is not positive
+  f <- fmt(n = rep(10, 3), pct = c(0, 0.5, 1), scale = "level_pct", display = "odds")
+  expect_equal(get_num(f), c(0, 1, NA_real_))
+})
+
+test_that("`odds` reads on the odds ratio's ladder, and names itself in the header", {
+  t <- tab(forcats::gss_cat, race, marital, pct = "row")
+  o <- set_display(t$Married, "odds")
+  # below 1 a cell prints its inverse, exactly as `or` does -- an odds and an odds ratio are read
+  # the same way, so the two tables of a logit lesson agree
+  expect_match(format(o)[[2]], "^1/", perl = TRUE)   # Black: 0.38 -> "1/2.60"
+  expect_equal(fmt_mult_plan(o)$measure[[1]], "odds_ratio")
+  expect_match(pillar::type_sum(o), "odds", fixed = TRUE)
+})
+
+test_that("a display that never asks for odds is unchanged by the token", {
+  t <- tab(forcats::gss_cat, race, marital, pct = "row")
+  expect_equal(unique(unlist(lapply(purrr::keep(t, is_fmt), get_display))), "pct")
+  expect_equal(format(t$Married), format(set_display(set_display(t$Married, "odds"), "pct")))
+})

@@ -375,6 +375,22 @@ DISPLAY_TOKENS <- list(
                   source = 'pct = "row" / "col"  (an odds ratio needs a percentage base)',
                   label = "OR",
                   doc = 'the odds ratio'),
+  # DERIVED from `pct`, like `sd` and `cv` from `var`: the odds ARE pct/(1 - pct), so nothing is
+  # stored twice and no field is added to the record. Read-only -- writing one back would mean
+  # writing a percentage. NOT `bare`: `or` alone names the odds_ratio measure (DISPLAY_MEASURE_TOKENS
+  # admits one token per measure), and an odds is a level, not a comparison. It borrows that measure
+  # all the same, through fmt_mult_plan(), because an odds and an odds ratio read on the same ladder:
+  # "1/2.60" is one chance in 2.6 whichever of the two it is.
+  odds    = .dtok(         user = TRUE, settable = FALSE, value_cell = TRUE, geometry = "ratio",
+                  comparison = "odds_ratio",
+                  min_digits = 2L,
+                  source = 'pct = "row" / "col"  (odds need a percentage base)',
+                  label = "odds",
+                  doc = paste('the odds --- `pct / (1 - pct)`, the quantity an odds ratio is a ratio',
+                              'of. Printed on the odds ratio\'s own ladder, so a cell below 1 reads',
+                              'its inverse ("1/2.60") unless `options(tabxplor.ratio_print = "raw")`',
+                              'asks for the plain number. Void where the percentage is 1 and the odds',
+                              'infinite')),
   ctr     = .dtok("ctr"  , user = TRUE, value_cell = TRUE,
                   source = 'test = TRUE  (the contributions come from the chi-squared)',
                   label = "ctr",

@@ -646,6 +646,16 @@ get_num <- function(x) {
     out[cv_m] <- ifelse(!is.na(m) & m > 0 & !is.na(v) & v >= 0,
                         suppressWarnings(sqrt(v)) / m, NA_real_)[cv_m]
   }
+  # DERIVED from `pct`, like `sd` and `cv` from `var`: the odds ARE pct/(1 - pct), the quantity the
+  # odds ratio beside them is a ratio OF, so nothing is stored twice. Read-only: set_num() has no
+  # matching arm. VOID at pct = 1 (infinite odds) and below 0, declared here as `cv` and `moe` are
+  # rather than special-cased at render time, so the per-cell void rule blanks it and keeps the
+  # column aligned. Guarded by any(): a display that never asks for odds pays nothing for them.
+  odds_m <- !nas & display == "odds"
+  if (any(odds_m)) {
+    p <- get_pct(x)
+    out[odds_m] <- ifelse(!is.na(p) & p >= 0 & p < 1, p / (1 - p), NA_real_)[odds_m]
+  }
   out[!nas & display == "ci"     ] <- get_ci   (x)[!nas & display == "ci"     ]
   # `moe` reads the SAME field as `ci` -- the two are one interval in two notations -- but a ratio
   # has no half-width, so it is void on a multiplicative scale. Declared void, like any other token
@@ -2052,7 +2062,7 @@ display_segment_of <- function(seg, i) {
 fmt_mult_plan <- function(x, display = NULL, scl = NULL) {
   scl     <- scl %||% fmt_scale_row(x)
   display <- display %||% fmt_resolve_scale_tokens(display_primary(get_display(x)), scl)
-  tok     <- c(ratio = "ratio", or = "odds_ratio")
+  tok     <- c(ratio = "ratio", or = "odds_ratio", odds = "odds_ratio")
   cells   <- !is.na(display) & (display %in% names(tok) |
                                   (isTRUE(scl$mult) & display %in% c("obs", "gap")))
   # a scale-relative cell takes the COLUMN's measure (EST_SCALES$label_meas): `{est}` on a mean-ratio
