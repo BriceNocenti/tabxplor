@@ -45,8 +45,9 @@ test_that("reg_meta survives dplyr verbs and footer materialisation", {
 
 test_that("reg_title names the model family, dependent and predictors", {
   rt <- function(...) tabxplor:::reg_title(tabxplor:::reg_call(tab_reg(..., cleannames = FALSE)))
+  # phase 7: a title is PROSE, so its predictor list joins with a word (and counts past three)
   expect_identical(rt(w14_data(), "married", c("race", "rincome"), family = "binomial"),
-                   "Logistic regression: married by race, rincome")
+                   "Logistic regression: married by race and rincome")
   expect_identical(rt(forcats::gss_cat, "tvhours", "race", family = "gaussian"),
                    "Linear regression: tvhours by race")
   expect_true(startsWith(

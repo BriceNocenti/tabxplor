@@ -107,8 +107,12 @@ testthat::test_that("the transposed model keeps every slot the flip does not tou
                                     compute = c("refs", "colors", "bold"))$tables[[1]]
   rd2 <- tabxplor:::tab_export_prep(t, backend = "kable", transpose = TRUE,
                                     compute = c("refs", "colors", "bold"))$tables[[1]]
-  # no top-level slot is dropped by the flip (it may be added: cells / tooltips / color_src ...)
-  testthat::expect_true(all(names(rd) %in% names(rd2)))
+  # no top-level slot is dropped by the flip (it may be added: cells / tooltips / color_src ...) --
+  # ⚠ except `bars`, dropped ON PURPOSE since phase 7: a bar is a share of its own COLUMN's largest,
+  # and a transposed column IS a row level, so keeping it would leave a list keyed by names that no
+  # longer exist (the follow_wrap() trap, on the other seam).
+  testthat::expect_true(all(setdiff(names(rd), "bars") %in% names(rd2)))
+  testthat::expect_false("bars" %in% names(rd2))
   # every per-cell ann field survives too -- this is where keep_black went missing
   testthat::expect_true(all(names(rd$ann[[1]]) %in% names(rd2$ann[[1]])))
   testthat::expect_length(rd2$ann[[1]]$keep_black, nrow(rd2$tab))

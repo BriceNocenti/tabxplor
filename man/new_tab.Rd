@@ -31,43 +31,29 @@ new_grouped_tab(
 It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
 or \code{\link{tab_plain}}.}
 
-\item{subtext}{A character vector to print legend lines under the table.}
+\item{subtext}{The footer's text, as a template: one element per line, every
+\code{<placeholder>} \pkg{tabxplor} generates and every line you write, in the order they print.
+See \code{\link{set_subtext}}.}
 
 \item{test}{A tidy tibble storing whole-table test results (Chi2 for factor columns,
 ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.}
 
 \item{chi2}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Soft-deprecated alias of \code{test}.}
 
-\item{meta}{The table's metadata, as a single named list gathering (all optional, \code{NULL}
-when unset):
+\item{meta}{The table's metadata, as a single named list gathering (all optional,
+\code{NULL} when unset):
 \itemize{
-\item \code{render_extras} -- display-only intent for the base count and the \code{add_pct}
-companion, \code{list(n =, add_pct =)}, materialised at print/export time from this attribute
-rather than baked into the table.
-\item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
-(\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
-(\code{list(wt =, caption =, outcomes =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
-variable model being derived from the declared index columns and from the columns' own
-\code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
-family, outcome, predictors, reference level, and the \code{fit_spec}
-\code{\link{reg_check_plots}} refits from).
-\item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
-column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-\item \code{assumptions} -- one record PER OUTCOME, keyed by it, each holding the observed curve
-of every continuous predictor (weighted quantile bins of the outcome on the family's link
-scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the
-sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape table below the
-footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
-\item \code{color_breaks} -- a per-table override of the colour break scales (see
-\code{\link{set_color_breaks}}), merged over the global option at render time.
-\item \code{footer_tabs} -- subordinate \code{tabxplor_tab}s rendered UNDER this one by every
-medium (console, \code{\link{tab_md}}, \code{\link{tab_html}}, \code{\link{tab_xl}}), set by
-\code{\link{set_footer_tabs}}: a second table that belongs to the first and travels with it
-through a dplyr pipeline. Not to be confused with the regression's \emph{shape table}, which is a
-grey NOTE of character columns (\code{assumptions}) rather than a table of \code{fmt} cells. A
-footer table's own \code{footer_tabs} are never rendered.
+\item \code{spec} --- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind} (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry (the weight, the caption, the outcomes, the variable labels --- see \code{\link{set_caption}}), the rest of the variable model being derived from the declared index columns and from the columns' own \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --- family, outcome, predictors, reference level, and the \code{fit_spec} \code{\link{reg_check_plots}} refits from).
+\item \code{render_extras} --- display-only intent for the base count and the \code{add_pct} companion, \code{list(n =, add_pct =)}, materialised at print/export time rather than baked into the table.
+\item \code{empirical_tips} --- multinomial crude-companion tooltip data (a \code{tibble} keyed by column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
+\item \code{assumptions} --- one record PER OUTCOME, keyed by it, each holding the observed curve of every continuous predictor (weighted quantile bins of the outcome on the family's link scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the shape table under the footer, and behind \code{\link{reg_check_plots}}'s linearity panel.
+\item \code{color_breaks} --- a per-table override of the colour break scales, set by \code{tab(color_breaks =)} and merged over the global option (\code{\link{set_color_breaks}}) at render time.
+\item \code{legend_words} --- what this table's colour legend CALLS each measure --- naming only, never a number (see \code{\link{set_legend_words}}).
+\item \code{footer_tabs} --- the tables and notes rendered UNDER this one by every medium, set by \code{\link{set_footer_tabs}}: a \code{tabxplor_tab} renders as a table, any other data.frame as a grey note (\code{\link{tab_note}}). In the console they print ABOVE the table, so the last thing printed is the object you can go on to pipe. A footer table's own are never rendered.
+\item \code{bars} --- the columns drawn as data bars in html (\code{\link{set_bars}}).
 }
-\code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.}
+\code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no
+attribute.}
 
 \item{...}{Needed to implement subclasses.}
 

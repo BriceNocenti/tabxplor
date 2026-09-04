@@ -588,7 +588,7 @@ reg_interaction_lines <- function(x, lang = NULL) {
   })
 }
 
-reg_title <- function(meta, max = 2, lang = NULL) {
+reg_title <- function(meta, max = 3, lang = NULL) {
   if (is.null(meta)) return(NA_character_)
   fams <- meta$families; if (is.null(fams)) fams <- meta$family
   mixed <- length(unique(fams)) > 1L
@@ -596,18 +596,26 @@ reg_title <- function(meta, max = 2, lang = NULL) {
     fam <- reg_family_display_name(meta$family)
     Fam <- if (mixed) gettext("Regression models")
            else paste0(toupper(substr(fam, 1, 1)), substr(fam, 2, nchar(fam)))
-    dep <- tab_title_names(meta$outcome, max)
+    dep <- tab_title_names(meta$outcome, max, noun = gettext("outcomes"), join = "and")
     tabbed <- if (!is.null(meta$tab_vars)) paste0(" ", gettextf("(tabbed by %s)", meta$tab_vars)) else ""
-    by_of  <- function(preds) if (nzchar(preds)) paste0(" ", gettextf("by %s", preds)) else ""
-    if (mixed) return(enc2utf8(paste0(Fam, ": ", dep, by_of(tab_title_names(meta$predictors, max)), tabbed)))
+    # "cinema by qualif, sexe and age" lists them; "cinema, by 4 predictors" counts them, and takes a
+    # comma -- a count is an aside about the model, not the continuation of its name.
+    by_of  <- function(preds, counted = FALSE)
+      if (!nzchar(preds)) "" else paste0(if (counted) ", " else " ", gettextf("by %s", preds))
+    pred_noun <- gettext("predictors")
+    if (mixed) return(enc2utf8(paste0(
+      Fam, ": ", dep,
+      by_of(tab_title_names(meta$predictors, max, noun = pred_noun, join = "and"),
+            tx_name_list_counted(meta$predictors, max)), tabbed)))
     if (isTRUE(meta$comparison)) {
       pl  <- meta$positive_level[[1]]
       dref <- if (!is.na(pl)) paste0(dep, ", '", pl, "' (", meta$eff_word, ")")
               else            paste0(dep, " (", meta$eff_word, ")")
       enc2utf8(gettextf("%s (models comparison): %s", paste0(Fam, "s"), paste0(dref, tabbed)))
     } else {
-      preds <- tab_title_names(meta$predictors, max)
-      enc2utf8(paste0(Fam, ": ", dep, by_of(preds), tabbed))
+      preds <- tab_title_names(meta$predictors, max, noun = pred_noun, join = "and")
+      enc2utf8(paste0(Fam, ": ", dep,
+                      by_of(preds, tx_name_list_counted(meta$predictors, max)), tabbed))
     }
   })
 }
@@ -3298,7 +3306,7 @@ reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars, outcome
                          basis = NULL, meta_extra = list()) {
   tab |>
     tab_stamp_inference(conf_level, degf = NULL, basis) |>
-    new_tab(subtext = meta_extra$subtext, test = tests,
+    new_tab(subtext = footer_default_template(meta_extra$subtext), test = tests,
             meta = c(meta_extra[setdiff(names(meta_extra), "subtext")],
                      list(spec = reg_spec(var_labels, outcomes)))) |>
     dplyr::group_by(!!!rlang::syms(group_vars))

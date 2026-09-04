@@ -288,7 +288,7 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
-                           theme_cols, var_names = "both", transposed = FALSE) {
+                           theme_cols, var_names = "both", transposed = FALSE, lang = NULL) {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -299,6 +299,9 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   # when other tab_vars are dropped for html/Excel.
   reg_grp_col <- intersect(reg_call(tab)$tab_vars, tab_vars)
   subtext  <- get_subtext(tab) |> purrr::discard(\(s) s == "")
+  # a table travelling UNDER another one (meta$footer_tabs, expanded by tx_with_footer_tabs()) renders
+  # what it carries and nothing generated -- so one host + subordinate pair shows one colour legend.
+  subordinate <- tx_is_subordinate(tab)
 
   # multinomial crude-companion tooltips, resolved NOW while the predictor `var` column is still
   # present (drop_tab_vars removes it below).
@@ -404,7 +407,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   has_stars <- length(fmt_cols) > 0 &&
     any(vapply(fmt_cols,
                function(j) any(nzchar(fmt_cell_suffix(tab[[j]], stars = TRUE,
-                                                      theme = theme_cols$theme))),
+                                                      theme = theme_cols$marks))),
                logical(1)))
 
   col_var_map   <- get_col_var(tab)
@@ -542,9 +545,12 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
     bold_cols = bold_cols,
     col_var_header = col_var_header,
     subtext = subtext,
+    subordinate = subordinate,
     bars = bars,
     # a fallback caption (NA on a crosstab) and a stored one (set_caption()), which takes precedence.
-    reg_title = reg_title(reg_call(tab)),
+    # ⚠ the exporter's OWN language: a caption built in the ambient locale while the footer below it
+    # followed `lang =` was the one place two languages met in one table.
+    reg_title = reg_title(reg_call(tab), lang = lang),
     caption = get_caption(tab),
     empirical_tips = emp_tips
   )
@@ -715,20 +721,6 @@ tab_header_runs <- function(label, group = NULL) {
   list(labels = label[ends], groups = group[ends], spans = r$lengths)
 }
 
-# The ONE footer invocation every backend shares. `src` is the fmt SOURCE table (rd$color_src for a
-# transposed model, whose rd$tab is plain character; else rd$tab). `want_legend` gates ONLY the
-# colour legend; the other streams always render.
-rd_footer <- function(src, medium, theme = NULL, want_legend = TRUE,
-                      subtext = character(0), lang = NULL, classes = FALSE) {
-  suppressWarnings(render_footer(
-    tab_footer_streams(src, style = legend_export_style(), lang = lang,
-                       subtext = subtext, legend = want_legend,
-                       # the direction WORDS are a palette fact, decided while the tokens are built:
-                       # a publication legend says "Underlined"/"Italic", a colour one names none.
-                       theme = tx_palette_theme(theme)),
-    medium = medium, theme = theme, classes = classes))
-}
-
 # The ONE caption fallback: user caption=, else set_caption() (rd$caption), else a regression's
 # auto-title. `fallback` is a closure so a further fallback is only computed when genuinely needed.
 rd_caption <- function(rd, user_caption = NULL, fallback = NULL) {
@@ -883,6 +875,7 @@ tab_export_prep <- function(tabs,
                             transpose     = FALSE,
                             var_names     = "both",
                             list_method   = FALSE,
+                            lang          = NULL,
                             what          = NULL) {
   backend   <- match.arg(backend)
   var_names <- match.arg(var_names[1], c("both", "rows", "cols", "none"))
@@ -907,7 +900,12 @@ tab_export_prep <- function(tabs,
     grey2 = chrome$grey2,
     # which family a cell's ink comes from: the plot backend cannot draw a rule, so a publication
     # palette borrows its grey ramp there instead. "text" everywhere else.
-    ink   = if (identical(backend, "plot")) tx_plot_ink_family(pal_theme, "text") else "text"
+    ink   = if (identical(backend, "plot")) tx_plot_ink_family(pal_theme, "text") else "text",
+    # THE THEME THE CELL SUFFIX READS, which is not always the table's: a publication palette MARKS
+    # its cells (`print_marks`), and a mark is the cell's own visual signal, not an aside -- so
+    # `color = FALSE` must take it away with the colour, or the reader gets a sign with no key
+    # (fmt_cell_suffix() draws nothing at all on a NULL theme).
+    marks = if ("colors" %in% compute) pal_theme else NULL
   )
 
   resolved <- tab_resolve_tables(tabs, list_method = list_method, what = what)
@@ -927,7 +925,7 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     var_names = var_names, transposed = isTRUE(transpose))
+                     var_names = var_names, transposed = isTRUE(transpose), lang = lang)
   )
 
   # Opt-in transpose-at-export, shared by all four exporters (console never transposes). Runs on the

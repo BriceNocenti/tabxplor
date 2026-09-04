@@ -559,22 +559,40 @@ testthat::test_that("set_footer_tabs() attaches, names caption, and survives a d
 })
 
 
-testthat::test_that("a footer table renders under its host in all four media", {
+testthat::test_that("a footer table renders beside its host in every medium, and above it in console", {
   main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
                           list("Base" = tab(fx_gss(), race)))
 
-  # console: the host stays a pillar grid, the subordinate one prints as a pipe table (phase 6)
-  txt <- print(main, get_text = TRUE)
+  # console: the host stays a pillar grid, the subordinate one prints as a pipe table (phase 6) --
+  # ABOVE it, because the LAST thing printed is the R object you can go on to pipe (phase 7).
+  txt  <- cli::ansi_strip(print(main, get_text = TRUE))
   testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
-  testthat::expect_true(any(grepl("^\\|:-", cli::ansi_strip(txt))))
+  testthat::expect_true(any(grepl("^\\|:-", txt)))
+  testthat::expect_lt(which(grepl("^\\|:-", txt))[[1]], which(grepl("A tabxplor tab", txt))[[1]])
 
-  # markdown: a second pipe table, carrying its caption line
+  # markdown: a second pipe table, carrying its caption line, BELOW the host
   md <- tab_md(main, css = FALSE, print = FALSE)
   testthat::expect_true(grepl(": Base", md, fixed = TRUE))
 
   # html: two <table> elements from one call
   h <- tab_html(main)
   testthat::expect_identical(lengths(regmatches(h, gregexpr("<table", h, fixed = TRUE))), 2L)
+})
+
+
+testthat::test_that("a host and its footer table share ONE generated footer", {
+  # the generated blocks belong to the HOST (FOOTER_BLOCKS' `carried` column): a subordinate renders
+  # what it carries and nothing generated, so two coloured tables show one colour legend, not two.
+  side <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row", color = "diff"), list(side))
+
+  md <- tab_md(main, css = FALSE, print = FALSE)
+  testthat::expect_identical(
+    lengths(regmatches(md, gregexpr("difference", md, fixed = TRUE))), 1L)
+
+  h <- tab_html(main)
+  testthat::expect_identical(
+    lengths(regmatches(h, gregexpr("(risk) difference", h, fixed = TRUE))), 1L)
 })
 
 
@@ -646,6 +664,13 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   testthat::expect_true(grepl("--tx-bar:100%", h2, fixed = TRUE))
   testthat::expect_identical(
     lengths(regmatches(h2, gregexpr("--tx-bar:", h2, fixed = TRUE))), 3L)
+
+  # ...and the SAME trap on the other seam: a transposed column IS a row level, so a `bars` list kept
+  # across the flip would name nothing. A bar is a per-COLUMN scale and has nothing left to be a share
+  # of -- it goes, rather than mis-drawing or silently matching none.
+  h3 <- as.character(tab_html(set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married"),
+                              transpose = TRUE))
+  testthat::expect_false(grepl("--tx-bar:", h3, fixed = TRUE))
 })
 
 

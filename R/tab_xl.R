@@ -209,7 +209,7 @@ tab_xl <-
     prep <- tab_export_prep(
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
-      theme = theme, var_names = o$var_names,
+      theme = theme, var_names = o$var_names, lang = lang,
       # `brk = "\n"` is what a wrapped Excel cell honours; spaces stay ordinary (the U+202F
       # substitution is only there to stop a BROWSER re-breaking what was wrapped -- Excel does not).
       wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
@@ -254,36 +254,36 @@ tab_xl <-
         sheets
       }
 
-    # subtext (+ colour legend) computed once. A workbook cell holds one line, so the render model's
-    # `subtext` is newline-flattened here.
-    subtext <- purrr::map(prep$tables, "subtext") |>
+    # THE WHOLE REGION as RICH-TEXT run lines from the shared builder, in FOOTER_BLOCKS' own order --
+    # the user's own lines included, so Excel reads the footer in the order every other medium does.
+    # Each break-word carries its palette hex + bold while the rest stays plain black; the plain text
+    # is derived from the runs, byte-for-byte, and drives the row geometry below.
+    # A workbook cell holds one line, so a line carrying a newline is flattened here.
+    legend_runs <- purrr::map(seq_along(tabs_src), function(i) {
+      rd <- prep$tables[[i]]
+      rd_blocks(tabs_src[[i]], "runs", theme = theme, want_legend = isTRUE(color_legend),
+                subtext = rd$subtext, lang = lang, host = !isTRUE(rd$subordinate))
+    })
+    subtext <- purrr::map(legend_runs, ~ purrr::map_chr(
+      ., function(line) paste0(purrr::map_chr(line, "text"), collapse = ""))) |>
       purrr::map(~ gsub(" +", " ", gsub("\\\n", " ", ., perl = TRUE), perl = TRUE))
-    # the whole footer (weight -> Model: -> colour legend -> stars) as RICH-TEXT run lines from the
-    # shared builder, so each break-word carries its palette hex + bold while the rest stays plain
-    # black; its plain text (derived from the runs, byte-for-byte) merges into `subtext` for geometry,
-    # and the legend occupies the first `length(legend_runs)` subtext rows, overwritten below.
-    legend_runs <- purrr::map(tabs_src, function(t)
-      rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend), lang = lang))
-    if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
-      legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
-        ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
-      subtext <- purrr::map2(subtext, legend_plain, ~ c(.y, .x))
-    }
 
     if (missing(titles)) {
       # a regression table titles itself from its `meta` (family + outcome + predictors, or outcome +
       # reference + effect for a comparison); a NAMED tabxplor_tabs (several row_vars -> names = the
       # row_vars) uses its element names; a plain table gets the vars-derived "X by Y" title.
-      base_nm <- names(tabs_base)
-      named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
-        all(nzchar(base_nm))
+      # the EXPANDED list's names: tx_with_footer_tabs() keeps each member's own and gives its
+      # subordinates none, so a named member still titles itself while a subordinate falls through.
+      base_nm <- names(tabs) %||% rep("", length(tabs))
+      named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs)
       # shared rd_caption() (user caption -> set_caption() -> reg auto-title), with xl's own two extra
       # fallbacks passed as the closure -- one caption rule, one place.
       titles <- purrr::pmap_chr(
         list(prep$tables, tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
         function(rd, t, rv, cv, tv, i) {
           cap <- rd_caption(rd, caption, fallback = function()
-            if (named_tabs) base_nm[[i]] else tab_get_titles(t, rv, cv, tv))
+            if (named_tabs && nzchar(base_nm[[i]])) base_nm[[i]]
+            else tab_get_titles(t, rv, cv, tv))
           if (is.null(cap)) NA_character_ else cap
         })
     } else {
@@ -299,10 +299,8 @@ tab_xl <-
     # subtext + 6 blank, +1 for the col_var spanning-name header row); absolute geometry is derived
     # from `start` in the plan builder. Observed-curve shape tables (below) join the same offset, or a
     # second table on the sheet would land on top of one.
-    shapes <- purrr::map(tabs_src, function(t)
-      if (is_tab(t) && tab_wants_shape_table(t, "xl")) reg_shape_table(t) else NULL)
-    shape_n <- purrr::map_int(shapes, function(st)
-    if (is.null(st)) 0L else nrow(st) + length(attr(st, "note")) + 2L)
+    shapes  <- purrr::map(tabs_src, footer_notes, medium = "xl")
+    shape_n <- purrr::map_int(shapes, note_xl_rows)
     # model-check pictures are drawn BEFORE the geometry too, so their height joins the same offset.
     check_imgs <- xl_check_images(tabs_src, check, data, theme = theme, lang = lang)
     check_n    <- purrr::map_int(check_imgs, xl_check_rows)
@@ -337,7 +335,11 @@ tab_xl <-
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
       ratio_cells       = ratio_cells,           # what a multiplicative cell holds: fold/raw/text
-      theme             = theme                  # format() needs it for a publication palette's marks
+      theme             = theme,                 # the chrome, the fills, the faces
+      # THE THEME THE CELL SUFFIX READS, which is not always the table's: a publication palette MARKS
+      # its cells, and a mark is the cell's own signal rather than an aside -- so `color = FALSE` takes
+      # it away with the colour (fmt_cell_suffix() draws nothing at all on a NULL theme).
+      marks             = if (isTRUE(color)) theme else NULL
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
@@ -638,8 +640,8 @@ xl_prose_height <- function(text, span_px, size = 9) {
   lines * (size * 1.28) + 2
 }
 
-# The shape table as (row, col, span, text) cells: a header row, one row per curve, then the note --
-# the same four columns every other medium prints, in the order reg_shape_table() declares.
+# A NOTE as (row, col, span, text) cells: a header row, one row per row of the note, then its own
+# lines -- the same columns every other medium prints, in the order the note declares.
 # THE SHAPE TABLE BORROWS THE MAIN TABLE'S GRID, so it must be laid over it rather than into it: the
 # first column holds a formula and takes the whole INDEX BLOCK, landing under the row labels, and
 # every other column takes TWO data columns, a data column being one number wide -- except the LAST,
@@ -649,7 +651,7 @@ xl_prose_height <- function(text, span_px, size = 9) {
 # column count. On a narrow table it runs one column past the right edge, which costs nothing (it
 # draws no border and nothing else sits there) where clamping would cut the one cell that cannot
 # wrap or shorten.
-xl_shape_cells <- function(shape, row0, index_cols = 1L) {
+note_xl <- function(shape, row0, index_cols = 1L) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
   hd <- attr(shape, "headers"); nt <- attr(shape, "note")
   spans <- c(index_cols, rep(2L, max(0L, length(hd) - 2L)), if (length(hd) > 1L) 3L)
@@ -816,7 +818,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     code <- xl_code(col)
     # the SAME suffix format() writes into the text, so Excel and every other backend annotate a cell
     # identically -- and a `contrib` column, which stars nothing, gets nothing here either.
-    st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$theme)
+    st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$marks)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
       # an unstarred "" is width 0, so max() over every value cell IS the column-max star width.
@@ -934,12 +936,14 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = last_row + 1L,
-    # header row, one row per curve, then the note -- one blank line under the subtext block.
-    shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L,
-                                 index_cols = max(1L, length(txt_cols))),
+    # each note: a header row, one row per row of it, then its own lines -- one blank line under the
+    # subtext block, and one between two notes.
+    shape_cells = note_xl_all(shape, last_row + length(subtext_clean) + 2L,
+                              index_cols = max(1L, length(txt_cols))),
     check_imgs = check_imgs,
-    check_row = last_row + length(subtext_clean) + 2L +
-      (if (is.null(shape)) 0L else nrow(shape) + 3L),
+    # ⚠ ONE arithmetic for the block's height (note_xl_rows), shared with the sheet-stacking budget:
+    # two of them drifted, and a model-check picture landed on top of a note.
+    check_row = last_row + length(subtext_clean) + 2L + note_xl_rows(shape),
     # the legend runs occupy the FIRST subtext rows (merged above), overwritten with rich text below.
     legend_runs = legend_runs, legend_row = last_row + 1L,
     # a text-mode column (ci = "cell" / OR) is written as its format() display STRING; every other
@@ -1341,21 +1345,22 @@ tab_title_rows_first <- function(tabs) {
   length(dir) > 0 && all(dir == "col")
 }
 
-# Name a variable set for a title: every name up to `max`, then "+N more" -- never "multi", which named
-# nothing, and never a bare index. Placeholders and empties drop out.
-tab_title_names <- function(x, max = 2) {
+# Name a variable set for a title, through the one name-list renderer (tx_name_list): up to `max`
+# names, then how many there were -- never "multi", which named nothing, and never a bare index.
+# Placeholders and empties drop out.
+tab_title_names <- function(x, max = 3, noun = NULL, join = "comma") {
   x <- as.character(x)
   x <- x[is_real_col_var(x)]
-  if (length(x) == 0) return("")
-  if (length(x) <= max) return(paste(x, collapse = ", "))
-  paste0(paste(x[seq_len(max)], collapse = ", "), " +", length(x) - max, " more")
+  tx_name_list(x, max = max, join = join,
+               overflow = if (is.null(noun)) "etc" else "count", noun = noun)
 }
 
-tab_get_titles <- function(tabs, row, col, tab, max = 2) {
+tab_get_titles <- function(tabs, row, col, tab, max = 3) {
   # the DEPENDENT variable is named first ("ROCK, JAZZ by DIPLOM" reads as the thing described, then
   # what it is broken down by), which under pct="row" is the col_vars.
-  rows <- tab_title_names(row, max)
-  cols <- tab_title_names(col, max)
+  nv   <- gettext("variables")
+  rows <- tab_title_names(row, max, noun = nv)
+  cols <- tab_title_names(col, max, noun = nv)
   swap <- tab_title_rows_first(tabs)
   a    <- if (swap) rows else cols     # the outcome axis, named first
   b    <- if (swap) cols else rows
@@ -1363,7 +1368,7 @@ tab_get_titles <- function(tabs, row, col, tab, max = 2) {
           else if (!nzchar(a)) b
           else if (!nzchar(b)) a
           else paste(a, "by", b)
-  tabn <- if (missing(tab)) "" else tab_title_names(tab, max)
+  tabn <- if (missing(tab)) "" else tab_title_names(tab, max, noun = nv)
   if (nzchar(tabn)) res <- paste0(res, " (tabbed by ", tabn, ")")
   res
 }

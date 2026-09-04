@@ -1668,9 +1668,10 @@ tab_assemble_tables <- function(ctx) {
   if (!lv1_group_vars(tab)) {
     tab    <- dplyr::group_by(tab, !!!tab_vars)
     groups <- dplyr::group_data(tab)
-    tab    <- new_grouped_tab(tab, groups = groups, subtext = subtext, test = tests, meta = meta)
+    tab    <- new_grouped_tab(tab, groups = groups, subtext = footer_default_template(subtext),
+                              test = tests, meta = meta)
   } else {
-    tab <- new_tab(tab, subtext = subtext, test = tests, meta = meta)
+    tab <- new_tab(tab, subtext = footer_default_template(subtext), test = tests, meta = meta)
   }
 
   ctx_update(ctx, list(tabs = tab, tests = tests))

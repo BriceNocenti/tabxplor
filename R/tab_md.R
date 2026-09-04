@@ -113,36 +113,30 @@ tab_md <- function(tabs,
   if (color) compute <- c(compute, "colors")
   # a table carrying subordinate tables (meta$footer_tabs) enters as the LIST it means, so the same
   # list path renders them under it -- one pipe table after another (tx_with_footer_tabs).
-  prep <- tab_export_prep(tx_with_footer_tabs(tabs), backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+  tabs_x    <- tx_with_footer_tabs(tabs)
+  tabs_list <- if (is.data.frame(tabs_x) || !is.list(tabs_x)) list(tabs_x) else tabs_x
+  prep <- tab_export_prep(tabs_x, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
-                          what = "tab_md()")
+                          lang = lang, what = "tab_md()")
 
   # WARNING: the POSITION, never imap()'s `i` -- a NAMED list makes `i` the name and `i == 1` silently
   # FALSE on every table, so the caption is dropped with no error. Same trap as xl_check_images().
   parts   <- purrr::map_chr(seq_along(prep$tables), function(i) {
-    rd <- prep$tables[[i]]
+    rd  <- prep$tables[[i]]
     cap <- rd_caption(rd, if (i == 1L) caption else NULL)   # user caption= applies to the FIRST table
-    md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
-                  subtext = subtext, color = color, css = css,
-                  color_legend = color_legend, lang = lang,
-                  title = cap,
-                  theme = theme)
+    txt <- md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
+                         subtext = subtext, color = color, css = css,
+                         color_legend = color_legend, lang = lang,
+                         title = cap,
+                         theme = theme)
+    # the NOTES this table carries -- a character grid, and the regression's observed curves where the
+    # base-count cell cannot hold them -- as pipe tables of their own below its footer.
+    for (nt in footer_notes(tabs_list[[i]], "md"))
+      txt <- paste(c(txt, "", note_md(nt)), collapse = "\n")
+    txt
   })
   md_text <- paste(parts, collapse = "\n\n")
-
-  # the observed curves, as a pipe table of their own below the footer, taken only where the
-  # base-count cell cannot carry them (see tab_wants_shape_table).
-  if (is_tab(tabs) && tab_wants_shape_table(tabs, "md")) {
-    st <- reg_shape_table(tabs)
-    if (!is.null(st)) {
-      nt <- attr(st, "note")                       # empty wherever no row wears the "ns" mark
-      md_text <- paste(c(md_text, "",
-                         tx_pipe_table(st, attr(st, "headers"), attr(st, "align")),
-                         if (length(nt)) c("", paste0("*", paste(nt, collapse = " "), "*"))),
-                       collapse = "\n")
-    }
-  }
 
   # a STYLED table is wrapped in a pandoc fenced div: pandoc emits a BARE `<table>` for a pipe table,
   # which none of tab_css()'s `.tabxplor-tab ...` rules can reach, so `::: {.tabxplor-tab}` (rendered
@@ -219,8 +213,9 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # attributes. Legend only when coloured.
   src         <- if (is.null(rd$color_src)) tabs else rd$color_src
   want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
-  subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend,
-                            subtext = subtext_text, lang = lang)
+  subtext_text <- rd_blocks(src, "md", theme = theme, want_legend = want_legend,
+                            subtext = subtext_text, lang = lang,
+                            host = !isTRUE(rd$subordinate))
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group
@@ -260,7 +255,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       # purpose, since pandoc must see an empty cell as `<td></td>` (`:empty`) for the spacer/blank-row
       # mechanisms to key on. nchar is unchanged (one codepoint either way).
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
-                        theme = theme, bold_split = TRUE, pad = fig_space,
+                        theme = if (isTRUE(color)) theme else NULL,
+                        bold_split = TRUE, pad = fig_space,
                         .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       pf      <- attr(raw, "primary_from")

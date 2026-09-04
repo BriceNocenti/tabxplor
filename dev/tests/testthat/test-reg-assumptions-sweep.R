@@ -699,7 +699,8 @@ testthat::test_that("the shape table's grey never lands on a <td>", {
   d <- shp_data()
   t <- suppressMessages(tab_reg(d, "married", c("age", "tvhours"), family = "binomial",
                                 empirical = FALSE, stats = "no"))
-  h <- tabxplor:::shape_html_table(t)
+  # phase 7: the shape table is a NOTE like any other, and note_html() is everybody's emitter
+  h <- tabxplor:::note_html(tabxplor:::reg_shape_table(t, syntax = "html"))
   testthat::skip_if(is.null(h))
   tds <- regmatches(h, gregexpr("<td[^>]*>", h))[[1]]
   expect_false(any(grepl("tx-sec", tds)))

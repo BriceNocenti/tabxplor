@@ -128,6 +128,19 @@ TAB_FOREIGN_KEYS <- list(
         function() names(MEASURES)),
   tx_fk("MEASURE_ACRONYMS_REG",    function() unname(MEASURE_ACRONYMS_REG),
         function() names(MEASURES)),
+  # --- the FOOTER: the region, its vocabulary and what each part reads -------------------------
+  # a placeholder's `reads` names the facts it is built from: `meta$<field>` must be a declared table
+  # attribute, and every other name a declared `fmt` column attribute. That edge is what lets
+  # ?tabxplor-footer say "to change what this says, use ..." without restating a single setter.
+  tx_fk("FOOTER_BLOCKS$reads (meta)",
+        function() sub("^meta[$]", "", grep("^meta[$]", tx_fk_all(FOOTER_BLOCKS, "reads"), value = TRUE)),
+        function() c(names(TAB_ATTRS), "spec$vars$wt", "spec$call")),
+  tx_fk("FOOTER_BLOCKS$reads (column)",
+        function() grep("^meta[$]", tx_fk_all(FOOTER_BLOCKS, "reads"), value = TRUE, invert = TRUE),
+        function() c(fmt_col_attrs, fmt_field_names, "subtext", "test")),
+  tx_fk("FOOTER_BLOCKS$kind",      function() tx_fk_scalar(FOOTER_BLOCKS, "kind"),
+        function() c("line", "note", "tab", "inline")),
+
   # --- into COLOR_SCALES (the break ladders) -------------------------------------------------
   tx_fk("EST_SCALES$break_key",    function() tx_fk_scalar(EST_SCALES, "break_key"),
         function() names(COLOR_SCALES), orphan = TRUE),

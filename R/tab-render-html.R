@@ -292,7 +292,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   } else purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
       format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
-             theme = meta$theme_cols$theme %||% "light",
+             theme = meta$theme_cols$marks,
              bold_split = TRUE, .ref = ann_ref(ann[[name]]))
     } else {
       as.character(col)
@@ -529,37 +529,35 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
 }
 
 
-# The SHAPE TABLE as html: the same four columns the console prints, in the table's own chrome, with
-# the glyph run upgraded to an <svg> at double size -- a table of its own has room a base-count cell
-# has not.
-shape_html_table <- function(tab) {
-  # `syntax = "html"`: the outcome cell comes back as markup (a subscripted "%"), so that ONE column
-  # is not escaped again below -- every other cell still is.
-  st <- reg_shape_table(tab, syntax = "html")
-  if (is.null(st)) return(NULL)
-  hd <- attr(st, "headers"); al <- attr(st, "align")
+# A NOTE as html: its columns in the table's own chrome, one step smaller and in the aside ink -- a
+# note under the table, not a second table (`tx-shape`). Per-column behaviour is the note's declared
+# `kind` and never its column names: "markup" is not escaped again, "spark" is a run of block glyphs
+# upgraded to an <svg> at double size, which a table of its own has room for.
+note_html <- function(nt) {
+  if (is.null(nt) || !nrow(nt)) return(NULL)
+  hd <- attr(nt, "headers"); al <- attr(nt, "align")
+  kd <- attr(nt, "kind") %||% rep("text", length(nt))
   cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
   thead <- paste0('<tr>', paste0('<th class="', cls, '">', tx_html_escape(hd), '</th>',
                                  collapse = ""), '</tr>')
-  # a curve inside its own sampling noise wears the ASIDE ink -- same convention as a non-significant
-  # cell. WARNING: the grey goes on a SPAN inside the cell, never the <td>: tab_css() gives `.tx-sec`
+  # a row the note greys out wears the ASIDE ink -- same convention as a non-significant cell.
+  # WARNING: the grey goes on a SPAN inside the cell, never the <td>: tab_css() gives `.tx-sec`
   # `display:inline-block` under every publication palette, which on a <td> would break the row layout.
-  ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
-  cells <- lapply(seq_along(st), function(j) {
-    v <- as.character(st[[j]])
-    if (names(st)[[j]] != "outcome") v <- tx_html_escape(v)   # the outcome cell IS markup
+  ns <- attr(nt, "noisy") %||% rep(FALSE, nrow(nt))
+  cells <- lapply(seq_along(nt), function(j) {
+    v <- as.character(nt[[j]])
+    if (!identical(kd[[j]], "markup")) v <- tx_html_escape(v)
     k <- cls[[j]]
-    if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
-                                     k <- paste(k, "tx-sparkcell") }
+    if (identical(kd[[j]], "spark")) { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
+                                       k <- paste(k, "tx-sparkcell") }
     v <- ifelse(ns, paste0('<span class="tx-sec">', v, '</span>'), v)
     paste0('<td class="', k, '">', v, '</td>')
   })
   body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")
-  nt    <- attr(st, "note")                        # empty wherever no row wears the "ns" mark
-  tfoot <- if (!length(nt)) "" else
-    paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
-           paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
-  # `tx-shape`: a note under the table, not a second table -- one step smaller and in the aside ink.
+  ln    <- attr(nt, "note")                        # empty wherever the note says nothing extra
+  tfoot <- if (!length(ln)) "" else
+    paste0('<tfoot><tr><td colspan="', length(nt), '"><div class="tx-foot">',
+           paste(tx_html_escape(ln), collapse = "<br>"), '</div></td></tr></tfoot>')
   tx_scrollbox(paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
                       '<tbody>', body, '</tbody>', tfoot, '</table>'))
 }

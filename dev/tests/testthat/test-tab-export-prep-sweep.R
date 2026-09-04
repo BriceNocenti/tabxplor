@@ -150,14 +150,21 @@ testthat::test_that("roles$sd_cols finds the Excel sd aside column, ungated by v
 })
 
 
-testthat::test_that("a title elides past `max` = 2 names", {
+# Phase 7: ONE name-list renderer (tx_name_list) for every line that names a variable set, with the
+# overflow declared per call -- a TITLE counts what it could not list, a LEGEND says "etc.". The old
+# "+N more" was a bare literal and came out untranslated in a French title.
+testthat::test_that("a title elides past `max` = 3 names, and says how many", {
   testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b")), "a, b")
-  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c")), "a, b +1 more")
-  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c", "d", "e")), "a, b +3 more")
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c")), "a, b, c")
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b", "c", "d", "e")), "a, b, c, etc.")
+  testthat::expect_equal(
+    tabxplor:::tab_title_names(c("a", "b", "c", "d", "e"), noun = "variables"), "5 variables")
+  # a list a reader READS joins with a word; one that merely identifies keeps its commas
+  testthat::expect_equal(tabxplor:::tab_title_names(c("a", "b"), join = "and"), "a and b")
   # placeholders never reach a title
   testthat::expect_equal(tabxplor:::tab_title_names(c("no_row_var", "all_col_vars")), "")
-  # the default really is 2 (the formal, not just the helper)
-  testthat::expect_equal(formals(tabxplor:::tab_get_titles)$max, 2)
+  # the default really is 3 (the formal, not just the helper)
+  testthat::expect_equal(formals(tabxplor:::tab_get_titles)$max, 3)
 })
 
 

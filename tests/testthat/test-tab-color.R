@@ -317,20 +317,22 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
 
 
 # Phase 22g-ii: WEIGHT IN A LEGEND COMES FROM THE PALETTE AND FROM NOTHING ELSE. The column-name
-# prefix used to be bold in every medium, putting more emphasis on the legend than the table's own
-# bold cells carry; the break-words keep theirs, because it IS the face of the cells they describe.
-test_that("a legend's column names are plain; its coloured break-words keep the palette's face", {
+# THE ONE thing in a legend whose weight is not the palette's: the VARIABLE NAMES a line opens with.
+# They are a label saying whom the sentence is about, so a reader picks out the line they need before
+# reading any of them -- while the break-words keep the palette's own face, because it IS the face of
+# the cells they describe.
+test_that("a legend's column names are bold; its break-words keep the palette's face", {
   d  <- suppressWarnings(fx_reg_fmt())
   # a crude/model pair: two column blocks, so the legend names the columns it describes
   t  <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
                                  measure = "difference"))
   md <- paste(tab_md(t, print = FALSE), collapse = "\n")
   ln <- grep("\u2014 RD \u2265", strsplit(md, "\n")[[1]], value = TRUE)[[1]]
-  testthat::expect_match(ln, "^Obs_RD, Model_mRD \u2014 ")      # the names ARE there...
-  testthat::expect_false(grepl("**", sub(" \u2014 .*", "", ln), fixed = TRUE))   # ...and plain
-  testthat::expect_match(ln, "**", fixed = TRUE)               # the break-words still carry theirs
-  # and the token model no longer has a hand-set flag to disagree with the palette
-  testthat::expect_false("b" %in% names(tabxplor:::.lg_tok("x")))
+  testthat::expect_match(ln, "^\\*\\*Obs_RD, Model_mRD\\*\\* \u2014 ")   # the names, in bold...
+  testthat::expect_match(ln, "[+5]{.p1}", fixed = TRUE)        # ...and the break-words keep theirs
+  # the flag is on the TOKEN, so it is the assembler that says "this is a label", never the palette
+  testthat::expect_true("b" %in% names(tabxplor:::.lg_tok("x")))
+  testthat::expect_false(tabxplor:::.lg_tok("x")$b)
 })
 
 

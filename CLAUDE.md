@@ -30,7 +30,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 **Core type system** — the `fmt` record, the table classes, the row/table identity.
 
 - `fmt_class.R` — the `tabxplor_fmt` vctrs record (the rich cell): fields, attributes, arithmetic, colour engine; the `MEASURES` / `EST_SCALES` fact tables.
-- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, `tab_compact()`, the `test` footer; the palette/breaks API and `COLOR_SCALES`.
+- `tab_classes.R` — `tabxplor_tab`/`grouped_tab` S3 classes, dplyr methods, print, `tab_compact()`; the table attributes (`TAB_ATTRS`) and the palette/breaks API (`COLOR_SCALES`).
 - `row-model.R` — the row axis: `row_kind` field + `tabxplor_lvl` factor subclass; `ROW_KINDS`; level operations.
 - `table-spec.R` — the table identity `meta$spec` (kind / vars / call).
 - `tab-structure.R` — `tab_structure()`/`tab_supports()`/`tab_columns()`: which reshape ops accept which table structure; `TAB_OPS`.
@@ -83,6 +83,8 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 - `tab-export-prep.R` — the shared exporter prep + ephemeral render model.
 - `tab-render-html.R` — `tab_html()` + the dependency-free HTML `<table>` engine.
 - `tab-tooltip.R` — the hover tooltip: `TOOLTIP_LINES`, its shared gates, the one builder.
+- `tab-legend.R` — the colour legend's SENTENCE: the spec, the two assemblers, the per-medium renderer.
+- `tab-footer.R` — the REGION under a table: `FOOTER_BLOCKS`, the `subtext` template, the three kinds and their emitters, `tab_note()`.
 - `tab_md.R` — the Markdown exporter (pandoc colour spans).
 - `tab_xl.R` — the Excel exporter (openxlsx2, colours/bold, numFmt from `format(syntax = "excel")`).
 - `tab-xl-backend.R` — openxlsx2 wrappers + the range coalescer.
@@ -150,6 +152,8 @@ The main fact tables:
 | `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                 |
 | `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                  |
 | `TOOLTIP_LINES`    | `tab-tooltip.R`      | The hover tooltip's lines: which token each renders, its label, its gates, their order  |
+| `FOOTER_BLOCKS`    | `tab-footer.R`       | The region under a table: one row per member, its `<placeholder>`, kind, and what it reads |
+| `TAB_ATTRS`        | `tab_classes.R`      | The table attributes: gloss, bind rule, setter, and whether a subordinate keeps them    |
 | `TAB_OPS`          | `tab-structure.R`    | Which reshape operations accept which table structure                                   |
 | `VAR_SHAPES`       | `var-shape.R`        | How a numeric variable may enter a table or a model, and which producer may ask for it  |
 | `REG_FAMILIES`     | `reg-estimand.R`     | Per family: the level kind, the links it fits, its names — the estimand library derives |
@@ -278,7 +282,11 @@ Colour has three orthogonal axes: a **measure** (which deviation to grade — `d
 
 The measure's behaviour — raw getter, scale keys, significance source, gating — lives in its `MEASURES` row, which drives both the plan and the legend with no per-measure branches; every backend then consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically. **`dev/colors.md`** derives where each ladder's anchor comes from, what colour-vision deficiency requires of a palette, and why a page with no colour needs a different palette rather than a desaturated one.
 
-**The footer legend states the measure, not the palette.** One line is `[<columns> — ]<measure named in words>: <subject> ≥ <reference> <thresholds>; <subject> ≤ …`, then one clause saying what an *uncoloured* cell means — the reverse being a tautology the cells already show. The name is a per-(measure × ladder scale) fact on the same `MEASURES` row, in two registers (`word` for the console, `word_long` for the exports), because a difference of proportions, of means and of log odds are three quantities. A colour palette names no direction — its break-words *are* blue and red — while a publication palette, whose greyscale has no diverging ramp, keeps its two face words and its two sentences.
+**The footer legend states the measure, not the palette.** One line is `[<columns> — ]<measure named in words>: <subject> ≥ <reference> <thresholds>; <subject> ≤ …`, then one clause saying what an *uncoloured* cell means — the reverse being a tautology the cells already show. The name is a per-(measure × ladder scale) fact on the same `MEASURES` row, in two registers (`word` for the console, `word_long` for the exports), because a difference of proportions, of means and of log odds are three quantities. A colour palette names no direction — its break-words *are* blue and red — while a publication palette, whose greyscale has no diverging ramp, keeps its two face words and its two sentences. **A table may re-state those words** (`set_legend_words()`, `meta$legend_words`): the same fold `measure_facts()` already applies for the significance policy and the ladder, one layer further out, so a package grading the same ladder on another quantity — a contribution to an axis's variance rather than to a chi-squared — keeps the whole grammar and says its own nouns. ⚠ Naming only (`MEASURE_WORD_FIELDS`): never an engine fact nor a ladder glyph, because a table attribute must not change a number and an extracted `fmt` column must colour identically on its own.
+
+### The footer
+
+**Everything printed under a table is one region, and its TEXT is a template the table carries.** `FOOTER_BLOCKS` (`tab-footer.R`) declares it — one row per member, row order the reading order, each naming its `<placeholder>`, its `kind` (`line` / `note` / `tab` / `inline`), and *what it reads*. `tab()` writes the default template into `subtext`, so a reader sees what the footer is made of and can re-order it, interleave prose, or delete `<legend>` — which is the only per-table legend switch there is, and the only one the console can obey. A `subtext` naming no placeholder is appended to the default instead, which is what a note has always done. **The `reads` column is the load-checked edge** to `TAB_ATTRS` and the `fmt` attributes, and it *generates* `?tabxplor-footer`'s "how to change this" from `TAB_ATTRS$setter` rather than restating it — so adding a placeholder is one row, and a row is **gated on what it reads**, which is also the degradation contract: a table stripped of its metadata keeps the column-derived half of its footer (the legend, the stars key) and drops the rest, with no exception handling anywhere. Everything generated is composed at RENDER — the theme changes the ladder's length and the note's words, the medium chooses terse or prose, and a post-build `select()` or `set_display()` changes what there is to say — while a person's own line is frozen in the language they wrote it; the default template holds no prose, so nothing mixes unless it is written.
 
 ### The regression subsystem
 
@@ -306,7 +314,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. They are not a fifth backend: `tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders them under it in all four media, a named one captioned by its name, and a subordinate table's own are never rendered. **In the console they print as a pipe table** (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift) — the shape a regression's shape table already takes there: one grid is the table, what travels under it reads as a note. **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, each bar the cell's share of its column's largest. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is `currentColor` mixed in the stylesheet, and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, each bar the cell's share of its column's largest. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is `currentColor` mixed in the stylesheet, and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content.** A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone; a *variable* name is written vertically only where the rotation actually saves width — the names that cannot turn, a one-row block like `Constant`, set the floor every other name is weighed against, and a rotated one wraps to its block's own height. That decision is one prep fact both media read. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
@@ -680,53 +688,143 @@ l'en-tête est corrigée au passage (`var` n'est pas « l'écart-type dans une c
 ne nomme aucune queue d'écart-type).
 
 
-#### v2.0.1 — Phase 7 — footer legends and legend pipe tables full redesign
+#### v2.0.1 — Phase 7 — le pied de tableau, un seul gabarit **DONE**
 
-During real-world usage, the tabxplor 2.0.0 framework for footer legends and pipe table legends have proven not to be flexible enough : to extend them out of tabxplor, either for `~github/ggfacto/` or for `~github/formations_stat/` (both relying heavily on `tabxplor::`), have proven ad hoc, difficult, requiring to modify tabxplor code itself in a very ad hoc way. Before any further development of these other packages and repos, I want to **carefully design a reliable, readable and integrated framework for flexible and easy-to-extend footer legends and pipe table legends** inside tabxplor itself. For that, I want you to **study different possibilities, and help me choose the better one**. Please make thorough research, test things in temporary scripts if needed, try to think out of the box, then write your very detailed and structured findings and propositions in `dev/legend_and_side_tables.md`, reworking it’s current content totall (see below).
-- Étudie **le brouillon `dev/legend_and_side_tables.md`**, qui pour l’instant décris le cas d'usage de `ggfacto` — une légende engendrée qui dit « contribution to Chi2 » là où l'axe factoriel n'a pas de chi², et aucun moyen d'en remplacer le mot —, l'inventaire de ce qui existe (quatre coutures ouvertes, cinq flux nommés en dur, un `color_legend` que la console n'atteint pas), et **deux formes possibles mises côte à côte sans trancher** : un registre de flux clé par `role`, ou un champ `meta$legend` portant les mots de la mesure.
-- Should we make color_legend should accept a string (or a table should carry its own wording in meta) ? Today it is TRUE/FALSE, and the sentence is generated from the measure — "contribution to Chi2: cell over-represented vs independence" — which is a fact about a crosstab. A hand-built table can legitimately use the same ladder for a different quantity, and its only options are the wrong sentence or no swatches. That is why `ggfacto:::mca_interpret_legend()` writes <span class="p1"> HTML in ggfacto; with this, it would be one string handed to tab_html().
-- Do not hesitate to remove and redesign what "### v2.0.1 — Phase 5 — un tableau subordonné (`meta$footer_tabs`)" and "### v2.0.1 — Phase 6 — la pipe table en console, la barre de données, `<var>`" have done : they were done by AI sessions outside tabxplor, not taking into account it’s integration in a consistent ecosystem, in a very *ad hoc* way. **At the end, write me a summary description of the new framework**, so that I tell to an AI session inside `~github/ggfacto/` and `~github/formations_stat/` to use it in a clean, reliable, future-proof way.
+Demandé par `ggfacto` et `formations_stat`, qui butaient sur le même mur : **ce que tabxplor engendre
+ne peut pas être redit par qui sait mieux, et ce qu'un paquet tiers porte ne peut pas être rendu par
+tabxplor.** `mca_interpret()` colorie sur `color = "contrib"` et recevait « contribution to Chi2 »,
+là où un axe factoriel n'a pas de chi² ; faute de pouvoir remplacer le mot, il coupait toute la
+légende, écrivait du texte simple dans `subtext` — perdant les pastilles et les deux registres — et
+en **console** ne pouvait rien couper du tout. Il collait aussi son échelle ×1 ×2 ×5 ×10 à la main
+depuis `get_color_breaks()`, exactement la dérive que le paquet existe pour empêcher.
 
-Dettes ouvertes par la phase 6 :
-- **Le cadre des légendes** — l'objet du brouillon ci-dessus. Tant qu'il n'existe pas, un paquet tiers
-  ne peut que couper la légende (`color_legend = FALSE`, per-call, **hors de portée en console**) et
-  écrire du texte brut dans `subtext` : ni coloré, ni traduit au rendu, ni terse/prose.
-- **`color = FALSE` sous `print_marks`** émet les marques `⁺⁺` / `⁻⁻` dans chaque cellule tout en
-  supprimant la légende qui les explique — le seul rendu où le lecteur reçoit un signe sans clé.
-  `fmt_cell_suffix()` ne voit pas `want_colors`.
-- **La barre de données en Excel.** `openxlsx2::wb_add_conditional_formatting(type = "dataBar")` est à
-  portée ; c'est la géométrie d'une feuille `tab_xl()` qui est le sujet.
+**Une seule idée : le TEXTE du pied est `subtext`, et `subtext` est un gabarit que `tab()` écrit.**
+Tout ce que tabxplor engendre est un `<placeholder>`, tout ce qu'une personne écrit est une ligne, et
+**l'ordre des lignes est l'ordre du pied**. `get_subtext()` le montre, `set_subtext()` le remplace ;
+supprimer `<legend>` supprime la légende — **en console aussi**, ce qu'aucun argument d'exportateur ne
+sait faire. ⚠ **La règle qui rend tout cela rétro-compatible** : un `subtext` qui ne nomme **aucun**
+placeholder est simplement ajouté au gabarit par défaut, ce que fait une note depuis toujours ; un
+`<…>` inconnu (`<b>`, `n < 30`, `<30 ans>`) passe verbatim et ne revendique rien.
 
-Trois dettes relatives aux pillar abbreviations ouvertes par la phase 6 :
-- **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
-  à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
-  la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche peut-être `cv`, `resid`,
-  `ci`, `moe`, `obs`, `gap` (vérifier). Find a reliable framework to make this flexible.
-- (The unit tag follows the displayed token, so <ctr> needs display = "ctr", which prints the signed value. A per-column tag override — or decoupling the tag from the token — would allow <ctr> over a column that displays pct. Too *ad hoc*, or reliable/readable ?)
-- ⚠ **`tab-steps-legacy.R:561`** compare `fmt_kind_label(tabs)` à `"row"` / `"col"`, que la fonction ne
-  renvoie jamais (elle rend `"row%"`), donc tout le bloc `ref` du chemin déprécié est sauté et
-  `diff_formula()` retomberait sur `NA_real_`. Chemin déprécié et non testé — à corriger ou à retirer.
+**Le tout est une grille.** `FOOTER_BLOCKS` (`R/tab-footer.R`) déclare la région : une ligne par
+membre, l'ordre des lignes étant l'ordre de lecture, chacune nommant son `<placeholder>`, son `kind`
+(`line` / `note` / `tab` / `inline`), et **ce qu'elle lit**. La colonne `reads` n'est pas décorative :
+elle est vérifiée au chargement contre `TAB_ATTRS` et les attributs `fmt`, et elle **engendre** la
+colonne « pour changer ce qui est dit, utilisez… » de `?tabxplor-footer` depuis `TAB_ATTRS$setter`, au
+lieu de la redire. C'est aussi **le contrat de dégradation** : une ligne est gated sur ce qu'elle lit,
+donc une table qui a perdu ses attributs garde la moitié qui vient des COLONNES (la légende, la clé
+des étoiles) et laisse tomber l'autre — sans un seul `tryCatch` (vérifié : `legend_specs()` passe par
+`tab_get_vars()$col_vars_levels`, dérivé entièrement de l'attribut `col_var` des colonnes).
 
-Other improvements related to legends, by the way:
+**Ce qui est engendré est composé au RENDU, ce qu'une personne écrit est figé.** Chiffré contre le
+code : `lang =` sur `tab_md()`/`tab_html()`/`tab_xl()` est un bug déjà corrigé (phase 20h) ; le thème
+change le TEXTE et pas seulement la couleur (une palette de publication raccourcit l'échelle, ajoute
+« Underlined: »/« Italic: », remplace *Uncoloured* par *Unmarked*, et `print_marks` supprime la ligne
+des étoiles) ; terse/prose est un registre par médium ; et un `select()`, un `set_display()` ou un
+`set_color_breaks()` après coup ferait mentir une phrase figée — **c'est pourquoi `set_display()` n'a
+besoin d'aucun crochet de légende**. jamovi y gagne aussi : `theme` et `wrap_*` restent HORS de la clé
+de cache parce que ce sont des arguments de rendu. ⚠ **Rien ne mélange deux langues par défaut** : le
+gabarit stocké ne contient que des placeholders, donc une table construite en français et rendue en
+`lang = "en"` sort entièrement en anglais.
 
-Dans les footer legends, mettre le nom des variables en gras (plus lisible, the user see at first glance what footer row is for what variables).
+**Le vocabulaire se redit** (`set_legend_words()`, `meta$legend_words`) : le même fold que
+`measure_facts()` applique déjà pour la politique de significativité et pour l'échelle, une couche
+plus loin — donc les pastilles, les deux registres, les palettes de publication, la guide de graphique
+et la console disent les noms de l'appelant sans une seule branche. Une chaîne nue est le `word`.
+⚠ **Nommage seulement** (`MEASURE_WORD_FIELDS`, liste blanche vérifiée à l'écriture) : jamais un fait
+du moteur ni un glyphe d'échelle, parce qu'un attribut de table ne doit pas changer un nombre et
+qu'une colonne `fmt` extraite doit se colorier à l'identique. L'invariant est écrit à l'envers, à côté
+de `MEASURES` : la liste blanche n'est PAS un sous-ensemble des champs déclarés (`lead_over` n'existe
+que comme override), donc ce qui est vérifié est qu'aucun fait du moteur n'y figure. Deux nettoyages
+en découlent : le mot de la référence « vs la moyenne » devient le champ déclaré `ref_word` (une
+branche sur `unit_kind` en moins, et une lecture par échelle : `zscore` dit « vs independence »), et
+`legend_lead_fn()` laisse un tiers fournir `lead_over`/`lead_under` en gabarits `%1$s`/`%2$s`/`%3$s`
+tandis que les leads déclarés restent des closures — une phrase entière par cas, ce dont l'accord
+français a besoin.
 
-La légende engendrée par `tab()` sort à moitié en anglais dès qu'il y a plus de deux prédicteurs — « Régression logistique: cinema selon qualif, sexe +1 more ».
-- En français juste utiliser "etc." (without saying how many variables, we don’t care it’s showed in the table itself) : « Régression logistique: cinema selon qualif, sexe, etc. »
+**Une note n'est plus un privilège de la régression.** `set_footer_tabs()` prend les deux : un
+`tabxplor_tab` se rend en TABLEAU, **toute autre data.frame en NOTE** — une grille de colonnes
+caractères déjà rendues, dans l'encre d'aparté. `reg_shape_table()` en est devenu un producteur
+(`tab_note()`), et ses quatre émetteurs écrits à la main sont ceux de tout le monde
+(`note_html()`, `note_xl()`, `tx_pipe_table()`), sans le double câblage `tab_is_reg() &&
+get_assumptions()`. ⚠ Ce que la note dit par colonne est **déclaré** (`kind = "markup"/"spark"`) et
+non plus reconnu au nom de la colonne. ⚠ **En console, notes et tableaux subordonnés s'impriment
+AU-DESSUS** : le dernier élément imprimé est l'objet R que l'on peut piper ; en export ils lisent
+sous le pied.
 
-La légende de `tab_reg()` pourrait être plus lisible : écrire les 3 premiers prédicteurs, remplacer par "<x> predictors" with 4 or more
-- « Logistic regression: cinema by qualif, sexe and age »
-- « Régression logistique: cinema selon qualif, sexe et age »
-- « Logistic regression: cinema, by 4 predictors »
-- « Régression logistique: cinema, selon 4 prédicteurs »
+**Six divergences silencieuses, toutes du même défaut** (la région était assemblée en quatre
+endroits), corrigées par construction : la légende imprimée **deux fois** sous un hôte + subordonné
+coloré (et zéro fois en console) — un subordonné rend ce qu'il porte et rien d'engendré (`carried`) ;
+`tab_html()` qui écrasait le titre d'un subordonné ; `tx_with_footer_tabs()` inopérant sur une liste ;
+la table de forme filtrée par `is_tab(tabs)` donc absente en html/md sous un subordonné ; `rd$bars`
+non re-clé au transpose (il disparaît maintenant explicitement — un bar est une échelle par COLONNE,
+et une colonne transposée est un niveau de ligne) ; et les deux arithmétiques de la hauteur du bloc
+en Excel, réduites à `note_xl_rows()`.
 
-Dettes et constats remontés du développement de `ggfacto` 1f et de `formations_stat` 1v (**septembre 2026**) :
+**Et la console ne divergeait que d'une chose**, contrairement à ce que le brouillon disait : le
+`theme` n'atteignait que le *renderer*, pas le *builder*, donc sous une palette de publication elle
+perdait les mots de direction et `print_marks` n'y supprimait pas la ligne des étoiles. `lang` n'a
+jamais été cassé (`legend_resolve_lang(NULL)` lit `options(tabxplor.lang)`, qui EST le levier de la
+console), et `legend_style` ignoré en console est un choix documenté — `<legend:terse|prose>` donne
+désormais le contrôle par table sans changer le défaut.
 
-- ⚠ **Une liste indexée par un nom de colonne cesse de correspondre après `tab_wrap_text()`, sans erreur.** `tab_export_prep()` construit `bars` (phase 6) avec les noms **bruts**, puis `tab_wrap_text()` réécrit chaque espace en U+202F et **renomme les colonnes** : `rd$bars[["% variance"]]` ne trouvait plus rien, et la barre de données ne s'affichait **jamais** pour une colonne dont le nom contient une espace — c'est-à-dire pour son seul appelant réel, le `% variance` de `ggfacto`. Corrigé sur place (un `follow_wrap()` partagé avec `emp_tips`, `R/tab-export-prep.R`, plus une assertion sur un nom espacé dans `test-tab-classes.R` — le test de la phase 6 employait `"Married"`, un seul mot, ce qui est exactement pourquoi il n'a rien vu). **La leçon est générale et doit survivre au redesign** : tout ce que le modèle de rendu indexe par un nom de colonne — `bars`, `emp_tips`, `tooltips`, un futur `legend` par colonne — se réindexe après le *wrap*, ou ne sert à rien en silence. Un identifiant de colonne stable serait la vraie réponse, et c'est le même sujet que le `rowspan` perdu par un nom espacé, en phase 8.
-- **Le coût mesuré de l'absence de cadre, côté `ggfacto`.** Faute de pouvoir remplacer *le mot de la mesure*, `ggfacto` coupe la légende engendrée (`color_legend = FALSE`) et écrit la sienne dans `subtext`, **texte simple figé à la construction**. Conséquence concrète, désormais visible : `ggfacto` a dû se donner son propre domaine gettext et un argument `lang =`, ce qui signifie qu'**un tableau construit en français ne peut plus être rendu en anglais** — la langue est gelée dans l'objet, alors que la légende engendrée par `tabxplor` se traduit au rendu (`rd_footer(lang =)`). Un cadre qui laisserait un tiers fournir *les mots de sa mesure* (et non sa phrase entière) rendrait cette asymétrie inutile : `ggfacto` déclarerait « contribution à la variance de l'axe » et `tabxplor` en ferait la phrase, colorée, terse ou prose, dans la langue du rendu.
-- **La légende d'un tiers doit pouvoir porter les pastilles.** C'est le nœud : `ggfacto` veut exactement l'échelle `×1 ×2 ×5 ×10` de `color = "contrib"`, avec ses classes `.p1`–`.p4`, mais sous un autre nom de mesure. Aujourd'hui, écrire les pastilles veut dire écrire du html dans `subtext` — ce qui fuit tel quel en `.md` et en `.xlsx` (corrigé en `ggfacto` 1e en **retirant** les pastilles). Le cadre doit donc rendre la *décoration* séparable du *libellé*.
-- **La console et les deux autres médias ne rendent pas le même tableau subordonné.** `print.tabxplor_tab()` appelle `tab_pipe()` avec ses propres défauts, alors que `tab_html()` et `tab_md()` propagent le `var_names` de l'appel à **tous** les tableaux du *prep*, subordonné compris. Sous `var_names = "rows"` — ce que `ggfacto::mca_interpret()` demande pour sa table principale — l'éboulis perd sa ligne de spans (`Variance` / `Benzecri`) en html et en md, et la garde en console. Mesuré : `both`/`cols` la montrent dans les deux médias, `rows`/`none` la cachent dans les deux ; c'est donc bien la console qui diverge. La question que le redesign doit trancher : **un tableau subordonné hérite-t-il des options de rendu de son hôte, ou porte-t-il les siennes ?** Les deux réponses se défendent — un éboulis ne veut pas forcément les réglages du tableau qu'il complète.
-- **Ce que la phase 6 a laissé en état d'être repris** (à étudier plus précisément, à refaire pour éviter les solutions ad hoc et mal intégrées à tabxplor autrement) : `tab_pipe()` (exportée) est la seule chose qui rende un tableau subordonné lisible en console, et `set_bars()` / `get_bars()` marchent maintenant de bout en bout dans les quatre médias sauf Excel. Si le redesign remplace `meta$footer_tabs`, la contrainte à conserver est celle que `ggfacto` a rencontrée : **une fonction rend UN tableau principal (celui qui est modifiable dans R directement), jamais une liste** — le subordonné voyage donc dans la table, et chaque exportateur le rend en dessous.
+**`TAB_ATTRS`** (`R/tab_classes.R`) : une ligne par attribut de table — `subtext`, `test` et chaque
+champ de `meta` — avec `gloss` (qui engendre la liste de `?new_tab` par `@eval`, déjà périmée),
+`bind` (qui absorbe `meta_bind_rules`, 2 lignes sur 7), `subordinate` (la règle de dépouillement,
+écrite deux fois) et `setter` (que `FOOTER_BLOCKS$reads` dérive). Quatre colonnes, chacune remplaçant
+quelque chose qui existait et dérivait déjà.
+
+**Dettes fermées au passage :** le `" +N more"` non traduit (« cinema selon qualif, sexe +1 more ») —
+un seul `tx_name_list()` remplace `tab_title_names()` et `legend_name_list()`, avec deux axes
+déclarés (`join` : une liste en PROSE prend « et », une ÉTIQUETTE garde ses virgules ; `overflow` :
+un titre compte ce qu'il n'a pas listé, une légende dit « etc. ») → « Régression logistique: cinema
+selon qualif, sexe et age » / « … cinema, selon 4 prédicteurs » ; `reg_title()` reçoit enfin `lang`
+(le seul endroit où deux langues se rencontraient vraiment dans un tableau) ; **les noms de variables
+sont en gras** dans les lignes de légende — un test épinglait explicitement le contraire, il est
+retourné et dit pourquoi (un nom est une étiquette, pas une mesure) ; et `color = FALSE` sous
+`print_marks` n'émet plus les marques sans leur clé (`fmt_cell_suffix()` lit un thème `marks` qui est
+`NULL` quand la couleur est coupée). `?new_tab` ne prétend plus que `set_color_breaks()` écrit
+l'attribut par table.
+
+**Ce que la phase n'a PAS fait, et pourquoi.** `md_plain_pipe()` et `tx_pipe_table()` ne sont pas
+fusionnés : ils répondent à deux questions différentes (une frame qui n'est pas un tableau tabxplor,
+vs une note que le tableau porte), n'ont ni le même padding ni la même bordure, et fusionner aurait
+changé la sortie dégradée pour rien. Pas de `tab_text()` non plus : la prose d'un producteur est figée
+dans sa langue, ce qui est le choix du mainteneur et évite le piège glibc du cache `(domain, msgid)`
+d'un domaine étranger.
+
+**Découpage.** `R/fmt_class.R` 7 353 → 5 928 lignes ; `R/tab-legend.R` (la PHRASE : specs, assembleurs,
+renderer par médium) et `R/tab-footer.R` (la RÉGION : la grille, le gabarit, les trois kinds et leurs
+émetteurs) sont nouveaux. Étape 1 vérifiée byte-identique.
+
+Suite livrée verte : **4 765** (4 702 avant), `_snaps/` **inchangé** de bout en bout. Les 36 fixtures
+`_golden/*.rds` bougent sur le seul attribut `subtext` (vérifié champ par champ contre `HEAD` : 0
+fixture diffère d'autre chose), le gabarit y étant désormais stocké. Traductions : 328 traduites
+(2 msgid neufs, 1 retiré). Deux fichiers de tests neufs, `test-tab-footer.R` (le gabarit, les
+placeholders, la dégradation, **et un bloc de compatibilité CRAN-`ggfacto`-0.3.2**) et
+`test-tab-legend.R` (le vocabulaire, la liste blanche, la survie à `dplyr` et `saveRDS`).
+
+**Le cadre à transmettre** est écrit dans `dev/legend_and_side_tables.md` : la section 9 montre le
+code AVANT/APRÈS que `ggfacto` écrirait (avec les sorties réelles), la section 10 est le texte à
+donner à une session IA dans `~/github/ggfacto/` ou `~/github/formations_stat/`.
+
+
+#### v2.0.1 — Phase 7b — further simplification and integration of the footer framework ?
+
+The footer legends framework have just been totally reworked by "#### v2.0.1 — Phase 7 — le pied de tableau, un seul gabarit". I wonder if, starting from this new framework, **your can see further simplificationd and integrations**, that would make it more **readable and easy to create custom footer legends even outside of tabxplor**, while keeping `tab()` and `tab_reg()` legends reliable, readable, consise, etc.
+- Look at `dev/legend_and_side_tables.md`, specially how other packages are supposed to use it.
+
+?`tabxplor-footer` says :
+```r
+t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+get_subtext(t)
+#> "<weight>" "<model>" "<interaction>" "<legend>" "<stars>"
+```
+It’s strange, because : this table use no weights ; it’s not a model, it have no interaction footers. tab() and tab_reg() should write something a bi . And they should adapt it a bit depending on the current table arguments : for example wt is a global table-level argument, it can’t be added easily on an already built table, so it’s meaningful to not write "<weight>" in this particular case.
+"<legend>" is the biggest block, so I wonder if more customisation could be easily achievable, using different "<>" tokens inside a same "..." string ?
+
+
+
 
 #### v2.0.1 — Phase 8 — noms de col_vars plus compacts dans les exports
 
@@ -738,6 +836,23 @@ Other related improvements, from `~github/ggfacto/` and `~github/formations_stat
 - A label column whose name contains a space silently loses its rowspan ("Axis label" fails, "Axis_label" works), and an empty name errors inside tab_label_runs() with replacement has length zero. It fails silently — the label just repeats down every row. The lookup should key on column identity, not on a name that gets split ? This is why the column is named Axe and not " " as the kableExtra table had it ?
 - A rotated name should be allowed to wrap to several vertical lines ? tab_vname_plan() gives it exactly one, so rotation is unreachable for any heading longer than ~1.75 × block height. The horizontal path already wraps; letting the vertical one do the same would make Axe 1: 9.9% of variance (mod. 57%) turn in a 5-row block.
 
+Dettes de la phase 6 à regler :
+- **La barre de données en Excel.** `openxlsx2::wb_add_conditional_formatting(type = "dataBar")` est à
+  portée ; c'est la géométrie d'une feuille `tab_xl()` qui est le sujet.
+- **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
+  à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
+  la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche peut-être `cv`,
+  `resid`, `ci`, `moe`, `obs`, `gap` (vérifier). Trouver un cadre fiable pour le rendre flexible.
+- (Le tag d'unité suit le jeton AFFICHÉ, donc `<ctr>` exige `display = "ctr"`, qui imprime la valeur
+  signée. Un override par colonne — ou découpler le tag du jeton — permettrait `<ctr>` au-dessus d'une
+  colonne qui affiche des pourcentages. Trop *ad hoc*, ou fiable/lisible ?)
+- ⚠ **`tab-steps-legacy.R:561`** compare `fmt_kind_label(tabs)` à `"row"` / `"col"`, que la fonction ne
+  renvoie jamais (elle rend `"row%"`), donc tout le bloc `ref` du chemin déprécié est sauté et
+  `diff_formula()` retomberait sur `NA_real_`. Chemin déprécié et non testé — à corriger ou à retirer.
+- **Un identifiant de colonne stable** serait la vraie réponse au piège que `follow_wrap()` rustine :
+  tout ce que le modèle de rendu indexe par un nom de colonne (`bars`, `emp_tips`, `tooltips`) cesse de
+  correspondre après `tab_wrap_text()`, en silence. Même sujet que le `rowspan` perdu par un nom
+  espacé, en phase 8. ⚠ La phase 7 a tenu la leçon en clé **par mesure**, jamais par colonne.
 
 #### Phase xx — jamovi 2.0.0 release
 

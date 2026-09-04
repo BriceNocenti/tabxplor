@@ -1437,54 +1437,17 @@ reg_shape_table <- function(tab, n = 20L, syntax = c("text", "html")) {
     gettext("\"ns\": the curve is inside its own sampling noise -- read it as flat.") else character(0)
   # ⚠ THE HEADER NAMES THE COLUMN, NOT THE SCALE: the cell writes the formula, so "(model scale)"
   # beside it said the same thing twice.
-  structure(
+  # ⚠ WHAT EACH COLUMN IS, declared rather than matched on its name: the outcome cell IS markup (a
+  # subscripted "%"), and the shape cell is a run of block glyphs the html backend upgrades to an
+  # <svg>. A note emitter reads `kind`, so nothing downstream knows this table by its column names.
+  tab_note(
     out,
     headers = c(gettext("outcome"), if (keep_group) gettext("group"),
                 gettext("numeric predictor"), gettext("observed range"),
                 gettext("observed shape (central 95%)")),
     align   = c("left", if (keep_group) "left", "left", "left", "left"),
-    noisy   = rows$noisy,
+    kind    = c("markup", if (keep_group) "text", "text", "text", "spark"),
+    grey    = rows$noisy,
     note    = note)
 }
 
-# A GFM pipe table from already-rendered character columns -- the console's shape table and the
-# Markdown exporter's are the same lines, so they are built once. Widths are counted in CHARACTERS,
-# exact in a monospace medium and near enough in a proportional one.
-# `grey`: one logical per row, styled AFTER the padding (an ANSI sequence has no width, but nchar()
-# would count it). NULL in a medium that has no colour, where the "ns" mark carries the same verdict.
-#' @keywords internal
-#' @noRd
-tx_pipe_table <- function(df, headers, align, grey = NULL) {
-  cols <- lapply(seq_along(df), function(j) c(headers[[j]], as.character(df[[j]])))
-  w    <- vapply(cols, function(c) max(nchar(c, type = "chars")), integer(1))
-  pad  <- function(s, j) formatC(s, width = w[[j]], flag = if (align[[j]] == "right") "" else "-")
-  emit <- function(cells) paste0("| ", paste(cells, collapse = " | "), " |")
-  body <- vapply(seq_len(nrow(df)), function(i)
-    emit(vapply(seq_along(df), function(j) pad(as.character(df[[j]])[[i]], j), character(1))),
-    character(1))
-  if (!is.null(grey) && any(grey)) body[grey] <- cli::col_grey(body[grey])
-  c(emit(vapply(seq_along(df), function(j) pad(headers[[j]], j), character(1))),
-    paste0("|", paste(vapply(seq_along(df), function(j) mk_align(w[[j]], align[[j]]), character(1)),
-                      collapse = "|"), "|"),
-    body)
-}
-
-# The console rendering: the pipe table, one blank line under the footer grid, then the note.
-# THE WHOLE BLOCK WEARS THE ASIDE INK (`grey2`), because it is a note under the table and not a
-# second table; a NOISY row then wears the dimmer `grey`, so the two verdicts stay one step apart.
-# ⚠ Styled AFTER the padding, like tx_pipe_table()'s own rows: an ANSI sequence has no width but
-# nchar() counts it.
-#' @keywords internal
-#' @noRd
-shape_render_console <- function(tab) {
-  st <- reg_shape_table(tab)
-  if (is.null(st)) return(invisible(NULL))
-  aside <- tryCatch(cli::make_ansi_style(tx_chrome_hex(tx_theme_option("console"))$grey2),
-                    error = function(e) identity)
-  # the footer grid already closes with a blank line -- one separates the two tables, never two.
-  cli::cat_line(aside(tx_pipe_table(st, attr(st, "headers"), attr(st, "align"), attr(st, "noisy"))))
-  nt <- attr(st, "note")                           # empty wherever no row wears the "ns" mark
-  if (length(nt)) cli::cat_line(cli::col_grey(paste0("# ", nt)))
-  cli::cat_line()
-  invisible(NULL)
-}

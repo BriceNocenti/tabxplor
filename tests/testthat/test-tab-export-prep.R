@@ -34,8 +34,11 @@ testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta"
   # backend now builds its whole footer via tab_footer_streams(). reg_title (the caption) stays.
   # Phase 6: `bars` -- the per-cell data-bar fractions set_bars() asked for, resolved here because
   # the render model is where a per-cell display fact belongs.
+  # Phase 7: `subordinate` -- is this table travelling UNDER another one (meta$footer_tabs)? It
+  # decides that the table renders what it carries and nothing generated, so a host + subordinate
+  # pair shows ONE colour legend. Ephemeral, like `bars`: set on the copy the exporter sees.
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "footer_rows", "bold_rows",
-                               "bold_cols", "col_var_header", "subtext", "bars",
+                               "bold_cols", "col_var_header", "subtext", "subordinate", "bars",
                                "reg_title", "caption", "empirical_tips"))
   testthat::expect_false(rd$vars$degrade)
 })

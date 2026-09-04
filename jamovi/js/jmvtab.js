@@ -19,7 +19,7 @@
 // R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after changing them;
 // the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_MEASURE_ODDS_RATIO = "odds_ratio";
-var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
+var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or", "odds"];
 var TABX_SHAPES_INDEX = ["auto", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_COL = ["linear", "log", "sqrt", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];

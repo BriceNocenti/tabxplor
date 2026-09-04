@@ -2,6 +2,26 @@
 
 ## New features
 
+* **The footer is a template you can edit.** Everything printed under a table --- the weight line,
+  the `Model:` line, the colour legend, the significance-stars key --- is a `<placeholder>` in the
+  table's `subtext`, and everything you write is a line: the order of the lines is the order of the
+  footer. `get_subtext()` shows it, the new `set_subtext()` replaces it, and `tab_footer_text()`
+  reads back what it prints. Drop `<legend>` and no colour legend is generated, in the console too.
+  Drop `<breaks>` into a sentence of your own and the ladder is still built from the plan the cells
+  are painted with. A `subtext` naming no placeholder is appended to the default, as before.
+  See `?tabxplor-footer`.
+
+* **`set_legend_words()` --- re-state what the colour legend calls a measure.** A table grading the
+  same ladder on another quantity (a contribution to an axis's variance rather than to a
+  chi-squared) keeps tabxplor's whole legend --- both registers, the publication palettes, the plot
+  guide --- and says its own nouns. Naming only: an engine fact is refused.
+
+* **`tab_note()` and `set_footer_tabs()` --- a note beside a table.** `set_footer_tabs()` now takes
+  any data.frame and renders it as a grey note of character columns under the table, in all four
+  media; `tab_note()` sets its headers, alignment, greyed rows and footnote. In the console notes
+  and subordinate tables print *above* the table, so the last thing printed is the object you can
+  go on to pipe.
+
 * **A wide html table now scrolls instead of widening the page.** `tab_html()` wraps every table in
   a `.tx-scrollbox`, and `tab_css()` styles it: the table keeps its own width up to the space it has
   and scrolls sideways past it, in a document, on a pkgdown site, in the RStudio/Positron Viewer and
@@ -18,6 +38,17 @@
   parsing its html back out.
 
 ## Minor improvements and fixes
+
+* **A regression's title is readable past two predictors, and no longer half English.** Up to three
+  are listed ("cinema by qualif, sexe and age"), four or more counted ("cinema, by 4 predictors"),
+  and the title now follows the exporter's `lang =` like the footer below it.
+
+* **A host and its footer table share one footer.** A subordinate table renders what it carries and
+  nothing generated, so a coloured pair shows one colour legend instead of two (or, in the console,
+  none). The variable names a legend line opens with are now bold.
+
+* `color = FALSE` under a `print_marks` palette no longer draws the `+`/`-` marks in the cells while
+  suppressing the key that explains them.
 
 * **The weight footer no longer mentions intervals and tests that are not there.** A weighted table
   showing no confidence interval, no significance star, no test and no significance-gated colour now
