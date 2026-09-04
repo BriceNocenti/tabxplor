@@ -280,12 +280,17 @@ reg_role_qualifier <- function(x, sep = "") {
 #   self_named the RENDERED cell already carries the token's own name ("cv 35%"), so a header that
 #              repeated it would say it twice: the export header drops such an aside, while the
 #              console type tag keeps it (there the tag is the only thing naming the layout).
+#   prefix     may the type tag put the COLUMN's kind in front of this token ("row%-diff")? TRUE for a
+#              deviation, whose direction of reading is the only thing saying what it deviates FROM;
+#              FALSE for a quantity that names itself and does not belong to an axis. ⚠ It cannot be
+#              read off `geometry`: NA there means "names no effect geometry", which the mismatch
+#              refusal needs, and several tokens are both (`var` is not a contrast AND not a deviation).
 #   alias      this row is not a token but a legacy SPELLING of one, resolved by display_primary().
 #   label      the token's SHORT name, the one word that says what the number is: the console type
 #              tag, the exports' unit line and an Excel aside column's header all read it through
 #              fmt_display_label(). A string, or a `function(x)` where the name depends on the column
-#              (`pct` carries its direction, `n_range` collapses when no range renders, `var` is the
-#              sd in a twin column, `mean` names its inline sd tail). NA = the token names nothing.
+#              (`pct` carries its direction, `n_range` collapses when no range renders, `mean` names
+#              whose mean it is on a regression column). NA = the token names nothing.
 #   doc        what the token shows, one phrase, for the GENERATED ?fmt / ?tab sections
 #              (display_tokens_rd()) -- user-facing documentation, written as such.
 #
@@ -296,9 +301,9 @@ reg_role_qualifier <- function(x, sep = "") {
                   value_cell = FALSE, footer = FALSE, colour = TRUE, geometry = NA_character_,
                   comparison = NA_character_, min_digits = NA_integer_, source = NA_character_,
                   alias = NA_character_, label = NA_character_, unit = NA_character_,
-                  self_named = FALSE, doc = NA_character_)
+                  self_named = FALSE, prefix = TRUE, doc = NA_character_)
   list(field = field, settable = settable, user = user, bare = bare, value_cell = value_cell,
-       unit = unit, self_named = self_named,
+       unit = unit, self_named = self_named, prefix = prefix,
        footer = footer, colour = colour, geometry = geometry, comparison = comparison,
        min_digits = min_digits, source = source, alias = alias, label = label, doc = doc)
 
@@ -395,8 +400,10 @@ DISPLAY_TOKENS <- list(
                   source = 'test = TRUE  (the contributions come from the chi-squared)',
                   label = "ctr",
                   doc = "the cell's contribution to the chi-squared"),
+  # `prefix = FALSE` like its own square root below: a variance is a quantity in the variable's units,
+  # not a deviation from an axis, so "mean-var" -- the variance OF the mean -- named the wrong thing.
   var     = .dtok("var"  , user = TRUE, value_cell = TRUE, source = 'a numeric col_var',
-                  label = "var",
+                  label = "var", prefix = FALSE,
                   doc = 'the variance'),
   # DERIVED from `var`, like `resid` and `gap` from theirs: the sd is sqrt(variance) and nothing is
   # stored twice. Read-only -- writing one back would mean writing a variance.
@@ -407,9 +414,11 @@ DISPLAY_TOKENS <- list(
   # DERIVED too, from `var` AND `mean`: the spread as a share of the level, so two columns measured
   # in different units can be compared for how dispersed they are. Void where the mean is not
   # strictly positive -- a ratio to something at or below zero says nothing (see ?tab).
+  # `prefix = FALSE` for its siblings' reason: a coefficient of variation is a quantity of its own,
+  # not a deviation from an axis -- "mean-cv" named the variation OF the mean.
   cv      = .dtok(         user = TRUE, settable = FALSE, value_cell = TRUE,
                   source = 'a numeric col_var whose mean is positive',
-                  label = "cv", unit = "pct", self_named = TRUE,
+                  label = "cv", unit = "pct", self_named = TRUE, prefix = FALSE,
                   doc = paste('the coefficient of variation --- the standard deviation as a',
                               'percentage of the mean')),
   resid   = .dtok(          user = TRUE, settable = FALSE, value_cell = TRUE, min_digits = 1L,
@@ -536,6 +545,9 @@ DISPLAY_SELF_NAMED     <- names(DISPLAY_TOKENS)[
 #' @keywords internal
 #' @noRd
 DISPLAY_TOKEN_GEOMETRY <- .dtok_map("geometry")
+#' @keywords internal
+#' @noRd
+DISPLAY_TOKEN_PREFIX <- .dtok_lgl("prefix")
 # The tokens that render each FIELD. "Does the cell already show this quantity?" is a question about
 # the field, not the token: `diff` and `coef` are one number written two ways, `ci` and `moe` one
 # interval, `n` and `n_range` one count.

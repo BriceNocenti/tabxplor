@@ -750,3 +750,31 @@ md_bold <- function(text, from = NA_integer_, to = NA_integer_) {
          bold_span(substr(text, from, to)),
          substr(text, to + 1L, nchar(text)))
 }
+
+
+#' Render a table as a plain pipe table
+#'
+#' @description
+#' The markdown grid without the markup: one GFM pipe table, its unit line kept (\verb{<col%>},
+#' \verb{<var>}), no colour spans, no footer and no stylesheet. It is what the console prints under a
+#' table for each of its subordinate tables (\code{\link{set_footer_tabs}}), the same shape a regression's
+#' \emph{shape table} takes there --- a grid one can read as text and paste anywhere.
+#'
+#' It is \code{\link{tab_md}} with three arguments fixed, not a second renderer: a pipe table that
+#' drifted from the markdown export would be a second answer to one question.
+#'
+#' @param tabs A \code{tabxplor_tab}, or a list of them.
+#' @param ... Passed to \code{\link{tab_md}} --- `color = TRUE` brings the colour spans back,
+#'   `subtext = TRUE` the footer.
+#' @return A character vector, one element per line.
+#' @seealso [tab_md()], [set_footer_tabs()].
+#' @export
+#' @examples
+#' cat(tab_pipe(tab(forcats::gss_cat, race, marital, pct = "row")), sep = "\n")
+tab_pipe <- function(tabs, ...) {
+  # `...` OVERRIDES the three defaults rather than colliding with them: they are a starting point,
+  # not a contract, and `tab_pipe(t, color = TRUE)` must reach tab_md() once.
+  args <- utils::modifyList(list(css = FALSE, color = FALSE, subtext = FALSE), rlang::list2(...))
+  txt  <- do.call(tab_md, c(list(tabs), args, list(print = FALSE)))
+  strsplit(txt, "\n", fixed = TRUE)[[1L]]
+}

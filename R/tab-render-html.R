@@ -3,10 +3,12 @@
 #   render_kable_html() isolates the engine so the render model stays engine-agnostic. There is ONE
 #   engine; `engine =` is accepted and ignored.
 # KEY CONSTRAINTS:
-#   - EVERY LOOK IS A CLASS, never an inline style. That is what makes theme = "auto" possible: an
+#   - EVERY COLOUR IS A CLASS, never an inline style. That is what makes theme = "auto" possible: an
 #     inline `style` beats every stylesheet rule short of !important, so inline hex could never
 #     follow a dark-mode toggle. R/tab-css.R owns what each class looks like; this file only names
-#     them. Do not reintroduce inline colour.
+#     them. Do not reintroduce inline colour. ⚠ The ONE inline `style` this engine writes is the data
+#     bar's LENGTH (`--tx-bar`, set_bars()): a length is not a look, its ink stays `currentColor`
+#     mixed in the stylesheet, and a class per percent would mean a hundred rules.
 #   - The <thead> is the prep's three rows (R/tab-export-prep.R). An INDEX column has no unit, so its
 #     header spans both rows and sits bottom-aligned, putting "levels" on the line of the "<row%>"
 #     beside it; Excel merges the same two.
@@ -397,7 +399,18 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
                                    cell_html[bg_left], '</span>')
     }
     if (!is.null(ovr)) cell_html <- tx_cells_write(cell_html, ovr[[name]])
-    paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
+    # THE DATA BAR (set_bars()). ⚠ The ONE inline `style` this engine writes, and the file header's
+    #   rule survives it: what is inline is a LENGTH, never a colour -- the ink is `currentColor`
+    #   mixed in the stylesheet, so `theme = "auto"` and every publication palette still decide how
+    #   the bar looks. A class per width would need one rule per percent.
+    sty <- ""
+    bar <- rd$bars[[name]]
+    if (!is.null(bar)) {
+      hit <- !is.na(bar)
+      cls[hit] <- trimws(paste(cls[hit], "tx-bar"))
+      sty <- ifelse(hit, paste0(' style="--tx-bar:', round(bar * 100, 1), '%"'), "")
+    }
+    paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', sty, tip, '>', cell_html, '</td>')
   })
 
   # (c2) LABEL columns are re-emitted as ONE `rowspan` cell per block, so the row/tab variable is

@@ -9,7 +9,9 @@
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
 #   - A table may carry SUBORDINATE tables (meta$footer_tabs, set_footer_tabs()). They are not a
 #     fifth renderer: tx_with_footer_tabs() hands the exporters the LIST the table means, so the
-#     `list_method = TRUE` path already in place renders them under it in every medium.
+#     `list_method = TRUE` path already in place renders them under it in every medium. In the
+#     console they print as a PIPE TABLE (tab_pipe()), the shape a regression's shape table already
+#     takes there: one grid is the table, what travels under it is a note.
 #   - tab_compact() stacks several row_vars ROW_VAR-MAJOR: two row_vars are two tables over the same
 #     population, the tab_vars are the sub-populations inside each. ⚠ the relocate, the group_by and
 #     the row order must state the SAME order -- tab_label_order() (R/tab-export-prep.R) derives
@@ -52,9 +54,12 @@
 #'   \item \code{footer_tabs} -- subordinate \code{tabxplor_tab}s rendered UNDER this one by every
 #'   medium (console, \code{\link{tab_md}}, \code{\link{tab_html}}, \code{\link{tab_xl}}), set by
 #'   \code{\link{set_footer_tabs}}: a second table that belongs to the first and travels with it
-#'   through a dplyr pipeline. Not to be confused with the regression's \emph{shape table}, which is a
-#'   grey NOTE of character columns (\code{assumptions}) rather than a table of \code{fmt} cells. A
-#'   footer table's own \code{footer_tabs} are never rendered.
+#'   through a dplyr pipeline. In the console it prints as a pipe table (\code{\link{tab_pipe}}), so
+#'   one grid is the table and what travels under it reads as a note. Not to be confused with the
+#'   regression's \emph{shape table}, which is a grey note of character columns
+#'   (\code{assumptions}) rather than a table of \code{fmt} cells. A footer table's own
+#'   \code{footer_tabs} are never rendered.
+#'   \item \code{bars} -- the columns drawn as data bars in html (\code{\link{set_bars}}).
 #' }
 #' \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.
 #' @param ... Needed to implement subclasses.
@@ -248,6 +253,35 @@ set_footer_tabs <- function(x, tabs) {
 #' @rdname set_footer_tabs
 #' @export
 get_footer_tabs <- function(x) get_meta(x)[["footer_tabs"]]
+
+#' Draw a column as data bars
+#'
+#' @description
+#' Names the columns whose cells carry a horizontal bar behind their figure, in html --- a bar chart
+#' inside the table, at no cost in width. Each bar is the cell's value as a share of its own column's
+#' largest, so the biggest fills its cell; total and footer rows take none.
+#'
+#' It is a display intent, like a caption: the numbers are untouched, and every other medium ignores
+#' it (a pipe table and an Excel cell have nowhere to put it).
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param cols Column names, or \code{NULL} to remove.
+#' @return \code{x}, with its bar columns set (\code{set_bars}) ; their names, or \code{NULL}
+#'   (\code{get_bars}).
+#' @seealso [new_tab()] for the whole `meta` record.
+#' @export
+#' @examples
+#' t <- tab(forcats::gss_cat, race, marital, pct = "row")
+#' t <- set_bars(t, "Married")
+#' get_bars(t)
+set_bars <- function(x, cols) {
+  if (!is.null(cols)) cols <- as.character(cols)[nzchar(as.character(cols))]
+  set_meta_field(x, "bars", if (length(cols)) cols else NULL)
+}
+
+#' @rdname set_bars
+#' @export
+get_bars <- function(x) get_meta(x)[["bars"]]
 
 # THE one expansion: a table carrying subordinate tables is handed to the exporters as the LIST it
 # means, so `list_method = TRUE` renders them one-after-another and css, theme, subtext and the
@@ -531,11 +565,17 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
 
   # the subordinate tables (meta$footer_tabs), each as a grid of its own under this one. A blank line
   # separates them, and their own footer tabs are already stripped (tx_with_footer_tabs).
+  # DESIGN: a subordinate table prints as a PIPE TABLE, not as a second pillar grid -- the shape a
+  #   regression's shape table already takes here. One grid is the table; what travels under it is a
+  #   note, and the two must not look like peers. tab_pipe() is tab_md() with three arguments fixed,
+  #   so the console and the markdown export cannot drift.
   ft <- get_footer_tabs(x)
   if (length(ft)) {
+    aside <- tryCatch(cli::make_ansi_style(tx_chrome_hex(tx_theme_option("console"))$grey2),
+                      error = function(e) identity)
     one <- function(t) {
       t <- set_meta_field(t, "footer_tabs", NULL)     # a footer table's own are never rendered
-      if (is_tab(t)) print(t, width = width, n = n, min_row_var = min_row_var, get_text = TRUE)
+      if (is_tab(t)) aside(tab_pipe(t))
       else           format(tibble::as_tibble(t), width = width, n = n)
     }
     out <- c(out, unlist(purrr::map(ft, ~ c("", one(.x)))))

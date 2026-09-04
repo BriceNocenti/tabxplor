@@ -311,6 +311,21 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])
   }
 
+  # The per-cell DATA-BAR fraction, for the columns set_bars() names: the value as a share of its own
+  # column's largest, so the tallest bar fills its cell -- a bar chart inside the table. Data rows
+  # only: a total is not on the same scale as what it totals.
+  bars <- purrr::map(purrr::set_names(intersect(get_bars(tab) %||% character(0), names(tab))),
+                     function(nm) {
+    col <- tab[[nm]]
+    if (!is_fmt(col)) return(NULL)
+    v <- abs(get_num(col))
+    v[get_row_kind(col) != "data"] <- NA_real_
+    m <- suppressWarnings(max(v, na.rm = TRUE))
+    if (!is.finite(m) || m <= 0) return(NULL)
+    pmin(v / m, 1)
+  })
+  bars <- purrr::compact(bars)
+
   # block-closing rows, read off label VALUES before `var_names` may drop the name column below.
   bound_runs <- tab_label_runs(tab, tab_label_order(tab, c(rv$var_col, tab_vars)))
   new_group  <-
@@ -520,6 +535,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
     bold_cols = bold_cols,
     col_var_header = col_var_header,
     subtext = subtext,
+    bars = bars,
     # a fallback caption (NA on a crosstab) and a stored one (set_caption()), which takes precedence.
     reg_title = reg_title(reg_call(tab)),
     caption = get_caption(tab),
@@ -565,8 +581,13 @@ tab_col_var_header <- function(tab, roles, name_cols = TRUE, transposed = FALSE)
   clean[roles$var_name_col] <- ""
   for (j in which(is_level)) {
     suff <- paste0("_", cvm[[j]])
-    if (endsWith(nms[j], suff)) {
-      clean[j] <- substr(nms[j], 1L, nchar(nms[j]) - nchar(suff))
+    # ⚠ THROUGH tx_unwrap_text(), per the file header's rule: tab_wrap_text() has already rewritten
+    #   this name -- U+202F for each space, a "<br>" wherever it broke -- while the col_var attribute
+    #   stayed raw. A literal endsWith() therefore stopped matching the moment a col_var held a space
+    #   or the compound name was long enough to wrap, and the suffix reached the page.
+    raw <- tx_unwrap_text(nms[j])
+    if (endsWith(raw, suff)) {
+      clean[j] <- substr(raw, 1L, nchar(raw) - nchar(suff))
     } else if (isTRUE(name_cols) && identical(nms[j], cvm[[j]]) && is_fmt(tab[[j]]) &&
                identical(fmt_var_kind(tab[[j]]), "mean")) {
       # A numeric col_var's column bears the VARIABLE's own name (else "tvhours" over "tvhours"), so

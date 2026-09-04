@@ -2334,9 +2334,15 @@ fmt_display_label <- function(x, style = c("tag", "plain"), footer_collapse = TR
   # direction of reading is the only thing saying what they are deviations OF. A level names itself
   # ("row%", "mean", "n"), and a regression column never takes the prefix (`role` is the fact that
   # separates the two producers).
+  # WARNING: `prefix` is asked, not derived from `geometry`. NA geometry means "names no effect
+  #   geometry", which the mismatch refusal reads, and it is NOT the same question -- `var` is neither
+  #   a contrast nor a deviation, and reading one for the other named it "mean-var".
   if (!identical(get_role(x) %||% "", "")) return(out)
-  geo <- DISPLAY_TOKEN_GEOMETRY[display_template_tokens(tmpl, scl)]
+  toks <- display_template_tokens(tmpl, scl)
+  geo  <- DISPLAY_TOKEN_GEOMETRY[toks]
   if (any(!is.na(geo) & geo == "level")) return(out)
+  pfx <- DISPLAY_TOKEN_PREFIX[toks]
+  if (length(pfx) && all(!is.na(pfx) & !pfx)) return(out)
   paste0(fmt_kind_label(x), "-", out)
 }
 

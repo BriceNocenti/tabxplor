@@ -246,6 +246,16 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
         "transparent", "transparent", cp$bg)
+    # THE DATA BAR (set_bars()): a bar chart inside the table. Its INK is `currentColor` mixed here,
+    # so it follows the theme and every publication palette; only its LENGTH is inline, in the custom
+    # property `--tx-bar` the html engine writes per cell. `background-image`, not `background-color`,
+    # so the transparent ground above still holds and the row hover still reads through.
+    bar_ink <- function(pct) paste0(
+      "linear-gradient(to right,color-mix(in oklch,currentColor ", pct,
+      "%,transparent) var(--tx-bar,0%),transparent var(--tx-bar,0%))")
+    add(".tabxplor-tab td.tx-bar", "background-image",
+        bar_ink(14), bar_ink(20), bar_ink(14))
+    add(".tabxplor-tab td.tx-bar", "background-repeat", "no-repeat", "no-repeat", "no-repeat")
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND (`border-right:1px solid`
     # would reset border-right-color to the CELL's palette hex). Longhands only; locked by
@@ -612,6 +622,8 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
   inner <- c(
     if (isTRUE(chrome)) c(
       "  .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
+      # a data bar is a background too, and a scree bar is worth the ink on paper
+      "  .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
       # A PRINTER HAS NO SCROLLBAR: left clipping, the box would simply lose the table's right-hand
       # columns. ⚠ `overflow`, not `overflow-x` -- the computed `overflow-y:auto` that `overflow-x:
       # auto` leaves behind forces `overflow-x` back to `auto`, and it would clip all the same.

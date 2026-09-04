@@ -563,9 +563,10 @@ testthat::test_that("a footer table renders under its host in all four media", {
   main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
                           list("Base" = tab(fx_gss(), race)))
 
-  # console: a second grid, separated by a blank line
+  # console: the host stays a pillar grid, the subordinate one prints as a pipe table (phase 6)
   txt <- print(main, get_text = TRUE)
-  testthat::expect_gte(sum(grepl("A tabxplor tab", txt)), 2L)
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+  testthat::expect_true(any(grepl("^\\|:-", cli::ansi_strip(txt))))
 
   # markdown: a second pipe table, carrying its caption line
   md <- tab_md(main, css = FALSE, print = FALSE)
@@ -584,6 +585,74 @@ testthat::test_that("a footer table's own footer tables are never rendered", {
 
   testthat::expect_identical(
     lengths(regmatches(tab_html(main), gregexpr("<table", tab_html(main), fixed = TRUE))), 2L)
+  txt <- cli::ansi_strip(print(main, get_text = TRUE))
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+  testthat::expect_identical(sum(grepl("^\\|:-", txt)), 1L)   # ONE pipe table, not two
+})
+
+
+# === Phase 6: the console pipe table, the data bar, and the `var` tag ============================
+
+testthat::test_that("a subordinate table prints as a pipe table, not a second pillar grid", {
+  # One grid is the table; what travels under it is a note, and the two must not look like peers.
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
+                          list("Base" = tab(fx_gss(), race)))
+  txt <- print(main, get_text = TRUE)
+  testthat::expect_true(any(grepl("A tabxplor tab", txt)))        # the host, still pillar
+  testthat::expect_true(any(grepl("^\\|:-", cli::ansi_strip(txt))))  # the note, a pipe table
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+})
+
+
+testthat::test_that("tab_pipe() is tab_md() with three arguments fixed", {
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  p <- tab_pipe(t)
+  testthat::expect_type(p, "character")
+  testthat::expect_gt(length(p), 3L)
+  testthat::expect_true(any(grepl("<row%>", p, fixed = TRUE)))    # the unit line is kept
+  testthat::expect_false(any(grepl("]{.", p, fixed = TRUE)))      # no colour span
+  testthat::expect_false(any(grepl("<style>", p, fixed = TRUE)))  # no stylesheet
+  testthat::expect_false(any(grepl("difference (Total)", p, fixed = TRUE)))  # no footer
+  # ... and it cannot drift from the markdown export: `...` reaches tab_md()
+  testthat::expect_true(any(grepl("]{.", tab_pipe(t, color = TRUE), fixed = TRUE)))
+})
+
+
+# *Silent failure guarded: a bar drawn from a total row, or a colour frozen inline where the theme
+# should decide -- both look right and are wrong the moment the reader switches to dark.*
+testthat::test_that("set_bars() draws a length inline and leaves every colour to the stylesheet", {
+  t <- set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married")
+  testthat::expect_identical(get_bars(t), "Married")
+  testthat::expect_null(get_bars(set_bars(t, NULL)))
+  testthat::expect_length(get_bars(dplyr::mutate(t, dummy = 1L)), 1L)   # rides `meta`
+
+  h <- as.character(tab_html(t))
+  # one bar per DATA row -- a total is not on the same scale as what it totals
   testthat::expect_identical(
-    sum(grepl("A tabxplor tab", print(main, get_text = TRUE))), 2L)
+    lengths(regmatches(h, gregexpr("--tx-bar:", h, fixed = TRUE))), 3L)
+  # the tallest fills its cell (the share is of the column's own maximum)
+  testthat::expect_true(grepl("--tx-bar:100%", h, fixed = TRUE))
+  # the INK is in the stylesheet, never inline: no hex, no colour keyword in a style attribute
+  sty <- unlist(regmatches(h, gregexpr('style="[^"]*"', h)))
+  testthat::expect_false(any(grepl("#|rgb|oklch", sty)))
+  testthat::expect_true(grepl("td.tx-bar", h, fixed = TRUE))
+  testthat::expect_true(grepl("currentColor", h, fixed = TRUE))
+})
+
+
+# *Silent failure guarded: a column of variances headed "the variance of the mean".*
+testthat::test_that("a variance names itself, and the prefix rule is asked rather than derived", {
+  v <- fmt(n = rep(100, 3), scale = "level_mean", mean = c(2, 3, 4), var = c(4, 9, 16),
+           display = "var")
+  testthat::expect_identical(tabxplor:::fmt_display_label(v), "var")
+  # its own square root already did, and the two must agree
+  testthat::expect_identical(
+    tabxplor:::fmt_display_label(tabxplor::set_display(v, "sd")), "sd")
+  # ⚠ `prefix` is NOT `geometry`: `var` still names no effect geometry, which the mismatch refusal reads
+  testthat::expect_true(is.na(tabxplor:::DISPLAY_TOKENS$var$geometry))
+  testthat::expect_false(tabxplor:::DISPLAY_TOKENS$var$prefix)
+  # a deviation still takes the prefix -- that is what the rule is for
+  d <- fmt(n = rep(100, 3), scale = "level_pct", pct_type = "row", pct = c(.1, .2, .3),
+           diff = c(.01, .02, .03), display = "diff")
+  testthat::expect_identical(tabxplor:::fmt_display_label(d), "row%-diff")
 })
