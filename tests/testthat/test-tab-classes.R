@@ -637,6 +637,15 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   testthat::expect_false(any(grepl("#|rgb|oklch", sty)))
   testthat::expect_true(grepl("td.tx-bar", h, fixed = TRUE))
   testthat::expect_true(grepl("currentColor", h, fixed = TRUE))
+
+  # ⚠ A NAME WITH A SPACE IS A DIFFERENT NAME BY THE TIME THE HTML BACKEND LOOKS IT UP:
+  # tab_wrap_text() rewrites every space to U+202F and renames the column, so a `bars` list keyed
+  # before the wrap stops matching -- and the bar then vanishes with no error. The whole feature's
+  # real caller (ggfacto's "% variance") has a space in it.
+  h2 <- as.character(tab_html(set_bars(tab(fx_gss(), race, marital, pct = "row"), "Never married")))
+  testthat::expect_true(grepl("--tx-bar:100%", h2, fixed = TRUE))
+  testthat::expect_identical(
+    lengths(regmatches(h2, gregexpr("--tx-bar:", h2, fixed = TRUE))), 3L)
 })
 
 

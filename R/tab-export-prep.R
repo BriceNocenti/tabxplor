@@ -44,7 +44,9 @@
 #     are the second half of their col_var's block and keep its span.
 #   - WARNING: match a column NAME through tx_unwrap_text(). tab_wrap_text() rewrites column names
 #     (U+202F for each space) before the header is built and leaves the col_var attribute raw, so a
-#     literal == silently stops matching in the html backend alone.
+#     literal == silently stops matching in the html backend alone. For the same reason, any list
+#     KEYED BY a column name (`emp_tips`, `bars`) is re-keyed through `pre_wrap_names` right after the
+#     wrap: a stale key is not an error, it is a feature that quietly does nothing.
 #   - WARNING: block boundaries are read off the label columns' VALUES, never off the dplyr grouping.
 #     group_indices() answers 1 for every row of a table that has lost its grouped_df class, and the
 #     separators then vanish with no error.
@@ -369,11 +371,16 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                          whitespace_only    = wrap$whitespace_only,
                          unbreakable_spaces = wrap$unbreakable_spaces,
                          brk                = wrap$brk)
-    # tab_wrap_text RENAMES columns, so emp_tips keys must follow via pre_wrap_names or the lookup fails.
-    if (!is.null(emp_tips)) {
-      renamed <- stats::setNames(names(tab), pre_wrap_names)[names(emp_tips)]
-      names(emp_tips) <- ifelse(is.na(renamed), names(emp_tips), renamed)
+    # tab_wrap_text RENAMES columns, so any list KEYED BY A COLUMN NAME must follow via
+    # pre_wrap_names or the lookup fails -- silently, and only in the html backend (see file header).
+    follow_wrap <- function(x) {
+      if (is.null(x) || !length(x)) return(x)
+      renamed <- stats::setNames(names(tab), pre_wrap_names)[names(x)]
+      names(x) <- ifelse(is.na(renamed), names(x), renamed)
+      x
     }
+    emp_tips <- follow_wrap(emp_tips)
+    bars     <- follow_wrap(bars)
     # NAME columns re-wrap to their OWN width via tx_wrap_name() (block height when rotated, column
     # width otherwise), not `wrap_rows` -- run AFTER the generic wrap, over tx_unwrap_text().
     for (cl in intersect(names(vname_plans), names(tab))) {

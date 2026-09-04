@@ -679,31 +679,65 @@ sur `var` seul ; `sd`, sa propre racine carrée, l'avait déjà par sa `geometry
 l'en-tête est corrigée au passage (`var` n'est pas « l'écart-type dans une colonne jumelle », `mean`
 ne nomme aucune queue d'écart-type).
 
-**Le brouillon `dev/legend_and_side_tables.md`**, demandé par le *maintainer* : le cas d'usage de
-`ggfacto` — une légende engendrée qui dit « contribution to Chi2 » là où l'axe factoriel n'a pas de
-chi², et aucun moyen d'en remplacer le mot —, l'inventaire de ce qui existe (quatre coutures ouvertes,
-cinq flux nommés en dur, un `color_legend` que la console n'atteint pas), et **deux formes possibles
-mises côte à côte sans trancher** : un registre de flux clé par `role`, ou un champ `meta$legend`
-portant les mots de la mesure. Il dit en tête, en toutes lettres, qu'il est un brouillon.
 
-#### Phase 7 — cinq dettes ouvertes par la phase 6 (à faire, pas commencé)
+#### v2.0.1 — Phase 7 — footer legends and legend pipe tables full redesign
 
+During real-world usage, the tabxplor 2.0.0 framework for footer legends and pipe table legends have proven not to be flexible enough : to extend them out of tabxplor, either for `~github/ggfacto/` or for `~github/formations_stat/` (both relying heavily on `tabxplor::`), have proven ad hoc, difficult, requiring to modify tabxplor code itself in a very ad hoc way. Before any further development of these other packages and repos, I want to **carefully design a reliable, readable and integrated framework for flexible and easy-to-extend footer legends and pipe table legends** inside tabxplor itself. For that, I want you to **study different possibilities, and help me choose the better one**. Please make thorough research, test things in temporary scripts if needed, try to think out of the box, then write your very detailed and structured findings and propositions in `dev/legend_and_side_tables.md`, reworking it’s current content totall (see below).
+- Étudie **le brouillon `dev/legend_and_side_tables.md`**, qui pour l’instant décris le cas d'usage de `ggfacto` — une légende engendrée qui dit « contribution to Chi2 » là où l'axe factoriel n'a pas de chi², et aucun moyen d'en remplacer le mot —, l'inventaire de ce qui existe (quatre coutures ouvertes, cinq flux nommés en dur, un `color_legend` que la console n'atteint pas), et **deux formes possibles mises côte à côte sans trancher** : un registre de flux clé par `role`, ou un champ `meta$legend` portant les mots de la mesure.
+- Should we make color_legend should accept a string (or a table should carry its own wording in meta) ? Today it is TRUE/FALSE, and the sentence is generated from the measure — "contribution to Chi2: cell over-represented vs independence" — which is a fact about a crosstab. A hand-built table can legitimately use the same ladder for a different quantity, and its only options are the wrong sentence or no swatches. That is why `ggfacto:::mca_interpret_legend()` writes <span class="p1"> HTML in ggfacto; with this, it would be one string handed to tab_html().
+- Do not hesitate to remove and redesign what "### v2.0.1 — Phase 5 — un tableau subordonné (`meta$footer_tabs`)" and "### v2.0.1 — Phase 6 — la pipe table en console, la barre de données, `<var>`" have done : they were done by AI sessions outside tabxplor, not taking into account it’s integration in a consistent ecosystem, in a very *ad hoc* way. **At the end, write me a summary description of the new framework**, so that I tell to an AI session inside `~github/ggfacto/` and `~github/formations_stat/` to use it in a clean, reliable, future-proof way.
+
+Dettes ouvertes par la phase 6 :
 - **Le cadre des légendes** — l'objet du brouillon ci-dessus. Tant qu'il n'existe pas, un paquet tiers
   ne peut que couper la légende (`color_legend = FALSE`, per-call, **hors de portée en console**) et
   écrire du texte brut dans `subtext` : ni coloré, ni traduit au rendu, ni terse/prose.
-- **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
-  à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
-  la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche `cv`, `resid`,
-  `ci`, `moe`, `obs`, `gap`. La colonne `prefix` de la phase 6 est le mécanisme ; il reste à la poser
-  sur ces lignes et à réaccepter les snapshots.
 - **`color = FALSE` sous `print_marks`** émet les marques `⁺⁺` / `⁻⁻` dans chaque cellule tout en
   supprimant la légende qui les explique — le seul rendu où le lecteur reçoit un signe sans clé.
   `fmt_cell_suffix()` ne voit pas `want_colors`.
 - **La barre de données en Excel.** `openxlsx2::wb_add_conditional_formatting(type = "dataBar")` est à
   portée ; c'est la géométrie d'une feuille `tab_xl()` qui est le sujet.
+
+Trois dettes relatives aux pillar abbreviations ouvertes par la phase 6 :
+- **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
+  à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
+  la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche peut-être `cv`, `resid`,
+  `ci`, `moe`, `obs`, `gap` (vérifier). Find a reliable framework to make this flexible.
+- (The unit tag follows the displayed token, so <ctr> needs display = "ctr", which prints the signed value. A per-column tag override — or decoupling the tag from the token — would allow <ctr> over a column that displays pct. Too *ad hoc*, or reliable/readable ?)
 - ⚠ **`tab-steps-legacy.R:561`** compare `fmt_kind_label(tabs)` à `"row"` / `"col"`, que la fonction ne
   renvoie jamais (elle rend `"row%"`), donc tout le bloc `ref` du chemin déprécié est sauté et
   `diff_formula()` retomberait sur `NA_real_`. Chemin déprécié et non testé — à corriger ou à retirer.
+
+Other improvements related to legends, by the way:
+
+Dans les footer legends, mettre le nom des variables en gras (plus lisible, the user see at first glance what footer row is for what variables).
+
+La légende engendrée par `tab()` sort à moitié en anglais dès qu'il y a plus de deux prédicteurs — « Régression logistique: cinema selon qualif, sexe +1 more ».
+- En français juste utiliser "etc." (without saying how many variables, we don’t care it’s showed in the table itself) : « Régression logistique: cinema selon qualif, sexe, etc. »
+
+La légende de `tab_reg()` pourrait être plus lisible : écrire les 3 premiers prédicteurs, remplacer par "<x> predictors" with 4 or more
+- « Logistic regression: cinema by qualif, sexe and age »
+- « Régression logistique: cinema selon qualif, sexe et age »
+- « Logistic regression: cinema, by 4 predictors »
+- « Régression logistique: cinema, selon 4 prédicteurs »
+
+Dettes et constats remontés du développement de `ggfacto` 1f et de `formations_stat` 1v (**septembre 2026**) :
+
+- ⚠ **Une liste indexée par un nom de colonne cesse de correspondre après `tab_wrap_text()`, sans erreur.** `tab_export_prep()` construit `bars` (phase 6) avec les noms **bruts**, puis `tab_wrap_text()` réécrit chaque espace en U+202F et **renomme les colonnes** : `rd$bars[["% variance"]]` ne trouvait plus rien, et la barre de données ne s'affichait **jamais** pour une colonne dont le nom contient une espace — c'est-à-dire pour son seul appelant réel, le `% variance` de `ggfacto`. Corrigé sur place (un `follow_wrap()` partagé avec `emp_tips`, `R/tab-export-prep.R`, plus une assertion sur un nom espacé dans `test-tab-classes.R` — le test de la phase 6 employait `"Married"`, un seul mot, ce qui est exactement pourquoi il n'a rien vu). **La leçon est générale et doit survivre au redesign** : tout ce que le modèle de rendu indexe par un nom de colonne — `bars`, `emp_tips`, `tooltips`, un futur `legend` par colonne — se réindexe après le *wrap*, ou ne sert à rien en silence. Un identifiant de colonne stable serait la vraie réponse, et c'est le même sujet que le `rowspan` perdu par un nom espacé, en phase 8.
+- **Le coût mesuré de l'absence de cadre, côté `ggfacto`.** Faute de pouvoir remplacer *le mot de la mesure*, `ggfacto` coupe la légende engendrée (`color_legend = FALSE`) et écrit la sienne dans `subtext`, **texte simple figé à la construction**. Conséquence concrète, désormais visible : `ggfacto` a dû se donner son propre domaine gettext et un argument `lang =`, ce qui signifie qu'**un tableau construit en français ne peut plus être rendu en anglais** — la langue est gelée dans l'objet, alors que la légende engendrée par `tabxplor` se traduit au rendu (`rd_footer(lang =)`). Un cadre qui laisserait un tiers fournir *les mots de sa mesure* (et non sa phrase entière) rendrait cette asymétrie inutile : `ggfacto` déclarerait « contribution à la variance de l'axe » et `tabxplor` en ferait la phrase, colorée, terse ou prose, dans la langue du rendu.
+- **La légende d'un tiers doit pouvoir porter les pastilles.** C'est le nœud : `ggfacto` veut exactement l'échelle `×1 ×2 ×5 ×10` de `color = "contrib"`, avec ses classes `.p1`–`.p4`, mais sous un autre nom de mesure. Aujourd'hui, écrire les pastilles veut dire écrire du html dans `subtext` — ce qui fuit tel quel en `.md` et en `.xlsx` (corrigé en `ggfacto` 1e en **retirant** les pastilles). Le cadre doit donc rendre la *décoration* séparable du *libellé*.
+- **La console et les deux autres médias ne rendent pas le même tableau subordonné.** `print.tabxplor_tab()` appelle `tab_pipe()` avec ses propres défauts, alors que `tab_html()` et `tab_md()` propagent le `var_names` de l'appel à **tous** les tableaux du *prep*, subordonné compris. Sous `var_names = "rows"` — ce que `ggfacto::mca_interpret()` demande pour sa table principale — l'éboulis perd sa ligne de spans (`Variance` / `Benzecri`) en html et en md, et la garde en console. Mesuré : `both`/`cols` la montrent dans les deux médias, `rows`/`none` la cachent dans les deux ; c'est donc bien la console qui diverge. La question que le redesign doit trancher : **un tableau subordonné hérite-t-il des options de rendu de son hôte, ou porte-t-il les siennes ?** Les deux réponses se défendent — un éboulis ne veut pas forcément les réglages du tableau qu'il complète.
+- **Ce que la phase 6 a laissé en état d'être repris** (à étudier plus précisément, à refaire pour éviter les solutions ad hoc et mal intégrées à tabxplor autrement) : `tab_pipe()` (exportée) est la seule chose qui rende un tableau subordonné lisible en console, et `set_bars()` / `get_bars()` marchent maintenant de bout en bout dans les quatre médias sauf Excel. Si le redesign remplace `meta$footer_tabs`, la contrainte à conserver est celle que `ggfacto` a rencontrée : **une fonction rend UN tableau principal (celui qui est modifiable dans R directement), jamais une liste** — le subordonné voyage donc dans la table, et chaque exportateur le rend en dessous.
+
+#### v2.0.1 — Phase 8 — noms de col_vars plus compacts dans les exports
+
+Les noms de variables en html rendent les tableaux `levels="first"` exportés (html, Excel, md) moins compacts, c’est un problème pour lequel je voudrais une solution générale user-friendly et bien pensée, pour utiliser l’espace horizontal quand il y en a, mais avoir un auto wrap intelligent quand l’espace est compté (et notamment quand chaque colonne à sa propre col_var avec `levels="first"`).
+- Je voudrais une politique plus agressive, using the sum of the maximums length of all already wrapped columns names (from `wrap_cols =`) *grouped under the same col_var*. It should cut preferentially at " ", "_", etc. (assuming the general case is snake_case variables names), but cut inside a "word" anyway if a "word" is longer that the maximum length.
+- Dans le cas spécifique où on a une succession de colonnes avec des col_var différentes (for example from `levels="first"`), je voudrais également une détection automatique des préfixes communs : par exemple, si la première variable de colonne est "CONCERT_CLASSIQUE" et qu’elle n’a qu’une seule colonne, et que la seconde est "CONCERT_ROCK", détecter le préfix commun `"CONCERT_"`, garder le nom de col_var complet de la première variable, et afficher un nom de col_var abrégé `"_ROCK"` pour la seconde variable, idem pour la suivante si elle a le même préfixe, et ainsi de suite jusqu’à ce qu’une colonne n’ait pas le même préfixe. (The leading `"_"` is a readable way to say to the user "it continues with the same prefix as the former name) Il faut prendre en compte les e*dges cases* où il pourrait y avoir des prefixes *nested* (MUS_CONCERT_CLASSIQUE, MUS_CONCERT_ROCK, MUS_CONCERT_JAZZ, MUS_FREQ, MUS_SUPPORT_VYNILE, MUS_SUPPORT_CD), en redonnant le nom complet à chaque fois que le préfixe commun change/s’allonge/se raccourcit. Also think about other possible edge cases. It must not change the col_var attribute itself, only the col_vars names header row built at export time.
+
+Other related improvements, from `~github/ggfacto/` and `~github/formations_stat/` dev:
+- A label column whose name contains a space silently loses its rowspan ("Axis label" fails, "Axis_label" works), and an empty name errors inside tab_label_runs() with replacement has length zero. It fails silently — the label just repeats down every row. The lookup should key on column identity, not on a name that gets split ? This is why the column is named Axe and not " " as the kableExtra table had it ?
+- A rotated name should be allowed to wrap to several vertical lines ? tab_vname_plan() gives it exactly one, so rotation is unreachable for any heading longer than ~1.75 × block height. The horizontal path already wraps; letting the vertical one do the same would make Axe 1: 9.9% of variance (mod. 57%) turn in a 5-row block.
+
 
 #### Phase xx — jamovi 2.0.0 release
 
