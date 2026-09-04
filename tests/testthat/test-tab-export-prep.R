@@ -37,9 +37,11 @@ testthat::test_that("tab_export_prep returns a tabxplor_render with tables/meta"
   # Phase 7: `subordinate` -- is this table travelling UNDER another one (meta$footer_tabs)? It
   # decides that the table renders what it carries and nothing generated, so a host + subordinate
   # pair shows ONE colour legend. Ephemeral, like `bars`: set on the copy the exporter sees.
+  # Phase 7b: `want_legend` -- whether THIS table gets a colour legend, decided once here instead of
+  # by three backends with three slightly different expressions.
   testthat::expect_named(rd, c("tab", "vars", "roles", "ann", "footer_rows", "bold_rows",
-                               "bold_cols", "col_var_header", "subtext", "subordinate", "bars",
-                               "reg_title", "caption", "empirical_tips"))
+                               "bold_cols", "col_var_header", "subtext", "want_legend",
+                               "subordinate", "bars", "reg_title", "caption", "empirical_tips"))
   testthat::expect_false(rd$vars$degrade)
 })
 

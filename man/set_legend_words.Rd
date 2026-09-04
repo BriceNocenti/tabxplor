@@ -40,10 +40,12 @@ The fields a table may re-state --- naming only, never a number:
 \item \code{word_guar} --- the \code{color_signif = "guaranteed_effect"} head, a template
 taking the confidence level (\code{"\%s\%\%-guaranteed contribution"}).
 \item \code{subject} --- the noun for what is graded, when it is not the cell itself.
-\item \code{ref_word} / \code{ref_phrase} --- how a reference-free baseline is named, in its two
-shapes: the compact clause the terse form brackets, \strong{preposition included}
-(\emph{vs the mean}), and the bare noun a prose lead points at (\emph{independence}). Re-state
-both, or the exports keep the old word.
+\item \code{ref} --- the baseline noun (\emph{the mean contribution}), for a measure compared to
+a \strong{concept} rather than to a row of the table: the terse form brackets it with its
+preposition and the prose one points at it bare, both from this one field. Give
+\code{ref_word} / \code{ref_phrase} instead only where those two nouns genuinely differ.
+Re-stating any of them on a measure whose reference is a category or a total is refused --- there
+the legend names what the table itself shows.
 \item \code{unit_word} --- the unit the thresholds are counted in.
 \item \code{lead_over} / \code{lead_under} --- the sentence each side of the ladder opens with,
 as a template taking \code{\%1$s} the subject, \code{\%2$s} the reference and \code{\%3$s} the

@@ -101,9 +101,10 @@ tab_md <- function(tabs,
   }
   # `allow_auto`: markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow the reader's
   # colour scheme -- the spans themselves are theme-independent (only the CSS differs).
-  o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
+  o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
+                           transpose = transpose,
                            var_names = var_names, allow_auto = TRUE, tabs = tabs)
-  theme <- o$theme; color <- o$color
+  theme <- o$theme; color <- o$color; color_legend <- o$color_legend
 
   # a single tab (or a mergeable list) renders as ONE table; a non-mergeable list renders each table
   # one-after-another (list_method = TRUE), keeping its own tab_vars sub-tables (drop_tab_vars = FALSE).
@@ -118,7 +119,7 @@ tab_md <- function(tabs,
   prep <- tab_export_prep(tabs_x, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
-                          lang = lang, what = "tab_md()")
+                          color_legend = color_legend, lang = lang, what = "tab_md()")
 
   # WARNING: the POSITION, never imap()'s `i` -- a NAMED list makes `i` the name and `i == 1` silently
   # FALSE on every table, so the caption is dropped with no error. Same trap as xl_check_images().
@@ -126,8 +127,7 @@ tab_md <- function(tabs,
     rd  <- prep$tables[[i]]
     cap <- rd_caption(rd, if (i == 1L) caption else NULL)   # user caption= applies to the FIRST table
     txt <- md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
-                         subtext = subtext, color = color, css = css,
-                         color_legend = color_legend, lang = lang,
+                         subtext = subtext, color = color, css = css, lang = lang,
                          title = cap,
                          theme = theme)
     # the NOTES this table carries -- a character grid, and the regression's observed curves where the
@@ -191,7 +191,7 @@ md_plain_pipe <- function(df) {
 # a pandoc bracketed span `[<num>]{.class}` (uncoloured cells get the neutral `.n`), keeping the
 # numbers aligned in raw text; an uncoloured table renders the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
-                          color = TRUE, css = FALSE, color_legend = TRUE, lang = NULL, title = NULL,
+                          color = TRUE, css = FALSE, lang = NULL, title = NULL,
                           theme = NULL) {
   if (isTRUE(rd$vars$degrade)) {
     if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)
@@ -211,9 +211,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # tx_slot_class()), so tab_css() colours them identically. The source is `rd$color_src` for a
   # transposed model (whose rd$tab is plain character), so weight/stars/legend read the right
   # attributes. Legend only when coloured.
-  src         <- if (is.null(rd$color_src)) tabs else rd$color_src
-  want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
-  subtext_text <- rd_blocks(src, "md", theme = theme, want_legend = want_legend,
+  src          <- if (is.null(rd$color_src)) tabs else rd$color_src
+  subtext_text <- rd_blocks(src, "md", theme = theme, want_legend = isTRUE(rd$want_legend),
                             subtext = subtext_text, lang = lang,
                             host = !isTRUE(rd$subordinate))
 

@@ -10,12 +10,17 @@ template is the table's \code{subtext}. \code{get_subtext()} shows it, \code{\li
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 get_subtext(t)
-#> "<weight>" "<model>" "<interaction>" "<legend>" "<stars>"
+#> "<legend>" "<stars>"
 }\if{html}{\out{</div>}}
 
 Everything generated is a \verb{<placeholder>}; everything you write is a line; \strong{the order of the
 lines is the order of the footer}. Re-order them and it re-orders. Delete \verb{<legend>} and no
 colour legend is generated --- in the console too, which no exporter argument can reach.
+
+\strong{A table names only what it can say.} The template above has no \verb{<weight>} because the table is
+unweighted and no \verb{<model>} because it is not a regression --- both are settled when the table is
+built and nothing can add them afterwards. \verb{<legend>} and \verb{<stars>} are always named: they are
+built from the columns, which \code{\link[=set_color]{set_color()}} and the \pkg{dplyr} verbs can still change.
 }
 \section{The one rule}{
 
@@ -49,6 +54,9 @@ text, printed as written.
 \item{\code{<legend>}}{the colour legend: what each shade means. \code{<legend:terse>} / \code{<legend:prose>} pin the register. Change it with \code{\link{set_legend_words}()}.}
 \item{\code{<stars>}}{what each significance star means.}
 \item{\code{<breaks>}}{just the coloured ladder of a measure, inside a line of your own. \code{<breaks:over>} / \code{<breaks:under>} take one side; \code{<breaks:contrib>} names a measure where several compete.}
+\item{\code{<measure>}}{what the colours grade, in the words \code{\link{set_legend_words}} gives it. Change it with \code{\link{set_legend_words}()}.}
+\item{\code{<ref>}}{the baseline it is graded against, as the compact form brackets it (preposition included); \code{<ref:noun>} gives the bare noun a sentence points at. Change it with \code{\link{set_legend_words}()}.}
+\item{\code{<method>}}{how the intervals were computed (\emph{Wilson score interval, 95\% confidence}).}
 \item{\code{<cols>}}{the names of the columns a measure describes.}
 \item{\code{<conf>}}{the confidence level, localised.}
 }

@@ -6,9 +6,9 @@
 In section "Black and white, for publication", the "print_ready" plot have colors css. We fixed that in README.R by using an image, but now it needs a long term solution.
 
 
-Jamovi icon : 
-- Send the .svg to contact@jamovi.org , making sure its public domain. 
-- Look at https://github.com/jamovi/jamovi/tree/current-dev/client/assets , the modules icons are prefixed with "analysis-" 
+Jamovi icon :
+- Send the .svg to contact@jamovi.org , making sure its public domain.
+- Look at https://github.com/jamovi/jamovi/tree/current-dev/client/assets , the modules icons are prefixed with "analysis-"
 
 
 
@@ -24,7 +24,7 @@ Jamovi icon :
 
 
 
-We are inside the development of tabxplor 2.0.1 and we want to simplify and integrate the functions in tabxplor in a clear, simple and user-friendly ecosystem at the package level, to simplify code, simplify future develpment, and make the whole framework more readable for both human and machine. Please read the whole remaining roadmap carefully to always remember the full picture, then your current task is to implement **"#### v2.0.1 — Phase 7 — footer legends and legend pipe tables full redesign"** : the first step is research, write your findings, then pause.
+We are inside the development of tabxplor 2.0.1 and we want to simplify and integrate the functions in tabxplor in a clear, simple and user-friendly ecosystem at the package level, to simplify code, simplify future develpment, and make the whole framework more readable for both human and machine. Please read the whole remaining roadmap carefully to always remember the full picture, then your current task is to implement **"#### v2.0.1 — Phase 7b — further simplification and integration of the footer framework ?"** :
 - This is a design and creative thinking task, where your main aim is to think out-of-the box, temporarily put backward-compatibility and other constraints away, and find the missing key to a possible simplification and integration of the whole footer legends and pipe tables legends framework, while assessing possible caveats.
 - Do NOT add another layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to integrate the new features in the current code seamlessly, and to increase user-friendliness in any situation.
 - If you see some caveats, inconsistencies, decisions no yet settled, or white elephants in some of my propositions, please tell me honestly. If you think about a more reliable, consistent, user-friendly, modern, future-proof way to do the same thing, do not hesitate to AskUserQuestion me about it.

@@ -286,7 +286,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 ### The footer
 
-**Everything printed under a table is one region, and its TEXT is a template the table carries.** `FOOTER_BLOCKS` (`tab-footer.R`) declares it — one row per member, row order the reading order, each naming its `<placeholder>`, its `kind` (`line` / `note` / `tab` / `inline`), and *what it reads*. `tab()` writes the default template into `subtext`, so a reader sees what the footer is made of and can re-order it, interleave prose, or delete `<legend>` — which is the only per-table legend switch there is, and the only one the console can obey. A `subtext` naming no placeholder is appended to the default instead, which is what a note has always done. **The `reads` column is the load-checked edge** to `TAB_ATTRS` and the `fmt` attributes, and it *generates* `?tabxplor-footer`'s "how to change this" from `TAB_ATTRS$setter` rather than restating it — so adding a placeholder is one row, and a row is **gated on what it reads**, which is also the degradation contract: a table stripped of its metadata keeps the column-derived half of its footer (the legend, the stars key) and drops the rest, with no exception handling anywhere. Everything generated is composed at RENDER — the theme changes the ladder's length and the note's words, the medium chooses terse or prose, and a post-build `select()` or `set_display()` changes what there is to say — while a person's own line is frozen in the language they wrote it; the default template holds no prose, so nothing mixes unless it is written.
+**Everything printed under a table is one region, and its TEXT is a template the table carries.** `FOOTER_BLOCKS` (`tab-footer.R`) declares it — one row per member, row order the reading order, each naming its `<placeholder>`, its `kind` (`line` / `note` / `tab` / `inline`), and *what it reads*. `tab()` writes the default template into `subtext`, so a reader sees what the footer is made of and can re-order it, interleave prose, or delete `<legend>` — which is the only per-table legend switch there is, and the only one the console can obey. A `subtext` naming no placeholder is appended to the default instead, which is what a note has always done. **The `reads` column is the load-checked edge** to `TAB_ATTRS` and the `fmt` attributes, and it *generates* `?tabxplor-footer`'s "how to change this" from `TAB_ATTRS$setter` rather than restating it — so adding a placeholder is one row, and a row is **gated on what it reads**, which is also the degradation contract: a table stripped of its metadata keeps the column-derived half of its footer (the legend, the stars key) and drops the rest, with no exception handling anywhere. **A stored template names only what THIS table can say** — the `default` column, the region's second gate and a different question from `reads`: a member built from `meta` is named where its fact exists, one built from the columns always, since `set_color()` can colour an uncoloured table afterwards; a predicate may over-name but never under-name, and the template is therefore written at each producer's tail, on the finished object. What a legend calls things is the third knob, `set_legend_words()`, and its own pieces — `<measure>`, `<ref>`, `<method>`, `<breaks>` — are inline placeholders, so the generated terse legend is itself expressible in the template language. Everything generated is composed at RENDER — the theme changes the ladder's length and the note's words, the medium chooses terse or prose, and a post-build `select()` or `set_display()` changes what there is to say — while a person's own line is frozen in the language they wrote it; the default template holds no prose, so nothing mixes unless it is written.
 
 ### The regression subsystem
 
@@ -809,22 +809,108 @@ code AVANT/APRÈS que `ggfacto` écrirait (avec les sorties réelles), la sectio
 donner à une session IA dans `~/github/ggfacto/` ou `~/github/formations_stat/`.
 
 
-#### v2.0.1 — Phase 7b — further simplification and integration of the footer framework ?
+#### v2.0.1 — Phase 7b — le gabarit dit ce que CE tableau dit **DONE**
 
-The footer legends framework have just been totally reworked by "#### v2.0.1 — Phase 7 — le pied de tableau, un seul gabarit". I wonder if, starting from this new framework, **your can see further simplificationd and integrations**, that would make it more **readable and easy to create custom footer legends even outside of tabxplor**, while keeping `tab()` and `tab_reg()` legends reliable, readable, consise, etc.
-- Look at `dev/legend_and_side_tables.md`, specially how other packages are supposed to use it.
+Deux dettes de la phase 7. (1) Le gabarit stocké décrivait **tous** les tableaux : un croisement simple
+portait `<weight> <model> <interaction>`, trois lignes qui ne peuvent jamais rien dire — or le gabarit
+existe pour qu'on VOIE de quoi le pied est fait et qu'on l'édite, et trois lignes de bruit lui faisaient
+rater sa seule fonction. Pire, `set_subtext(t, "Champ")` **effaçait** le gabarit (l'ajout se faisait au
+rendu), donc `get_subtext()` mentait juste après l'appel censé l'éditer. (2) Les **noms propres** de la
+légende n'étaient pas des pièces : une phrase écrite à la main pouvait reprendre l'échelle (`<breaks>`)
+mais ni le nom de la mesure, ni celui de la référence, ni l'intervalle.
 
-?`tabxplor-footer` says :
-```r
-t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
-get_subtext(t)
-#> "<weight>" "<model>" "<interaction>" "<legend>" "<stars>"
-```
-It’s strange, because : this table use no weights ; it’s not a model, it have no interaction footers. tab() and tab_reg() should write something a bi . And they should adapt it a bit depending on the current table arguments : for example wt is a global table-level argument, it can’t be added easily on an already built table, so it’s meaningful to not write "<weight>" in this particular case.
-"<legend>" is the biggest block, so I wonder if more customisation could be easily achievable, using different "<>" tokens inside a same "..." string ?
+**La règle, une phrase :** *un membre construit sur `meta` n'est nommé que là où son fait existe ; un
+membre construit sur les COLONNES l'est toujours* — parce que `set_color()` colorie après coup un
+tableau qui ne l'était pas. D'où une colonne `default` sur `FOOTER_BLOCKS`, prédicat par ligne, et deux
+grilles qui répondent à deux questions : **`reads` est la porte du RENDU** (ce qu'un tableau dépouillé
+imprime encore), **`default` celle du GABARIT** (ce que les producteurs écrivent). Un prédicat peut
+sur-nommer — le builder n'imprime alors rien — jamais sous-nommer.
 
+⚠ **Deux pièges vérifiés avant d'écrire une ligne, et c'est eux qui ont fixé la conception.**
+(a) `reg_spec()` ne porte **pas** de `call` : le dossier du modèle est attaché en QUEUE de `tab_reg()`
+(`set_reg_call()`), bien après le `new_tab()` de `reg_finalize()`. Un gabarit calculé là supprimait
+`<model>` de **toute** régression, et `<weight>` avec (une régression range son poids dans ce dossier,
+pas dans `vars`) — et **aucune fixture `_golden` ni aucun snapshot ne rend un pied de régression**,
+donc la garde « les snapshots n'ont pas bougé » était vide. Le gabarit s'écrit donc en **queue de chaque
+producteur, sur l'objet fini** (`leaf_finish()` après le tampon d'inférence, la queue d'assemblage de
+`tab()`, `tab_reg()` après `set_reg_call()`) : 5 sites → 3, et le prédicat de `<model>` est `tab_is_reg()`,
+jamais `reg_call()`. (b) Normaliser dans `new_tab()` aurait été plus court mais il est sur le chemin de
+reconstruction dplyr (`tab_restore()`), et 18 assertions de `test-tab-classes.R` interdisent précisément
+qu'un verbe MUTE `subtext`. `new_tab()` reste un constructeur bête.
 
+**Trois pièces de plus, et la légende terse devient exprimable dans le langage du gabarit** :
+`<measure>` (le nom de la mesure, dans les mots de `set_legend_words()`), `<ref>` (sa référence telle que
+la forme compacte la met entre parenthèses ; `<ref:noun>` le nom nu) et `<method>` (l'intervalle).
+`"<measure> (<ref>): <breaks>"` rend **exactement** `<legend:terse>` — épinglé par un test, en anglais
+(le français met des espaces autour du deux-points, ce qu'un littéral ne peut pas savoir : c'est
+justement ce que `set_legend_words()` évite). `<measure>` ne demande aucune résolution (l'appel de
+`legend_tokens_terse()` mot pour mot) ; `<ref>` et `<method>` la demandent et la font eux-mêmes, dans le
+`tryCatch` de `fi_spec()`, donc `<breaks>` et `<cols>` ne paient rien.
 
+**⚠ La portée gettext était hissée à moitié.** `new_footer_ctx()` hissait la VALEUR de `lang`, pas la
+PORTÉE : les jetons inline n'en ouvraient aucune, donc `gettext("etc.")` de `<cols>` et les mots d'effet
+lus par `legend_specs()` répondaient dans le `LANGUAGE` ambiant. La boucle de `tab_footer_streams()` est
+maintenant enveloppée une fois, et `with_legend_lang()` est **ré-entrant** (drapeau interne), donc les
+appels imbriqués des builders deviennent gratuits — quatre `flush_gettext_cache()` par builder évités,
+et rien à supprimer.
+
+**Un nom pour la référence, et la fin d'un silence.** `ref` rejoint `MEASURE_WORD_FIELDS` et nourrit les
+deux formes : la préposition reste traduite au rendu (`vs` / `p. r. à`), le nom est celui de l'appelant.
+Le poser **efface** la paire déclarée par la mesure (`w["ref_word"] <- list(NULL)`, que `modifyList()`
+supprime — `w$ref_word <- NULL` retirerait l'élément et ne ferait rien). `ref_word` / `ref_phrase`
+restent pour le cas où les deux noms diffèrent vraiment, qui est `contrib` lui-même (terse dit *vs the
+mean*, prose dit *independence*). ⚠ Et surtout : ces trois champs ne sont lus que là où
+`ref_kind == "indep"`, c'est-à-dire **contrib seul** — partout ailleurs la légende nomme la référence que
+le tableau MONTRE (un niveau, la ligne Total), qu'aucun mot ne peut redire. `set_legend_words(diff =
+list(ref_word = ...))` était donc **accepté et silencieusement ignoré depuis toujours** : c'est refusé
+maintenant, en nommant pourquoi (`measure_ref_worded()`).
+
+**Quatre restes de la phase 7, fermés.** (1) `want_legend` était calculé **trois** fois, de trois façons,
+et celle d'Excel n'avait pas le terme `color_cols` (seule la porte de `legend_specs()` la sauvait) : il
+est décidé une fois par tableau dans `tab_export_prep()` (`rd$want_legend`), et `prep$meta$color_legend`,
+stocké et jamais lu, disparaît. Au passage `tab_md()` ne passait pas du tout `color_legend` à la prep.
+(2) `fp_method_line()` (plots.R) appelait `legend_specs()` et `legend_resolve_spec()` à la main : un
+lecteur partagé, `legend_method_phrases()`, sert le jeton `<method>` et lui — ⚠ le `ucfirst` et le
+`paste(collapse = "; ")` restent dans `fp_method_line()`, dont le titre d'axe rogne la clause de
+confiance à la regex. (3) **La septième divergence de l'espèce que la phase 7 chassait** : en console un
+tableau subordonné passait par `tab_pipe()` avec `subtext = FALSE` et perdait donc les lignes qu'il
+PORTE, là où md/html le rendent en `host = FALSE` et les gardent ; il est maintenant marqué
+(`tx_mark_subordinate()`) et rendu avec son pied, donc la règle `carried` décide dans les cinq médias.
+(4) `tab_title_names()` rejoint `tx_name_list()` dans `R/tab-footer.R` (c'était un aide-titre logé dans
+`tab_xl.R` et utilisé par `tab_reg.R`) et `reg_footer_plan()` devient `reg_test_rows_plan()` — « footer »
+ne doit désigner qu'une chose.
+
+**Une fusion garde toutes ses lignes.** `tab_compact()` prenait `subtext` du membre 1 alors qu'il unit
+les `test` de tous : avec l'élagage, un gabarit de membre 1 sans `<weight>` aurait supprimé une ligne que
+les tests fusionnés portent. Un seul `subtext_bind()` — union, placeholders re-triés dans l'ordre de la
+grille, lignes de l'utilisateur dans le leur — sert `tab_compact()` et `tab_bind_attrs()`, et il est
+**déclaré dans `TAB_ATTRS$bind`** : la colonne devient vraie pour les deux lignes `attr` et plus
+seulement pour les champs de `meta` (`test` y déclare son `vec_rbind`).
+
+⚠ **Un piège de génération de doc corrigé au passage** : les lignes que `footer_blocks_rd()` rend
+OUVRENT sur une balise roxygen, donc roxygen les relit comme du roxygen et échappe le `%` lui-même — un
+`esc()` maison produisait `\\%` et imprimait la contre-oblique. Il est supprimé, et le contraire
+(écrire `\\%`) reste vrai là où un `@eval` est inséré en Rd brut (`R/tab-args.R`). `test-non-ascii.R`
+verrouille les deux.
+
+**Vérification.** Sortie **inchangée octet pour octet** : `_snaps/` intact de bout en bout, et les 36
+fixtures `_golden/*.rds` vérifiées champ par champ contre `HEAD` — **36 sur 36 identiques** une fois
+`subtext` neutralisé, seules `w_weighted` et `n_mean_w` gardant `<weight>`. Suite livrée verte :
+**4 790** (4 765 avant, dont un bloc neuf qui est la garde que la suite n'avait pas : une régression
+nomme `<model>`, une régression pondérée `<weight>`, une régression à `tab_vars` colorée sur
+`between_groups` `<interaction>`). Suite `dev/tests/` verte (**5 899**) après mise à jour des trois
+appels au nom renommé. Traductions : aucun msgid neuf (`"vs %s"` existait déjà, traduit) ; `po/` et
+`.pot` régénérés pour les numéros de ligne, `.mo` identique.
+
+**Ce que la phase n'a PAS fait, et pourquoi.** Les mots de la légende **ne rentrent pas dans la chaîne**
+du gabarit (`<legend:contrib=…>`) : aucune validation, aucune complétion, aucune liste blanche, aucune
+traduction au rendu, et la syntaxe meurt sur les `:`, `>` et `=` que contient une vraie légende
+française — en plus de fusionner deux des trois boutons que le guide sépare (disposition / vocabulaire /
+contenu). `set_legend_words()` reste la route ; les trois jetons inline sont le barreau en dessous.
+Et `<note>` / `<tab>` n'ont toujours pas de jeton : html met les lignes de pied dans `<tfoot>` et les
+notes après `</table>`, Excel rend un tableau subordonné comme une FEUILLE — le gabarit ne pourrait donc
+jamais les ré-ordonner, seulement les supprimer. Il n'y a toujours aucun moyen, par tableau,
+de n'imprimer **rien** : `subtext = FALSE` des exportateurs reste le coup unique.
 
 #### v2.0.1 — Phase 8 — noms de col_vars plus compacts dans les exports
 

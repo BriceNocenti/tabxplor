@@ -119,7 +119,7 @@ test_pvalue_label <- function(test, min_e = NA_real_) {
 #   producer    "tab" (a crosstab omnibus test) | "reg". Partitions every consumer.
 #   kind        "gof" (a plain number, the `gof` display token) | "pvalue" | NA on a `line` row.
 #               The row_kind vocabulary (R/row-model.R), checked in R/zzz-fact-keys.R.
-#   digits      gof rows only. ⚠ DELIBERATELY absent (never NA) on pvalue rows: reg_footer_plan()'s
+#   digits      gof rows only. ⚠ DELIBERATELY absent (never NA) on pvalue rows: reg_test_rows_plan()'s
 #               `%||% 0L` relies on the absence.
 #   render      "grid" = a footer ROW (a cell per model column) | "line" = a table-wide footer
 #               SENTENCE (a pooled test belongs to no single column) | "record" = recorded in the
@@ -400,7 +400,7 @@ reg_footer_spec <- function() {
   stats::setNames(lapply(TEST_FOOTER_KEYS, function(k) {
     r   <- TEST_ROWS[[k]]
     out <- list(label = test_row_label(k), kind = r$kind)
-    # digits is ABSENT (never NA) on a pvalue row: reg_footer_plan()'s `%||% 0L` relies on that.
+    # digits is ABSENT (never NA) on a pvalue row: reg_test_rows_plan()'s `%||% 0L` relies on that.
     if (identical(r$kind, "gof")) {
       out$digits <- r$digits
       out$flag   <- as.numeric(r$flag %||% NA_real_)   # the "worth a look" threshold, or none
@@ -431,7 +431,7 @@ test_group_cols <- function(tt) {
 # One row per (test, term), in spec then term order.
 # ⚠ built from the WHOLE `reg` slice, so K (the block height) stays constant across split groups
 # (tab_append_footer() requires it); a group missing one predictor shows a blank cell.
-reg_footer_plan <- function(reg) {
+reg_test_rows_plan <- function(reg) {
   spec <- reg_footer_spec()
   tm   <- test_key_col(reg, "var")
   keep <- reg$test %in% names(spec)
@@ -581,7 +581,7 @@ test_grid_reg <- function(x, test_tbl) {
   }, character(1), USE.NAMES = FALSE)
   value_headers <- if (!anyNA(outcome_of) && !anyDuplicated(outcome_of)) outcome_of else value_cols
 
-  plan <- reg_footer_plan(reg)
+  plan <- reg_test_rows_plan(reg)
   if (is.null(plan) || !nrow(plan)) return(NULL)
   reg$.term <- test_key_col(reg, "var")
 

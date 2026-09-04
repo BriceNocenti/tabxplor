@@ -16,7 +16,11 @@
 #     (set_legend_words(), meta$legend_words). ⚠ Naming only -- a table attribute must never change a
 #     number, so MEASURE_WORD_FIELDS admits no engine fact and no ladder glyph, and a re-stated word
 #     is DATA (a string, never a closure: a closure in `meta` captures a namespace and breaks
-#     saveRDS()).
+#     saveRDS()). ⚠ A BASELINE word (`ref`, and the two shapes it feeds) is refused on a measure whose
+#     reference is a row of the table rather than a concept -- there the legend names what the table
+#     shows, so a word could only be stored and ignored.
+#   - The gettext SCOPE is opened ONCE per footer (tab_footer_streams()); with_legend_lang() is
+#     re-entrant, so the nested calls here are free and every builder answers in the same language.
 # See: dev/legend_and_side_tables.md; CLAUDE.md section "The colour system".
 
 # Pipeline (one spec -> two assemblers -> per-medium renderer):
@@ -492,6 +496,24 @@ legend_method_phrase <- function(spec, lang, measure = spec$measure_text) {
   if (is.na(m)) conf else gettextf("%s, %s", m, conf)
 }
 
+# ...and THE reader of that phrase for a whole table: the distinct clauses its coloured columns state,
+# optionally narrowed to a set of them. Two callers -- the `<method>` footer token and forest_plot()'s
+# caption -- so neither reaches into legend_specs() on its own.
+# ⚠ `lang` formats the numbers; the gettext SCOPE belongs to the caller (tab_footer_streams() hoists
+# one for the whole footer, fp_caption() opens its own).
+#' @keywords internal
+#' @noRd
+legend_method_phrases <- function(x, cols = NULL, lang = NULL) {
+  sp <- tryCatch(legend_specs(x), error = function(e) list())
+  if (!is.null(cols)) sp <- Filter(function(s) s$col_name %in% cols, sp)
+  if (!length(sp)) return(character(0))
+  lg <- legend_resolve_lang(lang)
+  sp <- lapply(sp, function(s) legend_resolve_spec(s, lg))
+  ph <- unique(stats::na.omit(vapply(sp, function(s) s$method_phrase %||% NA_character_,
+                                     character(1))))
+  ph[nzchar(ph)]
+}
+
 # THE measure's name, in the register the medium can afford: `long = TRUE` (the export footers) gives
 # the discipline's term and the base measure together, `long = FALSE` (the console, a plot guide) the
 # short word. Both are read through measure_facts(), so the SCALE the ladder is on chooses the name --
@@ -557,8 +579,14 @@ legend_resolve_spec <- function(spec, lang) {
          # under `guaranteed_effect` this measure's breaks are ABSOLUTE thresholds (contrib's residual),
          # not a CI floor -- so the sentence must not say "after subtracting the margin of error".
          guar_abs     = identical(md$break_origin, "threshold"),
-         ref_word     = measure_word_of(md$ref_word)   %||% gettext("vs independence"),
-         ref_phrase   = measure_word_of(md$ref_phrase) %||% gettext("independence"),
+         # ONE noun, two shapes: `ref` is the baseline a table re-states, `ref_word` brackets it with
+         # its preposition and `ref_phrase` is the bare noun a prose lead points at. Declaring `ref`
+         # alone is the common case, and the preposition stays translated at RENDER.
+         ref_word     = measure_word_of(md$ref_word) %||%
+                        (if (!is.null(md$ref)) gettextf("vs %s", measure_word_of(md$ref))) %||%
+                        gettext("vs independence"),
+         ref_phrase   = measure_word_of(md$ref_phrase) %||% measure_word_of(md$ref) %||%
+                        gettext("independence"),
          # the interval NAME is per channel: a gap measure on the background runs its own test, so the
          # tail must not borrow the text channel's model interval.
          method_phrase = legend_method_phrase(spec, lang, measure),
@@ -1318,11 +1346,20 @@ tab_color_legend <- function(x, medium = c("console", "html", "md", "runs", "pla
 
 # run f(lg) with LANGUAGE set for the gettext lookups (flushing glibc's cache before/after). Shared by
 # the plain-text footer helpers (stars / weight legend), which are not coloured.
+# ⚠ RE-ENTRANT: a footer opens ONE scope for the whole region (tab_footer_streams()), and the builders
+# inside it open their own. A nested call for the SAME language is then a plain f(lg) -- four
+# bindtextdomain() round trips per builder is what the outer scope exists to save. Tracked on a flag
+# rather than on LANGUAGE itself: only an ancestor call proves the domain was actually re-bound.
+.tx_legend_lang <- new.env(parent = emptyenv())
 with_legend_lang <- function(lang, f) {
   lg  <- legend_resolve_lang(lang)
+  if (identical(.tx_legend_lang$active, lg)) return(f(lg))
   old <- Sys.getenv("LANGUAGE", unset = NA_character_)
   flush_gettext_cache(); Sys.setenv(LANGUAGE = lg); flush_gettext_cache()
+  prev <- .tx_legend_lang$active
+  .tx_legend_lang$active <- lg
   on.exit({
+    .tx_legend_lang$active <- prev
     if (is.na(old)) Sys.unsetenv("LANGUAGE") else Sys.setenv(LANGUAGE = old)
     flush_gettext_cache()
   }, add = TRUE)

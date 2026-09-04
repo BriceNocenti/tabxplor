@@ -291,7 +291,7 @@ test_that("per-predictor footer rows keep the model's term order, not the alphab
   d <- suppressWarnings(fx_gss_fmt())
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "relig"), family = "binomial",
                                 stats = c("n", "global")))
-  lab <- tabxplor:::reg_footer_plan(get_test(t))$label
+  lab <- tabxplor:::reg_test_rows_plan(get_test(t))$label
   glob <- sub("^.*: ", "", grep("^Overall association", lab, value = TRUE))
   testthat::expect_equal(glob, c("race", "rincome", "relig"))
 })
@@ -583,7 +583,7 @@ test_that("the footer is N, then the checks worst-first, then the content, then 
   d <- suppressWarnings(fx_reg_fmt())
   t <- suppressMessages(tab_reg(d, "married", c("race", "rincome", "age"), family = "binomial",
                                 stats = "all"))
-  k <- tabxplor:::reg_footer_plan(get_test(t))$test
+  k <- tabxplor:::reg_test_rows_plan(get_test(t))$test
   pos <- function(x) which(k == x)[[1]]
   expect_identical(k[[1]], "n")
   # what the number MEANS, then whether the standard errors are trustworthy, then how fragile it is

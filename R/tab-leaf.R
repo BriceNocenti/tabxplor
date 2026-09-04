@@ -863,15 +863,17 @@ leaf_finish <- function(tabs, row_var, tab_vars, wt, subtext, inference,
   # must let that default stand; passing NULL would DROP the empty-tibble attribute every table has.
   tst <- if (is.null(test)) new_test_tibble() else test
   result <- if (tab_var_1lv) {
-    new_tab(tabs, subtext = footer_default_template(subtext), test = tst, meta = meta) |>
+    new_tab(tabs, subtext = subtext, test = tst, meta = meta) |>
       dplyr::select(-tidyselect::any_of(purrr::map_chr(tab_vars, as.character)))
   } else {
     tabs <- tabs |> dplyr::group_by(!!!tab_vars)
-    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = footer_default_template(subtext),
-                    test = tst, meta = meta)
+    new_grouped_tab(tabs, dplyr::group_data(tabs), subtext = subtext, test = tst, meta = meta)
   }
 
   result <- tab_stamp_inference(result, inference$conf_level, inf$degf, inf$basis)
+  # the footer template names what THIS table can say, so it is written on the FINISHED leaf -- after
+  # the inference stamp, not inside the two constructors.
+  attr(result, "subtext") <- footer_default_template(result, subtext)
 
   if (df || num) leaf_extract_raw(result, num, row_var) else result
 }

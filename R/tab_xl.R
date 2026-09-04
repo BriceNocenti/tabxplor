@@ -261,7 +261,7 @@ tab_xl <-
     # A workbook cell holds one line, so a line carrying a newline is flattened here.
     legend_runs <- purrr::map(seq_along(tabs_src), function(i) {
       rd <- prep$tables[[i]]
-      rd_blocks(tabs_src[[i]], "runs", theme = theme, want_legend = isTRUE(color_legend),
+      rd_blocks(tabs_src[[i]], "runs", theme = theme, want_legend = isTRUE(rd$want_legend),
                 subtext = rd$subtext, lang = lang, host = !isTRUE(rd$subordinate))
     })
     subtext <- purrr::map(legend_runs, ~ purrr::map_chr(
@@ -1343,16 +1343,6 @@ tab_title_rows_first <- function(tabs) {
   types <- purrr::map_chr(tabs, ~ if (is_fmt(.)) get_pct_type(.) else NA_character_)
   dir   <- types[!is.na(types) & types %in% c("row", "col")]
   length(dir) > 0 && all(dir == "col")
-}
-
-# Name a variable set for a title, through the one name-list renderer (tx_name_list): up to `max`
-# names, then how many there were -- never "multi", which named nothing, and never a bare index.
-# Placeholders and empties drop out.
-tab_title_names <- function(x, max = 3, noun = NULL, join = "comma") {
-  x <- as.character(x)
-  x <- x[is_real_col_var(x)]
-  tx_name_list(x, max = max, join = join,
-               overflow = if (is.null(noun)) "etc" else "count", noun = noun)
 }
 
 tab_get_titles <- function(tabs, row, col, tab, max = 3) {

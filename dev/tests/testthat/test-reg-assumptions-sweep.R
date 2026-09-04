@@ -194,7 +194,7 @@ test_that("a comparison table carries one check row per (model column x numeric 
   # age is in both models, tvhours only in m2 -> 3 rows, and the plan lays out 2 labelled rows
   # Phase 19g re-keyed the `test` tibble: the column a row belongs to is `col` (was `col_var`).
   expect_setequal(paste(li$col, li$var), c("m1 age", "m2 age", "m2 tvhours"))
-  plan <- tabxplor:::reg_footer_plan(tt)
+  plan <- tabxplor:::reg_test_rows_plan(tt)
   expect_setequal(plan$label[startsWith(plan$test, "linearity")],
                   c("Linearity (LR): age", "Linearity (LR): tvhours"))
   # the whole-model checks stay one row each

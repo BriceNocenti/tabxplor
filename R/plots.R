@@ -1552,14 +1552,11 @@ fp_caption <- function(x, cols, caption, subtext, footer, want_legend, theme, la
                  else paste(vapply(out, rd_wrap, character(1), width = width), collapse = "\n"))
 }
 
+# WARNING: the JOIN and the capital stay HERE, not in legend_method_phrases(): forest_plot()'s
+# axis title strips the confidence clause off this exact string with a regex.
 fp_method_line <- function(x, cols, lang) {
   with_legend_lang(lang, function(lg) {
-    sp <- Filter(function(s) s$col_name %in% cols, legend_specs(x))
-    if (!length(sp)) return(character(0))
-    sp <- lapply(sp, function(s) legend_resolve_spec(s, lg))
-    ph <- unique(stats::na.omit(vapply(sp, function(s) s$method_phrase %||% NA_character_,
-                                       character(1))))
-    ph <- ph[nzchar(ph)]
+    ph <- legend_method_phrases(x, cols = cols, lang = lg)
     if (!length(ph)) return(character(0))
     legend_ucfirst(paste(ph, collapse = "; "))
   })

@@ -1,15 +1,62 @@
 # The REGION under a table: the subtext template, the placeholders, the three kinds and where each
 # medium puts them. The SENTENCE the `<legend>` placeholder builds is test-tab-color.R's.
 
-testthat::test_that("tab() stores the default template, and it renders today's footer", {
+testthat::test_that("the stored template names what THIS table can say", {
+  # A member built from `meta` is named only where its fact exists (the FOOTER_BLOCKS `default`
+  # column); one built from the COLUMNS is always named, because set_color() can colour an
+  # uncoloured table afterwards. So an unweighted crosstab names neither <weight> nor <model>.
   t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
-  testthat::expect_identical(get_subtext(t),
-                             c("<weight>", "<model>", "<interaction>", "<legend>", "<stars>"))
+  testthat::expect_identical(get_subtext(t), c("<legend>", "<stars>"))
+  testthat::expect_identical(get_subtext(tab(fx_gss(), race, marital, pct = "row", wt = tvhours)),
+                             c("<weight>", "<legend>", "<stars>"))
 
   # a user line takes the `user` row's slot -- last, as it always did
   t2 <- tab(fx_gss(), race, marital, pct = "row", color = "diff", subtext = "Field: GSS")
   testthat::expect_identical(utils::tail(get_subtext(t2), 1L), "Field: GSS")
   testthat::expect_identical(utils::tail(tab_footer_text(t2), 1L), "Field: GSS")
+
+  # ...and set_subtext() applies the same normalisation, so what you read back is what prints
+  testthat::expect_identical(get_subtext(set_subtext(t, "Field: GSS")),
+                             c("<legend>", "<stars>", "Field: GSS"))
+})
+
+
+testthat::test_that("a regression names <model>, its weight and its interaction", {
+  # ⚠ NO golden fixture and no snapshot renders a regression footer, so this is the ONLY guard that
+  # the `default` predicates do not prune a line a regression genuinely prints. `<model>` gates on
+  # tab_is_reg() and NOT on reg_call(), which reg_finalize() has not yet attached.
+  d <- fx_reg_df() |>
+    dplyr::mutate(
+      married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")),
+      party3  = forcats::fct_collapse(
+        partyid, dem = c("Strong democrat", "Not str democrat"),
+        rep = c("Strong republican", "Not str republican"), other_level = "oth"),
+      # a strictly positive, NA-free weight: `survey` warns on zero-weight observations
+      w = year / 2000)
+  t <- suppressMessages(tab_reg(d, "married", c("race", "age")))
+  testthat::expect_true("<model>" %in% get_subtext(t))
+  testthat::expect_true(any(grepl("Model:", tab_footer_text(t), fixed = TRUE)))
+
+  # a regression stores its weight in the MODEL RECORD, not in `vars` -- the case a naive predicate
+  # on meta$spec$vars$wt would have silently dropped.
+  tw <- suppressMessages(tab_reg(d, "married", c("race", "age"), wt = "w"))
+  testthat::expect_true("<weight>" %in% get_subtext(tw))
+  testthat::expect_true(any(grepl("Weighted by", tab_footer_text(tw), fixed = TRUE)))
+
+  ti <- suppressMessages(tab_reg(d, outcome = "married", predictors = "race", tab_vars = "party3",
+                                 family = "binomial", color = c(TRUE, "between_groups")))
+  testthat::expect_true("<interaction>" %in% get_subtext(ti))
+  testthat::expect_true(any(grepl("Interaction", tab_footer_text(ti), fixed = TRUE)))
+})
+
+
+testthat::test_that("a merge keeps every generated line, in the region's order", {
+  # `test` is unioned over the members, so what SPEAKS about it must be too: a member-1 template
+  # lacking <weight> would silently suppress the weighted member's line.
+  plain <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  wtd   <- tab(fx_gss(), race, marital, pct = "row", color = "diff", wt = tvhours)
+  m     <- tab_compact(list(plain, wtd))
+  testthat::expect_identical(get_subtext(m), c("<weight>", "<legend>", "<stars>"))
 })
 
 
@@ -75,6 +122,28 @@ testthat::test_that("the inline placeholders are built from the cells' own facts
   testthat::expect_true(any(grepl("difference", tab_footer_text(cf), fixed = TRUE)))
   testthat::expect_true(any(grepl("marital", tab_footer_text(set_subtext(t, "on <cols>")),
                                   fixed = TRUE)))
+
+  # the measure's own nouns and its interval, in the words set_legend_words() gives them
+  piece <- function(tpl) {
+    ln <- tab_footer_text(set_subtext(t, paste0("X=", tpl)))
+    sub("^X=", "", ln[grepl("^X=", ln)])
+  }
+  testthat::expect_identical(piece("<measure>"), "difference")
+  testthat::expect_identical(piece("<ref>"),      "Total")
+  testthat::expect_identical(piece("<ref:noun>"), "the Total row")
+  testthat::expect_true(grepl("confidence", piece("<method>"), fixed = TRUE))
+})
+
+
+testthat::test_that("the generated terse legend is expressible in the template language", {
+  # THE completeness property: a consumer copies this line and edits it. It holds for a single
+  # legend group on the text channel with `color_signif = "ignore"` -- and in English, where the
+  # colon takes no spaces (French writes " : ", which a literal in the template cannot know).
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  gen  <- tab_footer_text(set_subtext(t, "<legend:terse>"), style = "terse", lang = "en")
+  hand <- tab_footer_text(set_subtext(t, "<measure> (<ref>): <breaks>"), style = "terse",
+                          lang = "en")
+  testthat::expect_identical(hand[[1]], gen[[1]])
 })
 
 

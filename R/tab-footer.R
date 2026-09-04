@@ -13,6 +13,12 @@
 #     ⚠ A subtext naming no placeholder is APPENDED to the default instead -- the rule that keeps a
 #     bare note, a raw `attr(x, "subtext") <-` and jamovi's free-text box working -- and an unknown
 #     `<...>` passes through verbatim, claiming nothing.
+#   - AND IT NAMES WHAT *THIS* TABLE CAN SAY (the `default` column): a member built from `meta` is
+#     named only where its fact exists, one built from the COLUMNS always. So the two gates answer
+#     different questions -- `reads` decides what a stripped table still prints, `default` what the
+#     producers write down -- and a predicate may over-name but must never under-name.
+#     ⚠ Written at each PRODUCER'S TAIL, on the finished object: a regression's model record is
+#     attached after the table is assembled (set_reg_call()), so anything earlier prunes <model>.
 #   - A generated member belongs to the HOST (the `carried` column): a subordinate table renders what
 #     it carries and nothing else, so a host + subordinate pair shows ONE colour legend.
 #   - ⚠ In the CONSOLE a note and a subordinate table print ABOVE the grid, because the last thing
@@ -64,7 +70,7 @@ fb_model <- function(x, ctx, args = character(0))   # translated per family
 
 # the aggregated effect-modification test (predictor x tab_vars) -- table-wide, so it rides the stream
 # footer like the weight / Model: lines. `esc = TRUE`: the p-values carry stars pandoc would read as
-# emphasis. (The per-predictor global test is footer ROWS -- reg_footer_plan() -- not a line here.)
+# emphasis. (The per-predictor global test is footer ROWS -- reg_test_rows_plan() -- not a line here.)
 fb_interaction <- function(x, ctx, args = character(0))
   lapply(Filter(nzchar, reg_interaction_lines(x, ctx$lang)), function(il) list(.lg_tok(il, esc = TRUE)))
 
@@ -92,18 +98,28 @@ fb_user <- function(x, ctx, args = character(0))
 
 # THE spec of the measure an inline token speaks about: the one named in `args`, else the table's own
 # when it has a single one. NULL when the table is uncoloured or the name matches nothing.
-fi_spec <- function(x, ctx, args) {
-  specs <- tryCatch(legend_specs(x, ctx$theme), error = function(e) list())
-  if (!length(specs)) return(NULL)
-  m <- setdiff(args, c("over", "under"))
-  if (!length(m)) return(specs[[1L]])
-  m  <- measure_key(m[[1L]])
-  hit <- Filter(function(s) identical(s$measure_text, m) || identical(s$measure_bg, m), specs)
-  if (length(hit)) hit[[1L]] else NULL
+# `mods` are the token's OWN modifier words, which are not measure names (`over`, `noun`, ...).
+# `resolve`: only the tokens that read a per-channel phrase pay for legend_resolve_spec(), and they
+# pay INSIDE the tryCatch -- a stripped table must reach the same empty answer, not an error.
+fi_spec <- function(x, ctx, args, mods = character(0), resolve = FALSE) {
+  tryCatch({
+    specs <- legend_specs(x, ctx$theme)
+    hit   <- NULL
+    if (length(specs)) {
+      m <- setdiff(args, mods)
+      if (!length(m)) hit <- specs[[1L]]
+      else {
+        k <- measure_key(m[[1L]])
+        f <- Filter(function(s) identical(s$measure_text, k) || identical(s$measure_bg, k), specs)
+        if (length(f)) hit <- f[[1L]]
+      }
+    }
+    if (is.null(hit) || !resolve) hit else legend_resolve_spec(hit, ctx$lang)
+  }, error = function(e) NULL)
 }
 
 fi_breaks <- function(x, ctx, args = character(0)) {
-  spec <- fi_spec(x, ctx, args); if (is.null(spec)) return(list())
+  spec <- fi_spec(x, ctx, args, mods = c("over", "under")); if (is.null(spec)) return(list())
   is_bg <- is.null(spec$plan_txt)
   plan  <- if (is_bg) spec$plan_bg else spec$plan_txt
   bt    <- legend_break_tokens(plan, spec$is_pct, if (is_bg) "bg" else "text", ctx$lang, ctx$theme)
@@ -114,8 +130,33 @@ fi_breaks <- function(x, ctx, args = character(0)) {
   legend_join(toks, " ")
 }
 
-fi_cols <- function(x, ctx, args = character(0)) {
+# The measure's own NAME, built by the very call the terse legend makes -- so `<measure> (<ref>):
+# <breaks>` IS the terse line, and a hand-written legend cannot drift from the generated one. No
+# resolution: every argument is already on the unresolved spec.
+fi_measure <- function(x, ctx, args = character(0)) {
   spec <- fi_spec(x, ctx, args); if (is.null(spec)) return(list())
+  plan <- spec$plan_txt %||% spec$plan_bg; if (is.null(plan)) return(list())
+  list(.lg_tok(legend_measure_word(plan$measure, spec$is_std, spec$eff_word,
+                                   plan$policy, plan$scale_key, words = spec$words)))
+}
+
+# ...and its BASELINE, in the two shapes a sentence needs: the compact clause the terse form brackets
+# (preposition included), or `<ref:noun>`, the bare noun a lead points at.
+fi_ref <- function(x, ctx, args = character(0)) {
+  spec <- fi_spec(x, ctx, args, mods = "noun", resolve = TRUE); if (is.null(spec)) return(list())
+  w <- if ("noun" %in% args) legend_ref_phrase(spec, "plain") else legend_ref_short(spec)
+  if (is.null(w) || is.na(w) || !nzchar(w)) list() else list(.lg_tok(w))
+}
+
+# ...and what the interval WAS, through the one reader forest_plot() also uses.
+fi_method <- function(x, ctx, args = character(0)) {
+  ph <- legend_method_phrases(x, lang = ctx$lang)
+  if (!length(ph)) return(list())
+  list(.lg_tok(paste(ph, collapse = "; ")))
+}
+
+fi_cols <- function(x, ctx, args = character(0)) {
+  spec <- fi_spec(x, ctx, args, mods = c("over", "under")); if (is.null(spec)) return(list())
   nm <- if (length(setdiff(args, c("over", "under")))) spec$col_name else spec$col_var
   list(.lg_tok(legend_name_list(nm), esc = TRUE))
 }
@@ -143,21 +184,34 @@ fi_conf <- function(x, ctx, args = character(0)) {
 #            a peer, so it renders what it carries and nothing else, which is what keeps one colour
 #            legend under a host + subordinate pair instead of two.
 #   build    closure(x, ctx) -> a list of token streams. NULL where the kind is not a line.
+#   default  closure(x) -> is this member part of THIS TABLE'S OWN template? Absent = always named.
+#            It answers a DIFFERENT question from `reads`: `reads` is the RENDER gate (a fact that is
+#            gone prints nothing), this is the TEMPLATE gate (what the producers write down). So it
+#            tests only what the BUILD settles and no setter can add later -- a weight, a model, an
+#            interaction -- while everything derived from the COLUMNS stays named unconditionally,
+#            since set_color() can colour an uncoloured table afterwards.
+#            ⚠ It may OVER-name (the builder then prints nothing, and the reader deletes a line that
+#            says nothing) but must NEVER under-name: a placeholder the producers omit is one nothing
+#            brings back. ⚠ The predicates are CLOSURES, not bare symbols: this table is folded at
+#            source time, before R/table-spec.R and R/tab_reg.R exist (the TAB_ATTRS `spec` precedent).
 FOOTER_BLOCKS <- tx_grid(tibble::tribble(
-  ~key,          ~token,        ~kind,  ~role,         ~carried, ~reads,                                                                                            ~build,
-  "weight",      "weight",      "line", "weight",      FALSE,    c("meta$spec$vars$wt", "basis", "conf_level", "display"),                                          fb_weight,
-  "model",       "model",       "line", "reg",         FALSE,    "meta$spec$call",                                                                                  fb_model,
-  "interaction", "interaction", "line", "reg",         FALSE,    "test",                                                                                            fb_interaction,
-  "legend",      "legend",      "line", "legend",      FALSE,    c("color", "color_signif", "scale", "ref", "col_var", "meta$legend_words", "meta$color_breaks"), fb_legend,
-  "stars",       "stars",       "line", "stars",       FALSE,    c("pvalue", "conf_level"),                                                                         fb_stars,
-  "user",        NA_character_, "line", "subtext",     TRUE,     "subtext",                                                                                         fb_user,
-  "shape",       NA_character_, "note", NA_character_, FALSE,    "meta$assumptions",                                                                                NULL,
-  "tabs",        NA_character_, "tab",  NA_character_, TRUE,     "meta$footer_tabs",                                                                                NULL,
+  ~key,          ~token,        ~kind,  ~role,         ~carried, ~reads,                                                                                            ~build,         ~default,
+  "weight",      "weight",      "line", "weight",      FALSE,    c("meta$spec$vars$wt", "basis", "conf_level", "display"),                                          fb_weight,      function(x) !is.null(footer_wt_name(x)),
+  "model",       "model",       "line", "reg",         FALSE,    "meta$spec$call",                                                                                  fb_model,       function(x) tab_is_reg(x),
+  "interaction", "interaction", "line", "reg",         FALSE,    "test",                                                                                            fb_interaction, function(x) reg_has_interaction(x),
+  "legend",      "legend",      "line", "legend",      FALSE,    c("color", "color_signif", "scale", "ref", "col_var", "meta$legend_words", "meta$color_breaks"), fb_legend,      NULL,
+  "stars",       "stars",       "line", "stars",       FALSE,    c("pvalue", "conf_level"),                                                                         fb_stars,       NULL,
+  "user",        NA_character_, "line", "subtext",     TRUE,     "subtext",                                                                                         fb_user,        NULL,
+  "shape",       NA_character_, "note", NA_character_, FALSE,    "meta$assumptions",                                                                                NULL,           NULL,
+  "tabs",        NA_character_, "tab",  NA_character_, TRUE,     "meta$footer_tabs",                                                                                NULL,           NULL,
   # the INLINE tokens: they render INSIDE a line rather than as one, so they never claim the layout --
   # a note that quotes the confidence level must not cost its writer the whole generated footer.
-  "breaks",      "breaks",      "inline", NA_character_, FALSE,  c("color", "meta$color_breaks"),                                                                   fi_breaks,
-  "cols",        "cols",        "inline", NA_character_, FALSE,  c("col_var", "col_group"),                                                                         fi_cols,
-  "conf",        "conf",        "inline", NA_character_, FALSE,  "conf_level",                                                                                      fi_conf,
+  "breaks",      "breaks",      "inline", NA_character_, FALSE,  c("color", "meta$color_breaks"),                                                                   fi_breaks,      NULL,
+  "measure",     "measure",     "inline", NA_character_, FALSE,  c("color", "meta$legend_words"),                                                                   fi_measure,     NULL,
+  "ref",         "ref",         "inline", NA_character_, FALSE,  c("color", "ref", "meta$legend_words"),                                                            fi_ref,         NULL,
+  "method",      "method",      "inline", NA_character_, FALSE,  c("ci_method", "conf_level", "degf"),                                                              fi_method,      NULL,
+  "cols",        "cols",        "inline", NA_character_, FALSE,  c("col_var", "col_group"),                                                                         fi_cols,        NULL,
+  "conf",        "conf",        "inline", NA_character_, FALSE,  "conf_level",                                                                                      fi_conf,        NULL,
 ))
 
 # === SECTION: the template ==========================================================================
@@ -223,6 +277,54 @@ footer_text_tokens <- function(line, x, ctx) {
   if (!length(out)) list(.lg_tok(unesc(line))) else out
 }
 
+# The block placeholders, in the order the region reads them -- what a merge sorts by.
+#' @keywords internal
+#' @noRd
+footer_block_order <- function()
+  unname(Filter(Negate(is.na), vapply(FOOTER_BLOCKS, function(b)
+    if (identical(b$kind, "inline")) NA_character_ else b$token %||% NA_character_,
+    character(1))))
+
+# TWO TEMPLATES RECONCILED (the `subtext` row's `bind` rule): every generated line either table names,
+# in the region's own order, then every line a person wrote, in the order they arrive. A merge unions
+# the `test` rows, so it must union what SPEAKS about them -- else a weighted table bound onto an
+# unweighted one loses its weight line, or states it after the stars.
+#' @keywords internal
+#' @noRd
+subtext_bind <- function(sx, sy) {
+  s <- c(as.character(sx %||% character(0)), as.character(sy %||% character(0)))
+  s <- unique(s[!is.na(s) & nzchar(s)])
+  if (!length(s)) return(character(0))
+  tok <- vapply(s, function(l) { b <- footer_block_of(l)
+                                 if (is.null(b)) NA_character_ else b$block$token },
+                character(1), USE.NAMES = FALSE)
+  ord <- match(tok, footer_block_order())
+  c(s[!is.na(ord)][order(ord[!is.na(ord)])], s[is.na(ord)])
+}
+
+# THE LINE ROWS, in reading order. With a table, only the ones ITS OWN template names (the `default`
+# column); without one, every row -- a table that never had a template gets the whole default and each
+# builder's own gate decides, which is the degradation contract.
+#' @keywords internal
+#' @noRd
+footer_default_rows <- function(x = NULL) {
+  rows <- Filter(function(b) identical(b$kind, "line"), FOOTER_BLOCKS)
+  if (is.null(x)) return(rows)
+  Filter(function(b) is.null(b$default) || isTRUE(tryCatch(b$default(x), error = function(e) TRUE)),
+         rows)
+}
+
+# Does this subtext CLAIM the layout -- is any line exactly one block placeholder? The vectorised
+# pre-filter and the early exit are what keep it cheap on the dplyr path, where every verb re-checks a
+# template that already claims it.
+#' @keywords internal
+#' @noRd
+footer_claims_layout <- function(subtext) {
+  cand <- grepl(paste0("^", FOOTER_TOKEN_RE, "$"), trimws(subtext), perl = TRUE)
+  for (i in which(cand)) if (!is.null(footer_block_of(subtext[[i]]))) return(TRUE)
+  FALSE
+}
+
 # THE EFFECTIVE TEMPLATE: a list of entries, each either a FOOTER_BLOCKS row (with its args) or one
 # line of the user's own text. The default is FOOTER_BLOCKS' own order, the "user" row standing for
 # wherever the carried lines go.
@@ -232,7 +334,7 @@ footer_plan <- function(subtext = character(0)) {
   subtext <- Filter(nzchar, as.character(subtext))
   blocks  <- lapply(subtext, footer_block_of)
   if (!any(vapply(blocks, Negate(is.null), logical(1)))) {                       # APPEND mode
-    return(lapply(Filter(function(b) identical(b$kind, "line"), FOOTER_BLOCKS),
+    return(lapply(footer_default_rows(),
                   function(b) list(block = b, args = character(0), text = NA_character_)))
   }
   lapply(seq_along(subtext), function(i)                                          # OWN mode
@@ -240,17 +342,20 @@ footer_plan <- function(subtext = character(0)) {
     else                      c(blocks[[i]], list(text = NA_character_)))
 }
 
-# THE DEFAULT TEMPLATE, as the producers write it into `subtext`: every line-kind row that has a token,
-# in FOOTER_BLOCKS' order, then the caller's own lines (the `user` row's slot). Stored rather than
-# implied so a reader SEES what the footer is made of and can re-order or drop a part of it.
+# THE DEFAULT TEMPLATE, as the producers write it into `subtext` AT THEIR TAIL: the tokens of the rows
+# this FINISHED table can say something with, then the caller's own lines (the `user` row's slot).
+# Stored rather than implied so a reader SEES what the footer is made of and can re-order or drop a
+# part of it -- which is why it must name what THIS table says and not what every table might.
+# ⚠ ON A FINISHED TABLE, never mid-build: a regression's model record is attached after the object is
+#   assembled (set_reg_call()), so a template written earlier would omit <model> and <weight>.
 # ⚠ IDEMPOTENT: a `subtext` already naming a block is returned untouched, so a rebuild, a merge or a
 #   second producer in the chain cannot stack two templates.
 #' @keywords internal
 #' @noRd
-footer_default_template <- function(subtext = character(0)) {
+footer_default_template <- function(x = NULL, subtext = character(0)) {
   subtext <- Filter(nzchar, as.character(subtext))
-  if (any(vapply(subtext, function(l) !is.null(footer_block_of(l)), logical(1)))) return(subtext)
-  toks <- Filter(function(b) identical(b$kind, "line") && !is.na(b$token), FOOTER_BLOCKS)
+  if (footer_claims_layout(subtext)) return(subtext)
+  toks <- Filter(function(b) !is.na(b$token), footer_default_rows(x))
   c(vapply(toks, function(b) paste0("<", b$token, ">"), character(1), USE.NAMES = FALSE), subtext)
 }
 
@@ -266,15 +371,21 @@ tab_footer_streams <- function(x, style = "prose", lang = NULL,
   streams <- list()
   push    <- function(toks, role) if (length(toks))
     streams[[length(streams) + 1L]] <<- list(tokens = toks, role = role)
-  for (e in footer_plan(subtext)) {
-    if (is.null(e$block)) {                    # a carried line, its inline tokens resolved
-      push(footer_text_tokens(e$text, x, ctx), "subtext")
-      next
+  # DESIGN: ONE gettext scope for the whole region. new_footer_ctx() hoists the language VALUE; this
+  # hoists the SCOPE, which is what the INLINE builders never had -- `<cols>`' overflow word and the
+  # effect words legend_specs() reads used to answer in the ambient LANGUAGE, not in ctx$lang. The
+  # line builders' own with_legend_lang() calls become free (it is re-entrant).
+  with_legend_lang(ctx$lang, function(lg) {
+    for (e in footer_plan(subtext)) {
+      if (is.null(e$block)) {                  # a carried line, its inline tokens resolved
+        push(footer_text_tokens(e$text, x, ctx), "subtext")
+        next
+      }
+      # a SUBORDINATE renders what it carries and nothing generated (see the `carried` column).
+      if (!isTRUE(host) && !isTRUE(e$block$carried)) next
+      for (toks in e$block$build(x, ctx, e$args)) push(toks, e$block$role)
     }
-    # a SUBORDINATE renders what it carries and nothing generated (see the `carried` column).
-    if (!isTRUE(host) && !isTRUE(e$block$carried)) next
-    for (toks in e$block$build(x, ctx, e$args)) push(toks, e$block$role)
-  }
+  })
   streams
 }
 
@@ -331,6 +442,19 @@ tx_name_list <- function(x, max = 3L, join = c("comma", "and"),
   if (length(x) == 1L || identical(join, "comma")) return(paste(x, collapse = ", "))
   # the last two joined by a word, the rest by commas: "qualif, sexe and age" / "qualif, sexe et age"
   gettextf("%s and %s", paste(utils::head(x, -1L), collapse = ", "), utils::tail(x, 1L))
+}
+
+# Name a variable set for a TITLE: up to `max` names, then how many there were -- never "multi",
+# which named nothing, and never a bare index. Placeholders and empties drop out.
+# ⚠ ONE renderer, TWO doors: this filters placeholder col_vars, legend_name_list() (R/tab-legend.R)
+# undoes an html wrap marker instead. The pre-processing is what differs, never the joining.
+#' @keywords internal
+#' @noRd
+tab_title_names <- function(x, max = 3, noun = NULL, join = "comma") {
+  x <- as.character(x)
+  x <- x[is_real_col_var(x)]
+  tx_name_list(x, max = max, join = join,
+               overflow = if (is.null(noun)) "etc" else "count", noun = noun)
 }
 
 # ...and TRUE when that set overflowed, which a title needs: "cinema, by 4 predictors" takes a comma
@@ -600,6 +724,19 @@ tab_shows_inference <- function(x) {
   !is.null(tt) && nrow(tt) > 0 && any(!is.na(tt$pvalue))
 }
 
+# THE weight this table was built with, or NULL. Two homes, because a crosstab stamps it into its
+# `vars` while tab_reg() keeps it in the model record -- so the `weight` row's `default` predicate and
+# its builder read ONE function and cannot disagree about what "there is a weight" means.
+#' @keywords internal
+#' @noRd
+footer_wt_name <- function(x) {
+  ok <- function(v) !is.null(v) && length(v) > 0L && !is.na(v[[1]]) && nzchar(v[[1]])
+  wt <- tryCatch(get_vars_attr(x)$wt, error = function(e) NULL)
+  if (!ok(wt)) wt <- tryCatch(reg_call(x)$wt, error = function(e) NULL)
+  if (!ok(wt)) return(NULL)
+  as.character(wt)[1]
+}
+
 # the weight footer line, shown FIRST when the table was built with a weight (NULL when unweighted).
 # ONE sentence per INFERENCE BASIS, generated from the stored basis -- so the claim cannot outlive
 # the computation, and a weighted estimate on a raw-n interval (the DEFAULT) is stated, not silent.
@@ -607,11 +744,8 @@ tab_shows_inference <- function(x) {
 # where an interval, a star or a test is on the page. The long form warns about what they rest on;
 # the short one says the only thing left to say, that the table is weighted.
 tab_weight_line <- function(x, lang = NULL) {
-  wt <- get_vars_attr(x)$wt
-  if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt))
-    wt <- tryCatch(reg_call(x)$wt, error = function(e) NULL)
-  if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt)) return(NULL)
-  wt    <- as.character(wt)[1]
+  wt <- footer_wt_name(x)
+  if (is.null(wt)) return(NULL)
   # the basis is a STORED fact, read through its one resolver -- and derived from the COLUMNS, so the
   # sentence survives every rebuild that keeps them.
   basis <- tryCatch(tab_inference_basis(x), error = function(e) "n")
@@ -648,8 +782,11 @@ tab_weight_line <- function(x, lang = NULL) {
 # each -- so no setter is named twice, and a renamed one cannot go stale here.
 #' @keywords internal
 #' @noRd
+# ⚠ WRITE A BARE `%` HERE. These lines OPEN with a roxygen tag, so roxygen re-reads them as roxygen
+# and escapes the percent itself -- a hand-escaped `\%` comes out `\\%` and prints the backslash
+# (test-non-ascii.R locks it). The opposite holds where an @eval block is spliced into an existing
+# @param as raw Rd (R/tab-args.R), which must write `\\%`.
 footer_blocks_rd <- function() {
-  esc  <- function(s) gsub("%", "\\\\%", s)
   rows <- Filter(function(b) !is.na(b$token), FOOTER_BLOCKS)
   how  <- function(b) {
     st <- unique(stats::na.omit(vapply(sub("^meta[$]", "", b$reads), function(k)
@@ -665,6 +802,9 @@ footer_blocks_rd <- function() {
     legend      = "the colour legend: what each shade means. \\code{<legend:terse>} / \\code{<legend:prose>} pin the register.",
     stars       = "what each significance star means.",
     breaks      = "just the coloured ladder of a measure, inside a line of your own. \\code{<breaks:over>} / \\code{<breaks:under>} take one side; \\code{<breaks:contrib>} names a measure where several compete.",
+    measure     = "what the colours grade, in the words \\code{\\link{set_legend_words}} gives it.",
+    ref         = "the baseline it is graded against, as the compact form brackets it (preposition included); \\code{<ref:noun>} gives the bare noun a sentence points at.",
+    method      = "how the intervals were computed (\\emph{Wilson score interval, 95% confidence}).",
     cols        = "the names of the columns a measure describes.",
     conf        = "the confidence level, localised.")
   c("@section The placeholders:",
@@ -673,7 +813,7 @@ footer_blocks_rd <- function() {
     "text, printed as written.",
     "\\describe{",
     vapply(names(rows), function(k) paste0(
-      "  \\item{\\code{<", rows[[k]]$token, ">}}{", esc(gloss[[k]] %||% ""), esc(how(rows[[k]])), "}"),
+      "  \\item{\\code{<", rows[[k]]$token, ">}}{", gloss[[k]] %||% "", how(rows[[k]]), "}"),
       character(1), USE.NAMES = FALSE),
     "}")
 }
@@ -688,12 +828,17 @@ footer_blocks_rd <- function() {
 #' ```
 #' t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 #' get_subtext(t)
-#' #> "<weight>" "<model>" "<interaction>" "<legend>" "<stars>"
+#' #> "<legend>" "<stars>"
 #' ```
 #'
 #' Everything generated is a `<placeholder>`; everything you write is a line; **the order of the
 #' lines is the order of the footer**. Re-order them and it re-orders. Delete `<legend>` and no
 #' colour legend is generated --- in the console too, which no exporter argument can reach.
+#'
+#' **A table names only what it can say.** The template above has no `<weight>` because the table is
+#' unweighted and no `<model>` because it is not a regression --- both are settled when the table is
+#' built and nothing can add them afterwards. `<legend>` and `<stars>` are always named: they are
+#' built from the columns, which [set_color()] and the \pkg{dplyr} verbs can still change.
 #'
 #' @section The one rule:
 #' A `subtext` naming **no** placeholder is simply appended to the default footer, which is what a

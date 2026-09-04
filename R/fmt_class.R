@@ -5140,9 +5140,13 @@ fmt_stored_bounds <- function(x) list(lo = get_ci_inf(x), hi = get_ci_sup(x))
 # `scale`, `sig_source`, `bounds`, `gate_row`) nor a ladder glyph (`break_over`, `threshold_mult`,
 # `break_scale`), because a table attribute must never change a number and an extracted fmt column
 # must colour identically on its own. Checked when set, and foreign-key-checked at load.
+# ⚠ `ref` is the ONE baseline noun and feeds both shapes -- `ref_word` brackets it with a preposition
+# translated at render, `ref_phrase` is the bare noun -- so stating it DELETES the measure's declared
+# pair (measure_facts()). The two shapes stay for the case where the nouns genuinely differ, which is
+# contrib's own. All three are refused where the reference is a ROW of the table (measure_ref_worded).
 #' @keywords internal
 MEASURE_WORD_FIELDS <- c("word", "word_long", "word_std", "word_long_std", "word_guar",
-                         "subject", "ref_word", "ref_phrase", "unit_word",
+                         "subject", "ref", "ref_word", "ref_phrase", "unit_word",
                          "lead_over", "lead_under", "caveat")
 
 # ⚠ the invariant is what the list must NOT contain -- it is a whitelist, so the fields a table may
@@ -5166,6 +5170,12 @@ measure_word_of <- function(v, ...) {
   if (length(a)) do.call(sprintf, c(list(v), a)) else v
 }
 
+# WHICH measures take a re-stated baseline word: the ones compared to a CONCEPT. Everywhere else the
+# legend names the reference the table shows (a level, a Total row), so a word could only be ignored.
+#' @keywords internal
+measure_ref_worded <- function()
+  names(MEASURES)[vapply(MEASURES, function(m) identical(m$ref_kind, "indep"), logical(1))]
+
 #' @keywords internal
 measure_facts <- function(measure, policy = "ignore", scale_key = NULL, words = NULL) {
   md <- MEASURES[[measure]]
@@ -5179,7 +5189,15 @@ measure_facts <- function(measure, policy = "ignore", scale_key = NULL, words = 
   # everything downstream -- both registers, the publication palettes, the plot guide, every medium --
   # says the caller's nouns without one branch of its own.
   w <- words[[measure]]
-  if (!is.null(w)) md <- utils::modifyList(md, w[intersect(names(w), MEASURE_WORD_FIELDS)])
+  if (!is.null(w)) {
+    # `ref` is the ONE baseline noun; the two shapes derived from it (the bracketed clause and the
+    # bare noun) must therefore DROP the measure's declared ones, or modifyList would leave tabxplor's
+    # own word standing beside the caller's. `x["k"] <- list(NULL)` NULL-VALUES the element, which is
+    # what modifyList() deletes on; `x$k <- NULL` would remove it and change nothing.
+    if (!is.null(w$ref)) for (k in c("ref_word", "ref_phrase"))
+      if (is.null(w[[k]])) w[k] <- list(NULL)
+    md <- utils::modifyList(md, w[intersect(names(w), MEASURE_WORD_FIELDS)])
+  }
   if (is.null(md$bounds)) md$bounds <- fmt_stored_bounds
   md
 }

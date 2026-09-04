@@ -100,14 +100,20 @@ is_tab <- function(x) {
 #' the footer. Re-order them and it re-orders; drop \code{<legend>} and no colour legend is
 #' generated, in the console too.
 #'
-#' A \code{subtext} naming **no** placeholder is simply appended to the default footer --- which is
-#' what a note has always done, so \code{tab(subtext = "Field: GSS 2000")} is unchanged. Writing one
+#' A \code{subtext} naming **no** placeholder is simply appended to the template --- which is what a
+#' note has always done, so \code{tab(subtext = "Field: GSS 2000")} is unchanged. Writing one
 #' placeholder on a line of its own takes the layout over: only what you name is printed.
 #' An unknown \code{<...>} is not a placeholder and passes through verbatim (\code{\\<} escapes a
 #' literal \code{<}).
 #'
+#' The template a producer writes names only what **this** table can say: no \code{<weight>} on an
+#' unweighted table, no \code{<model>} outside a regression. What you read back is therefore what
+#' prints, and the way to drop a line is to delete it.
+#'
 #' @param x A \code{tabxplor_tab}.
-#' @param subtext A character vector, one element per line, or \code{NULL} to clear.
+#' @param subtext A character vector, one element per line, or \code{NULL} to restore the default
+#'   template. (There is no per-table way to print nothing at all: the exporters' \code{subtext =
+#'   FALSE} is the one-off.)
 #' @return \code{x}, with its footer template set (\code{set_subtext}) ; the template, as a
 #'   character vector (\code{get_subtext}).
 #' @seealso [tab_footer_text()] to see what the template prints, [set_legend_words()] to re-word the
@@ -117,11 +123,14 @@ is_tab <- function(x) {
 #' t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 #' get_subtext(t)
 #'
-#' # your own sentence, with tabxplor's own ladder inside it
-#' t <- set_subtext(t, c("<weight>", "over-representation: <breaks>", "<stars>"))
+#' # your own sentence, with tabxplor's own pieces inside it
+#' t <- set_subtext(t, c("<measure> (<ref>): <breaks>", "<stars>"))
 #' cat(tab_footer_text(t), sep = "\n")
 set_subtext <- function(x, subtext) {
-  attr(x, "subtext") <- if (is.null(subtext)) character(0) else as.character(subtext)
+  # the same normalisation the producers apply, so what get_subtext() reads back is what prints: a
+  # note added here keeps the template visible instead of replacing it at render time.
+  attr(x, "subtext") <- footer_default_template(
+    x, if (is.null(subtext)) character(0) else as.character(subtext))
   x
 }
 
@@ -285,10 +294,12 @@ get_footer_tabs <- function(x) get_meta(x)[["footer_tabs"]]
 #'   \item \code{word_guar} --- the \code{color_signif = "guaranteed_effect"} head, a template
 #'   taking the confidence level (\code{"\%s\%\%-guaranteed contribution"}).
 #'   \item \code{subject} --- the noun for what is graded, when it is not the cell itself.
-#'   \item \code{ref_word} / \code{ref_phrase} --- how a reference-free baseline is named, in its two
-#'   shapes: the compact clause the terse form brackets, \strong{preposition included}
-#'   (\emph{vs the mean}), and the bare noun a prose lead points at (\emph{independence}). Re-state
-#'   both, or the exports keep the old word.
+#'   \item \code{ref} --- the baseline noun (\emph{the mean contribution}), for a measure compared to
+#'   a \strong{concept} rather than to a row of the table: the terse form brackets it with its
+#'   preposition and the prose one points at it bare, both from this one field. Give
+#'   \code{ref_word} / \code{ref_phrase} instead only where those two nouns genuinely differ.
+#'   Re-stating any of them on a measure whose reference is a category or a total is refused --- there
+#'   the legend names what the table itself shows.
 #'   \item \code{unit_word} --- the unit the thresholds are counted in.
 #'   \item \code{lead_over} / \code{lead_under} --- the sentence each side of the ladder opens with,
 #'   as a template taking \code{\%1$s} the subject, \code{\%2$s} the reference and \code{\%3$s} the
@@ -333,6 +344,14 @@ set_legend_words <- function(x, ...) {
       cli::cli_abort(c("{.val {off}} {?is/are} not {?a/} legend word{?s} of {.val {m}}.",
                        "x" = "A table re-states what its colours are CALLED, never how they are computed.",
                        "i" = "Available: {.val {MEASURE_WORD_FIELDS}}."))
+    # A BASELINE word is only ever printed for a measure whose baseline is a CONCEPT (independence,
+    # the mean): everywhere else the legend names the reference from the DATA -- a level label, the
+    # Total row -- which no word can re-state. Refused rather than stored and silently ignored.
+    rw <- intersect(names(v), c("ref", "ref_word", "ref_phrase"))
+    if (length(rw) && !identical(MEASURES[[m]]$ref_kind, "indep"))
+      cli::cli_abort(c("{.val {rw}} cannot be re-stated on {.val {m}}.",
+                       "x" = "Its legend names the reference found in the table, not a word.",
+                       "i" = "Only a measure compared to a concept takes one: {.val {measure_ref_worded()}}."))
     v
   })
   old <- get_legend_words(x)
@@ -463,9 +482,9 @@ tab_attrs <- function(from) {
 #' @noRd
 TAB_ATTRS <- tx_grid(tibble::tribble(
   ~key, ~where, ~setter, ~subordinate, ~bind, ~gloss,
-  "subtext", "attr", "set_subtext", TRUE, NULL,
+  "subtext", "attr", "set_subtext", TRUE, function(x, y) subtext_bind(x, y),
   "the footer's TEXT, as a template: every \\code{<placeholder>} \\pkg{tabxplor} generates and every line you write, in the order they print (see \\code{\\link{set_subtext}} and \\code{\\link{tab_footer_text}}).",
-  "test", "attr", NA_character_, TRUE, NULL,
+  "test", "attr", NA_character_, TRUE, function(x, y) vctrs::vec_rbind(x, y),
   "a tidy tibble of whole-table tests --- a crosstab's chi2 or ANOVA, a regression's model-fit statistics and global tests (see \\code{\\link{get_test}}).",
   "spec", "meta", "set_caption", TRUE, function(x, y) spec_bind(x, y),
   "the table's identity, \\code{list(kind =, vars =, call =)}: its \\code{kind} (\\code{\"crosstab\"} or \\code{\"regression\"}); \\code{vars}, what no column can carry (the weight, the caption, the outcomes, the variable labels --- see \\code{\\link{set_caption}}), the rest of the variable model being derived from the declared index columns and from the columns' own \\code{col_var}; and \\code{call}, the producer's own recipe (a regression's model record --- family, outcome, predictors, reference level, and the \\code{fit_spec} \\code{\\link{reg_check_plots}} refits from).",
@@ -560,12 +579,14 @@ tab_meta_merge <- function(metas, ...) {
   if (length(out)) out else NULL
 }
 
+# ...and the same for the two BARE attributes, read out of the same grid column, so `bind` is true of
+# every TAB_ATTRS row and not only of the `meta` fields.
 #' @keywords internal
 tab_bind_attrs <- function(x, other) {
-  subtext <- unique(vctrs::vec_c(get_subtext(x), get_subtext(other)))
-  if (length(subtext) > 1) subtext <- subtext[subtext != ""]
-  list(subtext = subtext,
-       test    = vctrs::vec_rbind(get_test(x), get_test(other)),
+  bind1 <- function(k, a, b) { rule <- TAB_ATTRS[[k]]$bind
+                               if (is.null(rule)) a %||% b else rule(a, b) }
+  list(subtext = bind1("subtext", get_subtext(x), get_subtext(other)),
+       test    = bind1("test",    get_test(x),    get_test(other)),
        meta    = tab_meta_bind(get_meta(x), get_meta(other)))
 }
 
@@ -763,7 +784,10 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
   above <- c(unlist(purrr::map(footer_notes(x, "console"), ~ c(note_console(.x), ""))),
              unlist(purrr::map(ft, function(t) {
                t <- tx_strip_subordinate(t)   # a footer table's own are never rendered
-               c(aside(tab_pipe(t)), "")
+               # MARKED and asked for its footer, so the `carried` rule decides here as it does in an
+               # export: a subordinate prints the lines IT carries and nothing generated. Unmarked, it
+               # would have printed nothing at all in the console alone.
+               c(aside(tab_pipe(tx_mark_subordinate(t), subtext = TRUE)), "")
              })))
   if (length(above)) out <- c(above, out)
 
@@ -1078,9 +1102,8 @@ tab_html <- function(tabs,
     rd      <- prep$tables[[i]]
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
-      src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
-      want_legend <- color_legend && length(rd$roles$color_cols) != 0
-      subtext <- rd_blocks(src, "html", theme = theme[1], want_legend = want_legend,
+      src     <- if (is.null(rd$color_src)) rd$tab else rd$color_src
+      subtext <- rd_blocks(src, "html", theme = theme[1], want_legend = isTRUE(rd$want_legend),
                            subtext = rd$subtext, lang = lang, classes = TRUE,
                            host = !isTRUE(rd$subordinate))
     }
@@ -1222,7 +1245,10 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   merge_tab_vars <- tab_get_vars(tabs[[1]])$tab_vars
 
 
-  subtext <- get_subtext(tabs[[1]])
+  # the UNION, in the region's order: `test` below is unioned over every member, so what SPEAKS about
+  # it must be too -- a member-1 template lacking <interaction> would suppress a line the merged tests
+  # genuinely carry.
+  subtext <- purrr::reduce(purrr::map(tabs, get_subtext), subtext_bind)
   # Captured HERE while `tabs` is still the LIST: tab_stack_tables() below rebinds it to a plain tibble
   # carrying no table attributes, so this is where a `meta` sub-field could be lost (hence tab_meta_merge).
   metas_in <- purrr::map(tabs, get_meta)
@@ -1736,7 +1762,7 @@ reg_footer_lines <- function(tabs) {
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
 
-  plan <- reg_footer_plan(reg)
+  plan <- reg_test_rows_plan(reg)
   K    <- if (is.null(plan)) 0L else nrow(plan)
   if (K == 0) return(tabs)
   reg$.term     <- test_key_col(reg, "var")

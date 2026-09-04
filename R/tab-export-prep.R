@@ -288,7 +288,8 @@ tab_resolve_tables <- function(tabs, list_method = FALSE, what,
 
 # Build the render-model for ONE resolved table (already compacted / single). See the file header.
 prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
-                           theme_cols, var_names = "both", transposed = FALSE, lang = NULL) {
+                           theme_cols, var_names = "both", transposed = FALSE, lang = NULL,
+                           color_legend = TRUE) {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
     return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
@@ -545,6 +546,11 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
     bold_cols = bold_cols,
     col_var_header = col_var_header,
     subtext = subtext,
+    # WHETHER THIS TABLE GETS A COLOUR LEGEND, decided ONCE: the call's `color_legend` (already
+    # ANDed with `color` by resolve_export_opts()) and whether this table declares a measure at all.
+    # ⚠ the three backends each computed it, and the Excel one had no `color_cols` term -- a divergence
+    # only legend_specs()' own gate was hiding.
+    want_legend = isTRUE(color_legend) && length(color_flags$color_cols) != 0,
     subordinate = subordinate,
     bars = bars,
     # a fallback caption (NA on a crosstab) and a stored one (set_caption()), which takes precedence.
@@ -925,7 +931,8 @@ tab_export_prep <- function(tabs,
     resolved,
     ~ prep_one_table(.x, drop_tab_vars = drop_tab_vars,
                      wrap = wrap, compute = compute, theme_cols = theme_cols,
-                     var_names = var_names, transposed = isTRUE(transpose), lang = lang)
+                     var_names = var_names, transposed = isTRUE(transpose), lang = lang,
+                     color_legend = color_legend)
   )
 
   # Opt-in transpose-at-export, shared by all four exporters (console never transposes). Runs on the
@@ -949,8 +956,9 @@ tab_export_prep <- function(tabs,
   structure(
     list(
       tables = tables,
-      meta = list(backend = backend, theme = theme[1],
-                  color_legend = color_legend, theme_cols = theme_cols,
+      # ⚠ `color_legend` is NOT here: whether a table gets a legend is a PER-TABLE fact and lives on
+      # each `rd` as `want_legend`, so the backends read one answer instead of computing three.
+      meta = list(backend = backend, theme = theme[1], theme_cols = theme_cols,
                   compute = compute)
     ),
     class = "tabxplor_render"

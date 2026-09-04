@@ -561,14 +561,21 @@ reg_model_lines <- function(x, lang = NULL) {
   })
 }
 
+# Does this table carry an aggregated effect-modification test? ONE reader, so the `interaction` row's
+# `default` predicate and the builder below cannot disagree about what "there is one" means.
+#' @keywords internal
+reg_has_interaction <- function(x) {
+  tt <- tryCatch(get_test(x), error = function(e) NULL)
+  !is.null(tt) && nrow(tt) > 0 && any(tt$test %in% reg_interaction_types())
+}
+
 # The AGGREGATED effect-modification test, one footer LINE per model. A pooled test belongs to no
 # single model column, which is the only thing the footer-ROW machinery can key on.
 #' @keywords internal
 reg_interaction_lines <- function(x, lang = NULL) {
-  tt <- get_test(x)
-  if (is.null(tt) || nrow(tt) == 0) return(character(0))
-  it <- tt[tt$test %in% reg_interaction_types(), , drop = FALSE]
-  if (nrow(it) == 0) return(character(0))
+  if (!reg_has_interaction(x)) return(character(0))
+  it   <- get_test(x)
+  it   <- it[it$test %in% reg_interaction_types(), , drop = FALSE]
   meta <- reg_call(x)
   sv   <- if (is.null(meta)) NA_character_ else meta$tab_vars
   with_legend_lang(lang, function(lg) {
@@ -3306,7 +3313,7 @@ reg_finalize <- function(tab, tests, conf_level, var_labels, group_vars, outcome
                          basis = NULL, meta_extra = list()) {
   tab |>
     tab_stamp_inference(conf_level, degf = NULL, basis) |>
-    new_tab(subtext = footer_default_template(meta_extra$subtext), test = tests,
+    new_tab(subtext = meta_extra$subtext, test = tests,
             meta = c(meta_extra[setdiff(names(meta_extra), "subtext")],
                      list(spec = reg_spec(var_labels, outcomes)))) |>
     dplyr::group_by(!!!rlang::syms(group_vars))
@@ -4768,5 +4775,10 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # The model record IS this table's `spec$call` -- "how was this table made", the slot every
   # producer has. ⚠ `conf_level` is deliberately absent from it: the level lives on every COLUMN
   # (get_conf_level() is what consumers read), so a table-wide copy could only ever disagree.
-  set_caption(set_reg_call(res, reg_call_record), caption)
+  res <- set_caption(set_reg_call(res, reg_call_record), caption)
+  # ...and ONLY NOW the footer template: it names what this table can say, and until the line above
+  # ran the table had no model record -- so <model> (and a weighted fit's <weight>, which lives in
+  # that record) would have been pruned from every regression.
+  attr(res, "subtext") <- footer_default_template(res, get_subtext(res))
+  res
 }

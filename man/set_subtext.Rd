@@ -12,7 +12,9 @@ get_subtext(x)
 \arguments{
 \item{x}{A \code{tabxplor_tab}.}
 
-\item{subtext}{A character vector, one element per line, or \code{NULL} to clear.}
+\item{subtext}{A character vector, one element per line, or \code{NULL} to restore the default
+template. (There is no per-table way to print nothing at all: the exporters' \code{subtext =
+FALSE} is the one-off.)}
 }
 \value{
 \code{x}, with its footer template set (\code{set_subtext}) ; the template, as a
@@ -24,18 +26,22 @@ A table's footer text, as a \strong{template}: everything \pkg{tabxplor} generat
 the footer. Re-order them and it re-orders; drop \code{<legend>} and no colour legend is
 generated, in the console too.
 
-A \code{subtext} naming \strong{no} placeholder is simply appended to the default footer --- which is
-what a note has always done, so \code{tab(subtext = "Field: GSS 2000")} is unchanged. Writing one
+A \code{subtext} naming \strong{no} placeholder is simply appended to the template --- which is what a
+note has always done, so \code{tab(subtext = "Field: GSS 2000")} is unchanged. Writing one
 placeholder on a line of its own takes the layout over: only what you name is printed.
 An unknown \code{<...>} is not a placeholder and passes through verbatim (\code{\\<} escapes a
 literal \code{<}).
+
+The template a producer writes names only what \strong{this} table can say: no \code{<weight>} on an
+unweighted table, no \code{<model>} outside a regression. What you read back is therefore what
+prints, and the way to drop a line is to delete it.
 }
 \examples{
 t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
 get_subtext(t)
 
-# your own sentence, with tabxplor's own ladder inside it
-t <- set_subtext(t, c("<weight>", "over-representation: <breaks>", "<stars>"))
+# your own sentence, with tabxplor's own pieces inside it
+t <- set_subtext(t, c("<measure> (<ref>): <breaks>", "<stars>"))
 cat(tab_footer_text(t), sep = "\n")
 }
 \seealso{

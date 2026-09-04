@@ -13,10 +13,12 @@ The design of everything `tabxplor` prints under a table: the colour legend, the
 ```r
 t <- tab(d, x, y, color = "diff", subtext = "Champ : PCS 2020")
 get_subtext(t)
-#> "<weight>" "<model>" "<interaction>" "<legend>" "<stars>" "Champ : PCS 2020"
+#> "<legend>" "<stars>" "Champ : PCS 2020"
 ```
 
 Everything tabxplor generates is a `<placeholder>`; everything a person writes is a line. **The order of the lines is the order of the footer**: re-order them and it re-orders, delete `<legend>` and no legend is generated — in the console too, which no per-call argument can do. Write your own sentence with `<breaks>` in it and the ladder is still generated from the same plan the cells are painted with.
+
+**And it names only what THIS table can say.** There is no `<weight>` above because the table is unweighted, no `<model>` because it is not a regression. `set_subtext()` applies the same rule, so what comes back is always what prints, and dropping a line is deleting it.
 
 What travels **under the whole table + footer block** — a subordinate table, a shape table, a note — is not text and is not in the template. It is triggered by the metadata that holds it, exactly as the test rows are.
 
@@ -46,28 +48,45 @@ Unknown `<…>` is **not** a placeholder: `"<b>bold</b>"`, `"n < 30"`, `"<30 ans
 
 Declared in `FOOTER_BLOCKS` (`R/tab-footer.R`), one row per member of the region. A row with a `token` is **text** and the template places it; a row without one is a **block**, placed by its declared position and triggered by the metadata that holds it. Row order is the default order.
 
-| token                            | kind   | reads                                                                                       | build                     |
+| token                            | kind   | reads                                                                                       | named when                |
 |----------------------------------|--------|---------------------------------------------------------------------------------------------|---------------------------|
-| `<weight>`                       | line   | `meta$spec$vars$wt`; col `basis` `conf_level` `display`                                     | `tab_weight_line()`       |
-| `<model>`                        | line   | `meta$spec$call`                                                                            | `reg_model_lines()`       |
-| `<interaction>`                  | line   | `attr(x, "test")`                                                                           | `reg_interaction_lines()` |
-| `<legend>` `:terse` `:prose`     | line   | col `color` `color_signif` `scale` `ref` `col_var`; `meta$legend_words` `meta$color_breaks` | `legend_streams()`        |
-| `<stars>`                        | line   | col `pvalue`; `options(tabxplor.stars)`                                                     | `tab_stars_legend()`      |
-| `<breaks>` `:M` `:over` `:under` | inline | col `color`; `meta$color_breaks`                                                            | `legend_break_tokens()`   |
-| `<cols>` `:M`                    | inline | col `col_var` `col_group`                                                                   | `tx_name_list()`          |
+| `<weight>`                       | line   | `meta$spec$vars$wt` or `reg_call()$wt`; col `basis` `conf_level` `display`                  | there is a weight         |
+| `<model>`                        | line   | `meta$spec$call`                                                                            | it is a regression        |
+| `<interaction>`                  | line   | `attr(x, "test")`                                                                           | an interaction was tested |
+| `<legend>` `:terse` `:prose`     | line   | col `color` `color_signif` `scale` `ref` `col_var`; `meta$legend_words` `meta$color_breaks` | always                    |
+| `<stars>`                        | line   | col `pvalue` `conf_level`; `options(tabxplor.stars)`                                        | always                    |
+| `<breaks>` `:M` `:over` `:under` | inline | col `color`; `meta$color_breaks`                                                            | —                         |
+| `<measure>` `:M`                 | inline | col `color`; `meta$legend_words`                                                            | —                         |
+| `<ref>` `:M` `:noun`             | inline | col `color` `ref`; `meta$legend_words`                                                      | —                         |
+| `<method>`                       | inline | col `ci_method` `conf_level` `degf`                                                         | —                         |
+| `<cols>` `:M`                    | inline | col `col_var` `col_group`                                                                   | —                         |
 | `<conf>`                         | inline | col `conf_level`                                                                            | —                         |
-| —                                | note   | `meta$assumptions`; `options(tabxplor.shape_table)`                                         | `reg_shape_table()`       |
+| —                                | note   | `meta$assumptions`; `options(tabxplor.shape_table)`                                         | —                         |
 | —                                | tab    | `meta$footer_tabs`                                                                          | —                         |
 
-An **inline** placeholder renders inside a line rather than as one. `<breaks>` and `<cols>` take the table's colour measure when it has a single one; `:M` names it where several compete. `<legend:terse>` / `<legend:prose>` pins the register on the table, which is why `options(tabxplor.legend_style)` needs no per-call argument.
+An **inline** placeholder renders inside a line rather than as one, and is never pruned: it is substitution, not layout. `<breaks>`, `<measure>` and `<ref>` take the table's colour measure when it has a single one; `:M` names it where several compete. `<legend:terse>` / `<legend:prose>` pins the register on the table, which is why `options(tabxplor.legend_style)` needs no per-call argument.
 
-### 2.3 The `reads` column
+**The generated terse legend is expressible in these pieces**, which is what says they are complete:
 
-It is not decoration. It is checked at load — `zzz-fact-keys.R` requires every `meta$…` it names to be a `TAB_ATTRS` row and every column attribute to be a declared `fmt` attribute — and it **generates** the user-facing help: `TAB_ATTRS` says which setter writes each attribute, so `?tabxplor-footer`'s "to change what this says, use…" column is derived rather than restated.
+```r
+set_subtext(t, "<measure> (<ref>): <breaks>")     # identical to <legend:terse>, in English
+```
+
+(`<ref>` carries the preposition, as the bracket does; `<ref:noun>` gives the bare noun a sentence points at. French writes `" : "` round its colon, so the literal above is an English line — that is exactly the kind of thing `set_legend_words()` spares you.)
+
+### 2.3 Two gates, two questions: `reads` and `default`
+
+**`reads` is the RENDER gate.** It is not decoration: it is checked at load — `zzz-fact-keys.R` requires every `meta$…` it names to be a `TAB_ATTRS` row and every column attribute to be a declared `fmt` attribute — and it **generates** the user-facing help, since `TAB_ATTRS` says which setter writes each attribute, so `?tabxplor-footer`'s "to change what this says, use…" column is derived rather than restated. It is what makes a stripped table degrade correctly (§4).
+
+**`default` is the TEMPLATE gate** — a predicate the producers ask before writing a placeholder down. It answers a different question, and the split is what the two columns are for:
+
+> A member built from `meta` is named only where its fact exists; one built from the **columns** is always named — because `set_color()` can colour an uncoloured table afterwards, and a placeholder the producers omit is one nothing brings back.
+
+Hence the safety rule: **a predicate may over-name (the builder then prints nothing) but must never under-name.** And hence where the template is written: at each producer's **tail**, on the finished object. A regression's model record is attached by `set_reg_call()` *after* the table is assembled, so a template computed any earlier prunes `<model>` — and `<weight>` with it, since `tab_reg()` stores the weight in that record and not in `vars`.
 
 Two consequences worth stating, because they are the whole extension story:
 
-- **Adding a placeholder is one row** — a token, a kind, what it reads, its gate, its builder.
+- **Adding a placeholder is one row** — a token, a kind, what it reads, when it is named, its builder.
 - **Changing what an existing one says is changing one of the facts its row names.**
 
 ---
@@ -91,7 +110,7 @@ Two consequences worth stating, because they are the whole extension story:
 
 A `tabxplor_tab` that loses its table attributes keeps printing and colouring, because the `fmt` columns carry everything the cells need. **The footer degrades the same way, and no code makes it do so.** `legend_specs()` reaches the columns through `tab_get_vars()$col_vars_levels`, which is derived entirely from the columns' own `col_var` attribute; every other legend fact — `color`, `scale`, `ref`, `conf_level`, `ci_method`, `basis`, `pvalue` — is a column attribute too.
 
-> A table with no stored template gets the default one, and **each row is gated on what it `reads`**, so a row whose facts are gone produces nothing. A stripped table therefore keeps the column-derived half of its footer — the colour legend and the stars key — and silently drops the table-derived half: `<weight>`, `<model>`, `<interaction>`, the shape table and the subordinate tables.
+> A table with no stored template gets the default one — the **whole** one, `default` gates only what the producers write down — and **each row is then gated on what it `reads`**, so a row whose facts are gone produces nothing. A stripped table therefore keeps the column-derived half of its footer — the colour legend and the stars key — and silently drops the table-derived half: `<weight>`, `<model>`, `<interaction>`, the shape table and the subordinate tables.
 
 That is the gate every row has anyway: no `tryCatch`, no `if (is.null(meta))` branch, no fallback path to maintain. What is genuinely lost is a *customised* template and the user's own lines, which are table-level by nature and unrecoverable by anything.
 
@@ -131,7 +150,7 @@ tabs |> set_legend_words(contrib = "contribution à la variance de l'axe")
 
 tabs |> set_legend_words(contrib = list(          # the full form
   word      = "contribution à la variance de l'axe",
-  ref_word  = "vs la contribution moyenne",
+  ref       = "la contribution moyenne",
   lead_over = "%1$s contribue plus que la moyenne à l'axe, de"))
 ```
 
@@ -139,7 +158,9 @@ Everything else keeps working untouched, because only the word changed: the swat
 
 Two rules keep it safe:
 
-- **A declared whitelist**, `MEASURE_WORD_FIELDS`, checked when the words are set: `word`, `word_long`, `word_std`, `word_long_std`, `word_guar`, `subject`, `ref_word`, `ref_phrase`, `unit_word`, `lead_over`, `lead_under`, `caveat`. ⚠ `ref_word` and `ref_phrase` are two shapes of one thing and are almost always re-stated together: the terse form brackets a compact clause *with its preposition* (`vs la contribution moyenne`), the prose lead points at a bare noun (`la contribution moyenne`). ⚠ **Never** an engine fact (`raw`, `scale`, `sig_source`, `bounds`, `gate_row`) nor a ladder glyph (`break_over`, `threshold_mult`, `break_scale`): a table attribute must never change a number, and an extracted `fmt` column must colour identically on its own.
+- **A declared whitelist**, `MEASURE_WORD_FIELDS`, checked when the words are set: `word`, `word_long`, `word_std`, `word_long_std`, `word_guar`, `subject`, `ref`, `ref_word`, `ref_phrase`, `unit_word`, `lead_over`, `lead_under`, `caveat`. ⚠ **Never** an engine fact (`raw`, `scale`, `sig_source`, `bounds`, `gate_row`) nor a ladder glyph (`break_over`, `threshold_mult`, `break_scale`): a table attribute must never change a number, and an extracted `fmt` column must colour identically on its own.
+- **`ref` is the baseline, once.** It feeds the two shapes a sentence needs — the terse form brackets it *with a preposition tabxplor still translates at render* (`vs la contribution moyenne` / `p. r. à la contribution moyenne`), the prose lead points at the bare noun — so stating it **deletes** the measure's own pair. `ref_word` / `ref_phrase` remain for the case where the two nouns genuinely differ, which is tabxplor's own `contrib`: terse says *vs the mean*, prose says *independence*.
+- ⚠ **A baseline word only exists where the baseline is a CONCEPT.** Every other measure names the reference the table itself shows — a level label, the Total row — so `ref` / `ref_word` / `ref_phrase` are **refused** there rather than stored and ignored (which is what they used to be). Today that means `contrib`; `measure_ref_worded()` is the live list.
 - ⚠ **Words are data, never closures.** A closure in `meta` captures a namespace and breaks `saveRDS()`. A sentence template carries `%1$s` the subject, `%2$s` the reference and `%3$s` the null. ⚠ Only `%1$s` is always there: a line names its baseline in full on its first side and not again on its second, so where the baseline is the measure's own, write it into the sentence rather than interpolate it.
 - ⚠ The invariant is stated as what the list must **not** contain, beside `MEASURES` and not in `zzz-fact-keys.R`: the whitelist is not a subset of the fields `MEASURES` declares (`lead_over` exists only as an override, `word_std` only on a `by_scale` row), so the check is that no engine fact and no ladder glyph is in it.
 
@@ -221,8 +242,8 @@ Keep `<legend>` and re-state the two nouns. Nothing else changes: the swatches, 
 
 ```r
 tabs |>
-  set_legend_words(contrib = list(word     = "contribution à la variance de l'axe",
-                                  ref_word = "vs la contribution moyenne"))
+  set_legend_words(contrib = list(word = "contribution à la variance de l'axe",
+                                  ref  = "la contribution moyenne"))
 ```
 
 ```text
@@ -245,16 +266,14 @@ tabs |>
     lead_over  = "%1$s contribue plus que la moyenne à l'axe, de",  #    the over side's verb
     lead_under = "%1$s contribue moins que la moyenne à l'axe, de", #    the under side's
     unit_word  = "la contribution moyenne",                         # ...and what closes each side
-    # the two the TERSE form uses instead of a lead
-    ref_word   = "vs la contribution moyenne",                      # its bracket, preposition included
-    ref_phrase = "la contribution moyenne"))                        # the noun `%2$s` would name
+    ref        = "la contribution moyenne"))                        # the baseline, for the TERSE form
 ```
 
 The **terse** line, which is what the console prints, uses three of them:
 
 ```text
 contribution a la variance de l'axe           word
- (vs la contribution moyenne)                 ref_word   -- the bracket, preposition included
+ (vs la contribution moyenne)                 ref, bracketed -- the "vs" is tabxplor's, translated
 : x10 x5 x2 x1  x1 x2 x5 x10                  the ladder -- generated, both sides, never re-stated
 ```
 
@@ -275,7 +294,7 @@ Contribution a la variance de l'axe           word, capitalised: it opens the li
 .
 ```
 
-`ref_phrase` does not appear above because these leads name the baseline themselves; it is what `%2$s` would have interpolated.
+`ref` appears twice above because it is one noun in two positions: bracketed after the measure in the terse line, and pointed at bare by a prose lead (`%2$s`, which these leads do not use because they name the baseline themselves). State `ref_word` / `ref_phrase` separately only where the two nouns genuinely differ.
 
 ⚠ A lead template takes `%1$s` the subject, `%2$s` the reference and `%3$s` the null — but **only `%1$s` is always there**: a line names its baseline in full on its first side and not again on its second, so `%2$s` comes back empty there. Where the baseline is the measure's own, write it into the sentence, as above.
 
@@ -284,8 +303,8 @@ Contribution a la variance de l'axe           word, capitalised: it opens the li
 ```r
 gda_summary <- function(tabs, eig = NULL, glossary = character(), var_names = NULL) {
   tabs |>
-    set_legend_words(contrib = list(word     = "contribution à la variance de l'axe",
-                                    ref_word = "vs la contribution moyenne")) |>
+    set_legend_words(contrib = list(word = "contribution à la variance de l'axe",
+                                    ref  = "la contribution moyenne")) |>
     set_subtext(glossary) |>                       # "coord : ...", "cos2 : ..." -- APPENDED,
     set_footer_tabs(list("Valeurs propres" = eig)) #  since they name no placeholder
 }
@@ -323,13 +342,12 @@ Only then: write the sentence yourself and drop tabxplor's pieces into it. Namin
 
 ```r
 tabs |> set_subtext(c(
-  "<weight>",
-  "contrib : contribution à la variance de l'axe, vs la contribution moyenne : <breaks>",
+  "contrib : <measure>, <ref> : <breaks>",
   "coord : coordonnée sur l'axe",
   "<stars>"))
 ```
 
-`<breaks>` is still generated from the plan the cells are painted with, so the ladder cannot drift; what you lose against 9.2 is the terse/prose pair, the publication palettes' direction words and the plot guide. ⚠ Never paste `get_color_breaks()` into prose, and never write html into `subtext` — it reaches a `.md` file and an Excel cell as raw markup.
+Every piece is still generated from the plan the cells are painted with, so nothing can drift: `<breaks>` is the ladder, `<measure>` and `<ref>` are the nouns `set_legend_words()` gave them, `<method>` is the interval. What you lose against 9.2 is the terse/prose pair, the publication palettes' direction words and the plot guide. ⚠ Never paste `get_color_breaks()` into prose, and never write html into `subtext` — it reaches a `.md` file and an Excel cell as raw markup.
 
 ### 9.6 What disappears from the consumer
 
@@ -347,10 +365,12 @@ tabs |> set_subtext(c(
 
 ## 10. For a package building on tabxplor
 
-**The footer's text is `subtext`, and `subtext` is a template `tab()` writes for you.** `get_subtext(x)` shows it; `tab_footer_text(x)` shows what it prints. Re-order the lines and the footer re-orders; delete `<legend>` and none is generated, console included. A `subtext` with no placeholder at all is simply appended to the default, as always.
+**The footer's text is `subtext`, and `subtext` is a template `tab()` writes for you** — naming only what that table can actually say. `get_subtext(x)` shows it; `tab_footer_text(x)` shows what it prints. Re-order the lines and the footer re-orders; delete `<legend>` and none is generated, console included. A `subtext` with no placeholder at all is simply appended to the template, as always, and `set_subtext()` hands the template back so the next edit starts from what prints.
 
-- **Your measure has a different name.** Keep `color = "<measure>"` on your `fmt()` columns, keep `<legend>` in the template, and re-state the words: `set_legend_words(x, contrib = "contribution à la variance de l'axe")`. You get tabxplor's own legend saying your nouns, in every medium and both registers. **This is the preferred route** — do not suppress the legend and write your own.
-- **You need your own sentence.** Write it, and drop tabxplor's pieces into it: `set_subtext(x, c("<weight>", "contrib : … : <breaks>", "<stars>"))`. The ladder is generated, so it cannot drift. ⚠ Never paste `get_color_breaks()` into prose.
+- **Your measure has a different name.** Keep `color = "<measure>"` on your `fmt()` columns, keep `<legend>` in the template, and re-state the words: `set_legend_words(x, contrib = "contribution à la variance de l'axe")`, adding `ref =` for the baseline. You get tabxplor's own legend saying your nouns, in every medium and both registers. **This is the preferred route** — do not suppress the legend and write your own.
+- **You need your own sentence.** Write it, and drop tabxplor's pieces into it: `set_subtext(x, c("contrib : <measure>, <ref> : <breaks>", "<stars>"))`. The pieces are listed in §2.2; every one is generated, so none can drift, and `"<measure> (<ref>): <breaks>"` **is** the generated terse line. ⚠ Never paste `get_color_breaks()` into prose.
+- **You build your tables yourself** (`new_tab()`, not `tab()`), so they name no placeholder until you write one — everything still prints, through the no-template fallback of §4. `set_subtext()` is what gives you a template: pass your own lines and it hands back the placeholders plus them, which is then the document you edit.
+- **A baseline word only exists where the baseline is a concept** (`contrib`). On a measure whose reference is a row of the table — a level, the Total — `ref` / `ref_word` / `ref_phrase` are refused, because there the legend names what the table itself shows.
 - **A table or a note under the whole block.** `set_footer_tabs(x, list("Valeurs propres" = eig))` — a `tabxplor_tab` renders as a table, any other data.frame as a grey note. They are not in the template: carrying them is what prints them.
 - **A subordinate inherits the host's render options.** Do not rely on a span row surviving a `var_names = "rows"` host; name the columns in full.
 - **Your function returns ONE table**, never a list. The subordinate travels inside it, so the caller keeps something it can pipe and filter.

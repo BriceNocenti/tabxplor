@@ -82,3 +82,27 @@ testthat::test_that("a re-stated baseline reaches BOTH registers", {
   testthat::expect_false(grepl("independence", tab_footer_text(t, style = "prose")[[1]],
                                fixed = TRUE))
 })
+
+
+testthat::test_that("`ref` is the ONE baseline noun, and only where a baseline is a concept", {
+  # the common case: one field feeds both shapes, and the preposition stays tabxplor's to translate.
+  t <- set_legend_words(tab(fx_gss(), race, marital, pct = "row", color = "contrib"),
+                        contrib = list(word = "contribution to the axis variance",
+                                       ref  = "the mean contribution"))
+  testthat::expect_match(tab_footer_text(t, style = "terse")[[1]], "(vs the mean contribution)",
+                         fixed = TRUE)
+  testthat::expect_match(tab_footer_text(t, style = "prose")[[1]], "the mean contribution",
+                         fixed = TRUE)
+  # ⚠ it must DELETE the measure's own two shapes, not sit beside them
+  testthat::expect_false(grepl("independence", tab_footer_text(t, style = "prose")[[1]],
+                               fixed = TRUE))
+  testthat::expect_false(grepl("vs the mean:", tab_footer_text(t, style = "terse")[[1]],
+                               fixed = TRUE))
+
+  # ...and it is REFUSED where the legend names the reference the table shows (a level, a Total row):
+  # a word there could only be stored and silently ignored, which is what it used to be.
+  d <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  for (f in c("ref", "ref_word", "ref_phrase"))
+    testthat::expect_error(set_legend_words(d, difference = stats::setNames(list("x"), f)),
+                           "cannot be re-stated")
+})
