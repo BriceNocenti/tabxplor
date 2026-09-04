@@ -38,7 +38,9 @@ Defaults to \code{getOption("tabxplor.print_rules")}. Set to \code{FALSE} if you
 and the colours are the point, or name a palette (\code{"print_emphasis"}) to print in that one.
 \code{"print_marks"} cannot be used here: its marks are cell text, and a print rule can restyle a
 page but not add characters to it. It adds roughly 1.5 KB to a \code{light}/\code{dark} stylesheet and
-6 KB to an \code{"auto"} one.}
+6 KB to an \code{"auto"} one. \code{FALSE} drops the whole block, including the two declarations that are
+not about colour: the one that makes a background fill reach the paper, and the one that stops
+the scrollbox clipping a wide table there.}
 
 \item{...}{Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 (\code{color_type}): the text channel always uses the text palette, and the colour CHANNEL is chosen
@@ -95,6 +97,11 @@ row-variable levels column), \code{.tx-tot} (total columns), \code{.tx-bl}/\code
 \code{.tx-b} (bold), \code{.tx-lbl}/\code{.tx-vname} (a variable name spanning its block), \code{.tx-pill} (a
 background-coloured value), \code{.tx-span} (the variable-name header row), \code{.tx-foot} (the footnote).
 Rows carry \code{.tx-bt}/\code{.tx-bb}/\code{.tx-bb2} (top / bottom / thick-bottom rules).
+
+Each html table is wrapped in a \code{.tx-scrollbox}, which scrolls it sideways rather than let it
+widen the page. Its title stays outside, so it does not scroll away, and the \verb{@media print} block
+lifts the clip (a printer has no scrollbar). To let a table widen the page on screen too:
+\verb{.tx-scrollbox \{ overflow-x: visible; max-width: none; \}}.
 }
 
 \section{The black-and-white publication palettes}{

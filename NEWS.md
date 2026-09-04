@@ -2,6 +2,12 @@
 
 ## New features
 
+* **A wide html table now scrolls instead of widening the page.** `tab_html()` wraps every table in
+  a `.tx-scrollbox`, and `tab_css()` styles it: the table keeps its own width up to the space it has
+  and scrolls sideways past it, in a document, on a pkgdown site, in the RStudio/Positron Viewer and
+  in jamovi alike. Its title stays outside the box, so it does not scroll away, and `@media print`
+  lifts the clip. Opt out with `.tx-scrollbox { overflow-x: visible; max-width: none; }`.
+
 * **`tab_html(cells = )` — write back what `get_data = TRUE` reads.** Hand back the same data.frame
   with some cells edited and each edit is written verbatim into its `<td>`: the cell keeps its
   classes (colour, alignment, borders) and its tooltip, and loses only the decorations that belonged
@@ -10,6 +16,13 @@
   `tab_html(x, cells = tab_html(x, get_data = TRUE))` renders `x` unchanged. This is the supported
   way to splice foreign markup — an input box, a link, a badge — into a tabxplor table, in place of
   parsing its html back out.
+
+## Minor improvements and fixes
+
+* **The weight footer no longer mentions intervals and tests that are not there.** A weighted table
+  showing no confidence interval, no significance star, no test and no significance-gated colour now
+  prints only "Weighted by `<wt>`."; the caveat about what the intervals rest on is kept for the
+  tables that actually have one.
 
 
 # tabxplor 2.0.0

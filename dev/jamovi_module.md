@@ -736,8 +736,16 @@ the iframe's width *is* what we last reported, and the only outside signal is
 
 ### 7.4 Where it lives
 
+⚠ **The scroll box itself is not jamovi's.** `tab_html()` wraps *every* table it renders in a
+`<div class="tx-scrollbox">` (`tx_scrollbox()`, `R/tab-render-html.R`) and `tab_css()` gives it its
+shape — `display:block; width:max-content; max-width:100%; overflow-x:auto`, the trailing air, and
+the `@media print` that lifts the clip. That serves a document, a pkgdown site and the Viewer as
+well as jamovi. What is jamovi's, and **all** that `jmv_results_style()` may restate, is the cap:
+a document box stops at the space it has, and jamovi has no space to read — the panel is sized
+*from* the table. Anything else repeated here would drift from the stylesheet.
+
 `R/jmvtab-export.R`, under `# === SECTION: the jamovi results iframe` — `jmv_results_style()` (the
-one `<style>`), `jmv_results_scrollbox()` (wraps a rendered table), `jmv_results_note()` (the one
+one `<style>`: the Html un-pin, the box's pixel cap, the prose cap), `jmv_results_note()` (the one
 shape a non-table fragment takes) and `jmv_results_content()`, **the boundary every
 `html_table$setContent()` call goes through**: the style once, then the fragments, empties dropped.
 No backend hand-writes a `<div>`; three gates in `tests/testthat/test-jmvtab-export.R` keep it that

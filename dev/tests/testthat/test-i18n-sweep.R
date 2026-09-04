@@ -53,7 +53,10 @@ z16_footers <- c(
   n       = "Weighted by %s; confidence intervals and tests use the unweighted sample size.",
   weights = "Weighted by %s; confidence intervals and tests account for the weighting.",
   partial = paste("Design-based (survey) estimates; this table's design variance could not be",
-                  "computed, so its intervals account for the weighting only."))
+                  "computed, so its intervals account for the weighting only."),
+  # v2.0.1 phase 4: the SHORT half of each, printed where the table shows no inference at all
+  short_n   = "Weighted by %s.",
+  short_svy = "Design-based (survey): weighted estimates.")
 
 
 test_that("the per-basis weight lines stay English under the ambient en locale", {
@@ -196,7 +199,10 @@ z16_footers <- c(
   n       = "Weighted by %s; confidence intervals and tests use the unweighted sample size.",
   weights = "Weighted by %s; confidence intervals and tests account for the weighting.",
   partial = paste("Design-based (survey) estimates; this table's design variance could not be",
-                  "computed, so its intervals account for the weighting only."))
+                  "computed, so its intervals account for the weighting only."),
+  # v2.0.1 phase 4: the SHORT half of each, printed where the table shows no inference at all
+  short_n   = "Weighted by %s.",
+  short_svy = "Design-based (survey): weighted estimates.")
 
 
 # Phase 18z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They

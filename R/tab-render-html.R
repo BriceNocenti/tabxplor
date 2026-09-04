@@ -14,8 +14,10 @@
 #     a <div> sibling by default -- the only shape that cannot size the table -- a real <caption>
 #     under bookdown, which numbers tables by scanning for one, and nothing at all under Quarto when
 #     the cell already wrote `tbl-cap`. The markup a host reads is not a style choice.
-#   - EVERY <table> OPENS THROUGH tx_table_open(), and what this file hands back must OPEN AND CLOSE
-#     WITH A TAG: two things Quarto needs, stated at those two functions.
+#   - EVERY <table> OPENS THROUGH tx_table_open() AND IS WRAPPED BY tx_scrollbox(), and what this
+#     file hands back must OPEN AND CLOSE WITH A TAG: three things stated at those functions. The
+#     box is what makes a table too wide for its host scroll instead of widening the page; its
+#     title is emitted outside it, so it stays put while the table moves.
 #   - The <style> is hoisted ONCE by tab_kable_join(). It works inside jamovi: the results view
 #     injects our html through jQuery .html(), which applies <style> nodes, and has no sanitizer on
 #     that path (what jamovi ignores is htmlDependency, not <style>).
@@ -101,6 +103,15 @@ render_kable_html <- function(rd, meta,
 tx_table_open <- function(class) {
   paste0('<table class="', class, '" data-quarto-disable-processing="true">')
 }
+
+# THE ONE PLACE A <table> IS WRAPPED, and every one of ours is: a table too wide for the space it
+# has must SCROLL, not widen the document around it. The box is what scrolls -- `overflow-x` on the
+# <table> itself would need `display:block`, which costs the table its shrink-to-fit width. Idle
+# where the table fits, so there is nothing to decide at render time; R/tab-css.R has the rule.
+# ⚠ THE TITLE STAYS OUTSIDE. A caption that scrolls away with the table it names is not a caption --
+# so the `<div class="tabxplor-caption">` sibling is emitted BEFORE this call, never inside it. The
+# bookdown arm is the exception it cannot be: there the title IS a <caption> child of the <table>.
+tx_scrollbox <- function(html) paste0('<div class="tx-scrollbox">', html, '</div>')
 
 # WHO OWNS THE TABLE'S TITLE. The one host probe this file makes, answered from the ecosystem's own
 # flags through tx_knitr_opt(), which is NULL outside a render -- so the Viewer, tab_export(file =)
@@ -494,11 +505,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
   paste0(
     cap_div,
-    tx_table_open(tbl_class), cap_el,
-    '<thead>', span_thead, thead, unit_thead, '</thead>',
-    '<tbody>', body, '</tbody>',
-    tfoot,
-    '</table>'
+    tx_scrollbox(paste0(
+      tx_table_open(tbl_class), cap_el,
+      '<thead>', span_thead, thead, unit_thead, '</thead>',
+      '<tbody>', body, '</tbody>',
+      tfoot,
+      '</table>'
+    ))
   )
 }
 
@@ -534,8 +547,8 @@ shape_html_table <- function(tab) {
     paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
            paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
   # `tx-shape`: a note under the table, not a second table -- one step smaller and in the aside ink.
-  paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
-         '<tbody>', body, '</tbody>', tfoot, '</table>')
+  tx_scrollbox(paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
+                      '<tbody>', body, '</tbody>', tfoot, '</table>'))
 }
 
 
@@ -548,8 +561,8 @@ render_html_degrade <- function(tab) {
   cols <- lapply(tab, function(col) paste0('<td>', tx_html_escape(as.character(col)), '</td>'))
   row_inner <- if (length(cols)) do.call(paste0, cols) else rep("", nrow(tab))
   body <- paste0('<tr>', row_inner, '</tr>', collapse = "\n")
-  paste0(tx_table_open("tabxplor-tab"), '<thead>', thead,
-         '</thead><tbody>', body, '</tbody></table>')
+  tx_scrollbox(paste0(tx_table_open("tabxplor-tab"), '<thead>', thead,
+                      '</thead><tbody>', body, '</tbody></table>'))
 }
 
 
@@ -565,10 +578,10 @@ render_html_degrade <- function(tab) {
 # closing `:::` of the cell. Every part here already starts `<style>`, `<div ` or `<table `; keep it
 # that way, and add nothing before them. Asserted in test-tab-render-html.R.
 tab_kable_join <- function(parts, css = "", theme = NULL) {
-  # ⚠ NO <br> BETWEEN THE PARTS ANY MORE: each part ends in a `.tabxplor-tab`, which now carries one
-  # line of air below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism
-  # instead of two -- a <br> as well would have doubled the space between a table and its own shape
-  # table, which reads as a note under it.
+  # ⚠ NO <br> BETWEEN THE PARTS: each part ends in a `.tx-scrollbox`, which carries one line of air
+  # below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism instead of two
+  # -- a <br> as well would have doubled the space between a table and its own shape table, which
+  # reads as a note under it.
   body <- paste(unlist(parts), collapse = "\n")
   out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
   out <- structure(out, format = "html", class = c("tabxplor_kable", "knitr_kable"))

@@ -905,13 +905,16 @@ testthat::test_that("the jamovi results content carries the width chrome, once, 
   # `.jmv-results-html{width:500px}`, so a table wider than that is reported at the app's 620 px floor
   # and clipped by the iframe. Un-pinning it is what makes the panel size itself from the TABLE.
   # See dev/jamovi_results_width.md.
-  out <- jmv_results_content("", jmv_results_scrollbox("<table></table>"))
+  # ⚠ the BOX is tab_html()'s, for every host (tab_css() shapes it); jamovi restates only the cap.
+  out <- jmv_results_content("", '<div class="tx-scrollbox"><table></table></div>')
   testthat::expect_match(out, "^<style>", fixed = FALSE)                     # chrome first
   testthat::expect_match(out, ".jmv-results-html{width:max-content;}", fixed = TRUE)
   testthat::expect_identical(lengths(regmatches(out, gregexpr("<style>", out, fixed = TRUE))), 1L)
   testthat::expect_match(out, "tx-scrollbox", fixed = TRUE)
   # the box hugs the table and is capped only by the runaway guard
-  testthat::expect_match(out, "width:max-content;max-width:4000px;overflow-x:auto;", fixed = TRUE)
+  testthat::expect_match(out, ".tx-scrollbox{max-width:4000px;}", fixed = TRUE)
+  # and jamovi says nothing the stylesheet already says, or the two would drift
+  testthat::expect_no_match(jmv_results_style(), "overflow", fixed = TRUE)
 
   # empty / NULL fragments drop out, so a caller passes its status line unconditionally
   testthat::expect_identical(jmv_results_content(NULL, "", "<b>x</b>"),
@@ -952,7 +955,7 @@ testthat::test_that("a table title cannot size a shrink-to-fit container", {
   # `.tabxplor-caption` is a block sibling of the <table>; inside jamovi's max-content scroll box its
   # own max-content (the whole title on one line) would drive the width. Same idiom as `.tx-foot`.
   css <- tab_css()
-  testthat::expect_match(css, "\\.tabxplor-caption\\{[^}]*width:0;min-width:100%;\\}")
+  testthat::expect_match(css, "\\.tabxplor-caption\\{[^}]*width:0;min-width:100%;")
 })
 
 

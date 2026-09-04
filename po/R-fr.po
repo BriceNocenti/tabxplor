@@ -579,6 +579,20 @@ msgstr ""
 "Pondéré par %s ; les intervalles de confiance et les tests utilisent "
 "l'effectif non pondéré."
 
+# Phase 4 (2.0.1) -- the SHORT half of each weighted footer sentence, used when the table shows no
+# interval, no star, no test and no significance-gated colour: there is then nothing for the long
+# sentence to caveat.
+#: fmt_class.R:6790
+msgid "Design-based (survey): weighted estimates."
+msgstr ""
+"Estimations pondérées tenant compte du plan d'échantillonnage (survey-"
+"design)."
+
+#: fmt_class.R:6791
+#, c-format
+msgid "Weighted by %s."
+msgstr "Pondéré par %s."
+
 #: jmvtab.b.R:111
 msgid "Ensemble"
 msgstr "Ensemble"
@@ -1922,12 +1936,6 @@ msgstr ""
 
 #~ msgid "design not supported"
 #~ msgstr "plan non pris en charge"
-
-# Phase 16d -- colour-legend / footer strings (English wired via gettext; .mo recompiled in the
-# dedicated French-translation phase). FR for the stars legend + weighted footer from the roadmap.
-#, c-format
-#~ msgid "Weighted by %s."
-#~ msgstr "Pondéré par %s."
 
 #~ msgid "Brant PO test"
 #~ msgstr "Test PO de Brant"

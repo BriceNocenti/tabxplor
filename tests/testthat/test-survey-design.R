@@ -108,13 +108,21 @@ cramer_v <- function(M) {
 test_that("D7/D8 the footer says 'survey design', and tab_reg emits a weight line at all", {
   b   <- svy_fixture(n = 1000)
   des <- survey::svydesign(~psu, weights = ~w, data = b)
-  tt  <- suppressMessages(tab(des, x, y, pct = "row"))
+  tt  <- suppressMessages(tab(des, x, y, pct = "row", test = TRUE))
   line <- tabxplor:::tab_weight_line(tt, lang = "en")
   expect_true(!is.null(line))
   expect_false(grepl(".svy_weights", line, fixed = TRUE))
   # z14-ii replaced z14-i's placeholder ("Weighted by the survey design.") by ruling Q7's sentence,
   # now that the intervals account for the design too (test-survey-variance.R pins the wording).
   expect_match(line, "sample design")
+
+  # ...and the SHORT half of it where the table shows no interval, star, test or gated colour:
+  # the caveat has nothing to qualify there (v2.0.1 phase 4).
+  plain <- suppressMessages(tab(des, x, y, pct = "row"))
+  expect_false(tabxplor:::tab_shows_inference(plain))
+  expect_equal(tabxplor:::tab_weight_line(plain, lang = "en"),
+               "Design-based (survey): weighted estimates.")
+  expect_false(grepl(".svy_weights", tabxplor:::tab_weight_line(plain, lang = "en"), fixed = TRUE))
 
   tr <- suppressMessages(tab_reg(des, outcome = "y", predictors = "x", family = "binomial"))
   line_reg <- tabxplor:::tab_weight_line(tr, lang = "en")

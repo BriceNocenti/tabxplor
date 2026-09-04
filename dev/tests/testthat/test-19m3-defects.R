@@ -33,8 +33,8 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   # "Valid fields" abort and ?tab's generated section).
   testthat::expect_identical(
     tabxplor:::DISPLAY_USER_FIELDS,
-    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or", "ctr", "var",
-      "sd", "cv", "resid", "obs", "coef", "gap"))
+    c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or", "odds", "ctr",
+      "var", "sd", "cv", "resid", "obs", "coef", "gap"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_BARE_TOKENS,
     c("pct", "n", "wn", "mean", "est", "base", "diff", "ratio", "ci", "moe", "or"))
@@ -52,10 +52,11 @@ testthat::test_that("the derived vocabularies reproduce what they replaced", {
   testthat::expect_identical(
     tabxplor:::DISPLAY_TOKEN_GEOMETRY,
     c(pct = "level", n = "level", wn = "level", mean = "level", base = "level",
-      diff = "difference", ratio = "ratio", or = "ratio", sd = "level", n_range = "level"))
+      diff = "difference", ratio = "ratio", or = "ratio", odds = "ratio", sd = "level",
+      n_range = "level"))
   testthat::expect_identical(
     tabxplor:::DISPLAY_COMPARISON,
-    c(diff = "difference", ratio = "ratio", or = "odds_ratio"))
+    c(diff = "difference", ratio = "ratio", or = "odds_ratio", odds = "odds_ratio"))
 })
 
 testthat::test_that("the build-time guard ties get_num()/set_num() to the table, both ways", {

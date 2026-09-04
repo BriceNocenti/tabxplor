@@ -534,3 +534,56 @@ testthat::test_that("get_test() is exported and reads the tests off a built tabl
   testthat::expect_true(all(c("var", "col", "test", "statistic", "pvalue") %in% names(none)))
   testthat::expect_null(get_test(tibble::tibble(a = 1)))
 })
+
+
+# === Phase 25: meta$footer_tabs -- subordinate tables ============================================
+# The CONTRACT is "one table renders as several, in every medium": a producer attaches a fact that
+# belongs to the table without being a row of it, and no exporter needs to know what it holds.
+# *Silent failure guarded: the block renders in the console the author checked and in no export.*
+
+testthat::test_that("set_footer_tabs() attaches, names caption, and survives a dplyr verb", {
+  main <- tab(fx_gss(), race, marital, pct = "row")
+  side <- tab(fx_gss(), race)
+
+  testthat::expect_null(get_footer_tabs(main))
+  x <- set_footer_tabs(main, list("Base" = side))
+  testthat::expect_length(get_footer_tabs(x), 1L)
+  # a NAME is the subordinate table's caption -- the mechanism that already exists
+  testthat::expect_identical(get_caption(get_footer_tabs(x)[[1]]), "Base")
+  # a bare table is accepted, and nothing is captioned
+  testthat::expect_null(get_caption(get_footer_tabs(set_footer_tabs(main, side))[[1]]))
+  # it rides `meta`, so every dplyr verb carries it (tab_attrs)
+  testthat::expect_length(get_footer_tabs(dplyr::mutate(x, dummy = 1L)), 1L)
+  testthat::expect_null(get_footer_tabs(set_footer_tabs(x, NULL)))
+  testthat::expect_error(set_footer_tabs(main, "not a table"), "list of tables")
+})
+
+
+testthat::test_that("a footer table renders under its host in all four media", {
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
+                          list("Base" = tab(fx_gss(), race)))
+
+  # console: a second grid, separated by a blank line
+  txt <- print(main, get_text = TRUE)
+  testthat::expect_gte(sum(grepl("A tabxplor tab", txt)), 2L)
+
+  # markdown: a second pipe table, carrying its caption line
+  md <- tab_md(main, css = FALSE, print = FALSE)
+  testthat::expect_true(grepl(": Base", md, fixed = TRUE))
+
+  # html: two <table> elements from one call
+  h <- tab_html(main)
+  testthat::expect_identical(lengths(regmatches(h, gregexpr("<table", h, fixed = TRUE))), 2L)
+})
+
+
+testthat::test_that("a footer table's own footer tables are never rendered", {
+  side  <- tab(fx_gss(), race)
+  deep  <- set_footer_tabs(side, list(side))
+  main  <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"), list(deep))
+
+  testthat::expect_identical(
+    lengths(regmatches(tab_html(main), gregexpr("<table", tab_html(main), fixed = TRUE))), 2L)
+  testthat::expect_identical(
+    sum(grepl("A tabxplor tab", print(main, get_text = TRUE))), 2L)
+})

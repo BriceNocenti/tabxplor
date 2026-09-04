@@ -6743,9 +6743,37 @@ tab_stars_legend <- function(x, lang = NULL, theme = NULL) {
   })
 }
 
+# IS THERE ANY INFERENCE ON THIS TABLE -- an interval, a star, a test, or a colour that only paints
+# what is significant? Read from the COLUMNS, so it answers for the table as rendered, and read here
+# rather than threaded down from tab_export_prep()'s `roles` (which four callers of rd_footer() would
+# have to carry). The one reader is tab_weight_line(): a caveat about what the intervals rest on has
+# nothing to say where the reader can see no interval.
+# ⚠ DISPLAYED, not merely computed: `ci` and `moe` are two tokens over one stored field, and a colour
+# counts only when its policy actually gates on significance (`color_signif = "ignore"` does not).
+tab_shows_inference <- function(x) {
+  cols <- purrr::keep(x, is_fmt)
+  if (length(cols) == 0) return(FALSE)
+  shows_ci <- function(cl) {
+    d <- get_display(cl)
+    any(fmt_display_shows(d, "ci")) || any(fmt_display_shows(d, "moe"))
+  }
+  if (any(vapply(cols, shows_ci, logical(1)))) return(TRUE)
+  # the stars gate, said exactly as tab_stars_legend() says it
+  starred <- purrr::keep(cols, fmt_stars_applicable)
+  if (any(vapply(starred, function(cl) any(nzchar(get_stars(cl))), logical(1)))) return(TRUE)
+  sig <- get_color_signif(cols) %in% c("grey_non_signif", "guaranteed_effect") &
+    !get_color(cols) %in% c("", "no") & !is.na(get_color(cols))
+  if (any(sig)) return(TRUE)
+  tt <- get_test(x)
+  !is.null(tt) && nrow(tt) > 0 && any(!is.na(tt$pvalue))
+}
+
 # the weight footer line, shown FIRST when the table was built with a weight (NULL when unweighted).
-# ONE sentence per INFERENCE BASIS, generated from the stored basis -- so the claim cannot outlive the
-# computation, and a weighted estimate on a raw-n interval (the DEFAULT) is stated, not silent.
+# ONE sentence per INFERENCE BASIS, generated from the stored basis -- so the claim cannot outlive
+# the computation, and a weighted estimate on a raw-n interval (the DEFAULT) is stated, not silent.
+# ⚠ EACH BASIS HAS TWO FORMS and tab_shows_inference() picks, because that caveat only has a subject
+# where an interval, a star or a test is on the page. The long form warns about what they rest on;
+# the short one says the only thing left to say, that the table is weighted.
 tab_weight_line <- function(x, lang = NULL) {
   wt <- get_vars_attr(x)$wt
   if (is.null(wt) || length(wt) == 0L || is.na(wt) || !nzchar(wt))
@@ -6759,16 +6787,25 @@ tab_weight_line <- function(x, lang = NULL) {
   # only fires when a design table's stored inference was lost -> drop the line (missing-metadata
   # contract), never invent a claim about the intervals.
   if (identical(wt, svy_wt_col) && !basis %in% c("design", "design_partial")) return(NULL)
-  with_legend_lang(lang, function(lg) enc2utf8(switch(
-    basis,
-    "design" = gettext(
-      "Design-based (survey): weighted estimates, intervals and tests account for the sample design."),
-    "design_partial" = gettext(
-      "Design-based (survey) estimates; this table's design variance could not be computed, so its intervals account for the weighting only."),
-    "weights" = gettextf(
-      "Weighted by %s; confidence intervals and tests account for the weighting.", wt),
-    gettextf("Weighted by %s; confidence intervals and tests use the unweighted sample size.", wt)
-  )))
+  infer <- isTRUE(tryCatch(tab_shows_inference(x), error = function(e) TRUE))
+  with_legend_lang(lang, function(lg) enc2utf8(
+    if (!infer) switch(
+      basis,
+      "design"         = ,
+      "design_partial" = gettext("Design-based (survey): weighted estimates."),
+      gettextf("Weighted by %s.", wt)
+    )
+    else switch(
+      basis,
+      "design" = gettext(
+        "Design-based (survey): weighted estimates, intervals and tests account for the sample design."),
+      "design_partial" = gettext(
+        "Design-based (survey) estimates; this table's design variance could not be computed, so its intervals account for the weighting only."),
+      "weights" = gettextf(
+        "Weighted by %s; confidence intervals and tests account for the weighting.", wt),
+      gettextf("Weighted by %s; confidence intervals and tests use the unweighted sample size.", wt)
+    )
+  ))
 }
 
 # the level -> palette-slot mapping lives with the break scales (mk_color_scale() precomputes

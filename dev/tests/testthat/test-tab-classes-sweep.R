@@ -115,7 +115,8 @@ test_that("tab_weight_line() reads the STORED basis, never the .svy_weights colu
   skip_if_no_gettext()
   withr::local_options(list(tabxplor.lang = "en"))
   g <- fx_gss()[!is.na(fx_gss()$tvhours) & fx_gss()$tvhours > 0, ]
-  t <- tab(g, marital, race, wt = tvhours)
+  # `test = TRUE`: v2.0.1 phase 4 keeps the caveat for the tables that show an inference at all
+  t <- tab(g, marital, race, wt = tvhours, test = TRUE)
   expect_match(tab_weight_line(t), "unweighted sample size")           # basis "n" = the default
   # forge the internal design weight name with NO stored inference: the line is DROPPED, the internal
   # name is never printed, and no claim about the intervals is invented.
@@ -475,8 +476,8 @@ test_that("a >=2 row_var table keeps meta$inference (the footer cannot invert)",
   skip_if_no_gettext()
   d <- fx_gss()[!is.na(fx_gss()$tvhours) & fx_gss()$tvhours > 0, ]
   withr::local_options(list(tabxplor.design_effect = TRUE, tabxplor.lang = "en"))
-  one <- tab(d, marital, race, wt = tvhours, pct = "row")
-  two <- tab(d, c(marital, relig), race, wt = tvhours, pct = "row")
+  one <- tab(d, marital, race, wt = tvhours, pct = "row", test = TRUE)
+  two <- tab(d, c(marital, relig), race, wt = tvhours, pct = "row", test = TRUE)
   expect_identical(tabxplor:::tab_inference_basis(one), "weights")   # non-vacuous
   expect_identical(tabxplor:::tab_inference_basis(two), "weights")
   # the sentence the merged table prints must be the one the numbers earned

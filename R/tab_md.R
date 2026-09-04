@@ -111,7 +111,9 @@ tab_md <- function(tabs,
   compute <- "refs"
   if (bold_references) compute <- c(compute, "bold")
   if (color) compute <- c(compute, "colors")
-  prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+  # a table carrying subordinate tables (meta$footer_tabs) enters as the LIST it means, so the same
+  # list path renders them under it -- one pipe table after another (tx_with_footer_tabs).
+  prep <- tab_export_prep(tx_with_footer_tabs(tabs), backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
                           what = "tab_md()")

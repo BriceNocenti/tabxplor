@@ -306,7 +306,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. They are not a fifth backend: `tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders them under it in all four media, a named one captioned by its name, and a subordinate table's own are never rendered. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content.** A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone; a *variable* name is written vertically only where the rotation actually saves width — the names that cannot turn, a one-row block like `Constant`, set the floor every other name is weighed against, and a rotated one wraps to its block's own height. That decision is one prep fact both media read. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
@@ -542,6 +542,109 @@ voids rather than special-cased at render time.
 **Watch the `%`**: a `doc =` string reaches the Rd through `@eval`, where a bare `%` comes out
 double-escaped and `test-non-ascii.R` catches it. Say "the percentage is 1", not "100%".
 
+
+### v2.0.1 — Phase 2 — l'italique de la légende **DONE**
+
+Une ligne, `.tabxplor-caption{font-style:italic}`, ajoutée à `tab_css()` (`R/tab-css.R`). Elle
+vivait depuis des années dans le `style.css` des cours, qui la restatait sous chaque document : un
+sélecteur du domaine de tabxplor écrit ailleurs que dans tabxplor. La migration Quarto de
+`formations_stat` (phase 1b) supprime cette feuille de style, et c'est ce qui a rendu la question
+visible.
+
+**Pourquoi c'est un défaut et pas une option.** Le titre d'un tableau est une *légende*, pas un
+titre de section : il nomme le tableau au lieu d'ouvrir une partie. Sur une page où un titre est
+déjà gras, l'italique est ce qui dit la différence au premier coup d'œil — et le gras et les 110 %
+étaient déjà là.
+
+Suite de tests verte ; `_snaps/golden.md` accepté (le seul instantané qui contient la feuille).
+
+### v2.0.1 — Phase 3 — l'air au-dessus d'une légende **DONE**
+
+Deux déclarations ajoutées à la même règle : `.tabxplor-caption{margin-top:1.2em;margin-bottom:0}`
+(`R/tab-css.R`). Le titre d'un tableau était collé à la ligne qui le précède et se lisait comme sa
+suite.
+
+**Pourquoi ici et pas dans la feuille du document.** Une légende ouvre un tableau et lui appartient :
+l'air qui sépare le couple du paragraphe au-dessus est celui du **tableau**, dans tous les médiums —
+un document, un site pkgdown, jamovi. Un `margin-bottom` nul dit l'autre moitié de la même chose :
+l'espace va au-dessus de la paire, jamais entre la légende et le tableau qu'elle nomme.
+
+Suite de tests verte (4 651) ; `_snaps/golden.md` accepté — 16 écarts, tous la même ligne.
+
+### v2.0.1 — Phase 4 — la scrollbox horizontale **DONE**
+
+Demandé par `formations_stat` (phase 1p, constat C14) : 43 des 221 tableaux d'un corpus de cours ont
+huit colonnes ou plus, et **aucune règle `overflow` ne les enveloppait** sous Quarto ni dans le
+Viewer — un tableau trop large élargissait le document au lieu de défiler. La boîte existait
+pourtant, trois fois et ailleurs : chez jamovi (`jmv_results_scrollbox()`), chez pkgdown
+(`main table{display:block;overflow:auto}`, une règle de l'hôte que `tab_css()` se contentait de
+compenser), nulle part ailleurs.
+
+**Un seul balisage, une seule règle, quatre hôtes.** `tx_scrollbox()` (R/tab-render-html.R) enveloppe
+les trois producteurs de `<table class="tabxplor-tab">` — le moteur, la table de forme, la sortie
+dégradée — et `tab_css()` porte `display:block; width:max-content; max-width:100%; overflow-x:auto;
+overscroll-behavior-x:contain`. `jmv_results_scrollbox()` disparaît ; `jmv_results_style()` ne
+restate plus que le plafond en pixels, et la géométrie rendue dans jamovi est inchangée. Gain
+collatéral : `jmvtabreg.b.R` n'enveloppait rien, les tableaux de régression jamovi gagnent la boîte.
+
+**Trois points ne se devinent pas.** (1) `width:max-content` **avec** `max-width:100%` : la boîte
+épouse un tableau étroit et se plafonne à la place disponible pour un large, ce qui est ce qui fait
+déborder le contenu. (2) L'air passe sur la boîte (`TX_TAIL_SPACE`) et la table rend le sien :
+`overflow-x` crée un contexte de formatage, donc la marge de la table se serait retrouvée **au-dessus**
+de la barre de défilement. La variante jamovi (`:last-child`) n'avait de sens que pour une boîte
+unique autour de tableaux empilés. (3) `.tx-scrollbox>.tabxplor-tab{display:table;overflow:visible}`
+est **un reset d'hôte** — il neutralise la règle pkgdown (0,2,0 contre 0,0,2) au lieu de la
+compenser, et sert tout site pkgdown, pas seulement le nôtre.
+
+⚠ **Le titre reste dehors** : un `<div class="tabxplor-caption">` qui défilerait avec sa table n'est
+plus un titre. ⚠ Sur papier la boîte ne doit pas rogner — une imprimante n'a pas de barre de
+défilement — et la déclaration écrit `overflow`, pas `overflow-x` : un `overflow-y:auto` calculé
+reforce `overflow-x` à `auto`. Elle vit dans `tx_print_block()`, à côté de `print-color-adjust` :
+**une feuille n'a qu'un seul bloc `@media print`**, et un second, écrit dans `static`, cassait deux
+contrats mesurés — `print_rules = FALSE` n'émet aucun `@media print`, et `test-tab-palettes-sweep.R`
+lit la feuille « jusqu'au premier `@media print` ».
+
+**Le pied de pondération dit désormais ce qu'il peut tenir.** « Weighted by w ; confidence intervals
+and tests use the unweighted sample size. » s'imprimait sous *tout* tableau pondéré, y compris ceux
+qui ne montrent ni intervalle, ni étoile, ni test, ni couleur conditionnée par la significativité
+(155 fois dans le corpus des cours). `tab_shows_inference()` (R/fmt_class.R) lit ces quatre choses
+sur les colonnes — un `ci` **affiché**, jamais seulement calculé, et `color_signif != "ignore"` —
+et chaque base d'inférence gagne sa forme courte : « Weighted by w. » / « Design-based (survey):
+weighted estimates. » Deux msgid, `po/R-fr.po` + `.mo` recompilé (325 traduits).
+
+Suites vertes : la livrée (**4 665**) et celle de `dev/tests/` (**4 892**). `_snaps/golden.md`
+accepté — 16 fois la règle nouvelle, plus une ligne de pied sur `n_mean_w` ; `_snaps/tab-render-html.md`
+accepté — le `<div>` et rien d'autre. Trois assertions de `dev/tests/` étaient **périmées avant cette
+phase** et sont remises à jour au passage : l'inventaire des jetons d'affichage, qui ignorait `odds`
+(phase 1), et le motif du `.tabxplor-caption`, qui exigeait que `min-width:100%` ferme la règle alors
+que la phase 3 lui a ajouté une marge.
+
+### v2.0.1 — Phase 5 — un tableau subordonné (`meta$footer_tabs`) **DONE**
+
+Demandé par `ggfacto` (phase 1u de `formations_stat`) : un résumé d'analyse géométrique doit porter le
+tableau des valeurs propres **sous** celui des axes, dans les quatre médias, sans que la fonction rende
+une liste — l'appelant veut un `tab` qu'il peut piper et filtrer.
+
+**Rien de neuf à rendre : une expansion.** `set_footer_tabs(x, tabs)` / `get_footer_tabs(x)` écrivent
+et lisent `meta$footer_tabs`, et `tx_with_footer_tabs()` rend aux exportateurs **la liste que la table
+veut dire**. Le chemin `list_method = TRUE` fait donc tout le reste, déjà : css une fois, thème,
+`subtext`, caption sur la première table, une pipe table par tableau en md, un `<table>` par tableau en
+html, une feuille par tableau en Excel. Trois lignes d'appel (`tab_md()`, `tab_html()`, `tab_xl()`) et
+une boucle dans `print.tabxplor_tab()`.
+
+⚠ **Ce n'est pas la table de forme sous un autre nom, et les deux restent.** Une table de forme
+(`meta$assumptions`, `reg_shape_table()`) est une **note** — colonnes de caractères, encre d'aparté,
+pipe table en console délibérément —, d'où son émetteur écrit à la main par médium ; un footer tab est
+un **tableau** de cellules `fmt`, avec ses couleurs et sa feuille Excel, et n'a donc rien à écrire à la
+main. `?new_tab` énonce la différence.
+
+⚠ **Le champ est retiré de la copie transmise**, ce qui interdit la récursion sans garde à maintenir :
+les footer tabs d'un footer tab ne sont jamais rendus. Et **un nom est un titre** — `list("Base" = t)`
+passe par `set_caption()`, le mécanisme qui existe déjà, plutôt que d'inventer un second titrage ; un
+tableau qui porte déjà un titre le garde.
+
+Suite livrée verte : **4 677** (4 665 avant, 12 assertions neuves dans `test-tab-classes.R`). Aucun
+snapshot touché : la nouveauté est inerte sur une table qui ne porte pas le champ.
 
 #### Phase xx — jamovi 2.0.0 release
 

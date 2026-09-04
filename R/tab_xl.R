@@ -196,6 +196,7 @@ tab_xl <-
       xl_finish(function(p) xlb_write_xlsx(tibble::as_tibble(tabs), p), path, replace, open)
       return(invisible(tabs_base))
     }
+    tabs <- tx_with_footer_tabs(tabs)   # subordinate tables become sheets/blocks of their own
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
     # transpose is a render-model flip AFTER materialise (tx_transpose_render), so a transposed `tab`

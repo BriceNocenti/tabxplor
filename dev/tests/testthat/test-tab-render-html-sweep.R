@@ -228,7 +228,11 @@ testthat::test_that("the footnote does not SIZE the table", {
   # to pin one). Match a SIZING width only -- at the start of a declaration, so `border-top-width` and
   # friends don't count. The tx-foot pair + the tooltip/popover caps are all that may remain.
   widths <- unlist(regmatches(css, gregexpr("(?<=[;{])(min-|max-)?width:[^;}]*", css, perl = TRUE)))
-  testthat::expect_setequal(widths, c("width:0", "min-width:100%", "max-width:none", "max-width:none"))
+  # the scrollbox pair is a SIZING width and belongs here: the box hugs the table up to the space
+  # it has, which is what makes the content overflow and the bar appear.
+  testthat::expect_setequal(widths, c("width:max-content", "max-width:100%",
+                                      "width:0", "min-width:100%",
+                                      "max-width:none", "max-width:none", "max-width:none"))
 })
 
 

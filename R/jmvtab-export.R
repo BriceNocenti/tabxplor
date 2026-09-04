@@ -358,8 +358,7 @@ jmv_backend_render_html <- function(self, tabs) {
     wrap_rows = self$options$wrap_rows,
     wrap_cols = self$options$wrap_cols,
     theme     = jmv_backend_theme(self)
-  ) |>
-    jmv_results_scrollbox()
+  )
 }
 
 
@@ -367,8 +366,14 @@ jmv_backend_render_html <- function(self, tabs) {
 # WARNING: jamovi sizes an analysis from its results iframe's reported width, but jamovi's own
 # stylesheet pins an Html result at `width:500px`, so the table's real width never reached the host.
 # Un-pinning to `width:max-content` restores that intent and lets the box hug the table in one pass;
-# there is deliberately no display cap (the panel scrolls instead), and prose must NOT drive the
-# width -- hence `tx-note` on every non-table fragment. Full CSS chain: dev/jamovi_module.md s7.
+# and prose must NOT drive the width -- hence `tx-note` on every non-table fragment. Full CSS chain:
+# dev/jamovi_module.md s7.
+#
+# THE SCROLL BOX ITSELF IS NOT JAMOVI'S. tab_html() wraps every table in a `.tx-scrollbox` and
+# tab_css() gives it its shape, for jamovi as for a document, a pkgdown site and the Viewer. What is
+# jamovi's, and all that is left here, is the CAP: a document box stops at the space it has
+# (`max-width:100%`), and jamovi has no such space to read -- the panel is sized FROM the table.
+# Nothing else may be restated below, or the two would drift.
 
 # Runaway guard only: no table is meant to reach it.
 JMV_RESULTS_MAX_WIDTH <- 4000L
@@ -378,22 +383,10 @@ jmv_results_style <- function(max_width = JMV_RESULTS_MAX_WIDTH) {
   paste0(
     "<style>",
     ".jmv-results-html{width:max-content;}",
-    ".tx-scrollbox{display:block;width:max-content;max-width:", max_width,
-    "px;overflow-x:auto;margin-bottom:", TX_TAIL_SPACE, ";}",
-    # ⚠ THE AIR MOVES OUT ONTO THE BOX: `overflow-x:auto` makes the scrollbox a formatting context,
-    # so the table's own trailing margin would sit INSIDE it -- above the horizontal scrollbar
-    # instead of below the whole thing. Only the LAST table gives it up; the ones stacked above keep
-    # theirs, which is what still separates them.
-    ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}",
+    ".tx-scrollbox{max-width:", max_width, "px;}",
     ".tx-note{max-width:520px;}",
-    "@media print{.tx-scrollbox{max-width:none;overflow-x:visible;}}",
     "</style>"
   )
-}
-
-#' @noRd
-jmv_results_scrollbox <- function(html) {
-  paste0('<div class="tx-scrollbox">', as.character(html), '</div>')
 }
 
 # The shape every non-table fragment takes: `tx-note` keeps its prose from sizing the panel.

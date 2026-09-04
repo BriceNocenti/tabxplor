@@ -729,16 +729,24 @@ test_that("contrib's residual is design-corrected, and identical at every table 
 
 
 test_that("the footer says design-based, in English and in French", {
+  # ⚠ v2.0.1 phase 4: each sentence has a LONG and a SHORT half, and the table decides -- the caveat
+  # about what the intervals rest on is printed only where an interval, a star, a test or a
+  # significance-gated colour is actually on screen (tab_shows_inference()).
   d <- svv_fixture(800); des <- svv_des(d)
-  tt <- suppressMessages(tab(des, g, col, pct = "row"))
+  tt <- suppressMessages(tab(des, g, col, pct = "row", test = TRUE))
   expect_equal(tabxplor:::tab_weight_line(tt, lang = "en"),
                "Design-based (survey): weighted estimates, intervals and tests account for the sample design.")
+  expect_equal(tabxplor:::tab_weight_line(suppressMessages(tab(des, g, col, pct = "row")), lang = "en"),
+               "Design-based (survey): weighted estimates.")
   # Phase 18z16-i: the DEFAULT weighted position now says what it does (S8.2 -- load-bearing).
-  expect_equal(tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en"),
+  expect_equal(tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row", test = TRUE), lang = "en"),
                "Weighted by w; confidence intervals and tests use the unweighted sample size.")
+  expect_equal(tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en"),
+               "Weighted by w.")
   expect_equal(
     withr::with_options(list(tabxplor.design_effect = TRUE),
-                        tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row"), lang = "en")),
+                        tabxplor:::tab_weight_line(tab(d, g, col, wt = w, pct = "row", test = TRUE),
+                                                   lang = "en")),
     "Weighted by w; confidence intervals and tests account for the weighting.")
 })
 

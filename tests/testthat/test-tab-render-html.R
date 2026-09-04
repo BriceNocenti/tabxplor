@@ -284,10 +284,57 @@ testthat::test_that("a rendered table carries a trailing gap, and only the outer
 testthat::test_that("the gap sits BELOW the footer legend, not above it", {
   t <- tab(fx_gss_fmt(), race, party3, pct = "row", color = TRUE)
   h <- as.character(tab_html(t))
-  # the legend rides in <tfoot>, so it is INSIDE the element the margin hangs off
+  # the legend rides in <tfoot>, so it is INSIDE the table the scrollbox holds, and the margin
+  # hangs off the BOX -- one element further out again.
   expect_match(h, "tx-foot", fixed = TRUE)
   expect_true(grepl("</tfoot></table>", h, fixed = TRUE))
-  expect_match(trimws(h), "</table>$")
+  expect_true(grepl("</table></div>", h, fixed = TRUE))
+  expect_match(trimws(h), "</div>$")
+})
+
+
+# === the scrollbox ================================================================================
+# Every html table is wrapped: too wide for its host, it must SCROLL rather than widen the page.
+
+testthat::test_that("every html table is wrapped in a scrollbox, and its title is not", {
+  t <- tab(fx_gss_fmt(), race, party3, pct = "row")
+  # `css = FALSE`: the stylesheet names `.tx-scrollbox` too, and the count below is about MARKUP
+  h <- as.character(tab_html(t, caption = "A title", css = FALSE))
+  # the title comes FIRST, then the box: a caption that scrolls away with its table is not a caption
+  expect_match(h, paste0('<div class="tabxplor-caption">A title</div>',
+                         '<div class="tx-scrollbox"><table class="tabxplor-tab"'), fixed = TRUE)
+  # one box per table, never one around several
+  expect_equal(lengths(regmatches(h, gregexpr("tx-scrollbox", h))),
+               lengths(regmatches(h, gregexpr("<table", h))))
+})
+
+testthat::test_that("the scrollbox carries the gap, and the table gives its own up", {
+  # `overflow-x:auto` makes the box a formatting context, so a table's own trailing margin would sit
+  # above the horizontal scrollbar instead of below the whole thing.
+  css <- tab_css(format = "html", style_tag = FALSE)
+  expect_match(css, paste0("overscroll-behavior-x:contain;margin-bottom:",
+                           tabxplor:::TX_TAIL_SPACE, ";}"), fixed = TRUE)
+  expect_match(css, ".tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}",
+               fixed = TRUE)
+  # ⚠ `overflow`, not `overflow-x`: a computed `overflow-y:auto` would force `overflow-x` back to
+  # `auto`, and the box would still clip on paper. It rides tx_print_block(), the sheet's ONE
+  # @media print block -- so `print_rules = FALSE` drops it, exactly as it drops print-color-adjust.
+  expect_match(css, "  .tx-scrollbox{max-width:none;overflow:visible;}", fixed = TRUE)
+  expect_no_match(tab_css(format = "html", style_tag = FALSE, print_rules = FALSE),
+                  "@media print", fixed = TRUE)
+  # md carries the colour classes only -- no geometry, so no box
+  expect_no_match(tab_css(format = "md", style_tag = FALSE), "tx-scrollbox", fixed = TRUE)
+})
+
+testthat::test_that("jamovi restates the cap and nothing else", {
+  # the box is tab_css()'s, for every host. What is jamovi's is that it has no space to read: the
+  # panel is sized FROM the table, so `max-width:100%` means nothing there and a pixel cap replaces
+  # it. Anything else restated here would drift from the stylesheet.
+  s <- tabxplor:::jmv_results_style()
+  expect_match(s, paste0(".tx-scrollbox{max-width:", tabxplor:::JMV_RESULTS_MAX_WIDTH, "px;}"),
+               fixed = TRUE)
+  expect_no_match(s, "overflow", fixed = TRUE)
+  expect_no_match(s, "margin-bottom", fixed = TRUE)
 })
 
 testthat::test_that("stacked parts are separated by the margin, not by a <br>", {
@@ -298,14 +345,6 @@ testthat::test_that("stacked parts are separated by the margin, not by a <br>", 
   h <- as.character(tab_html(t))
   testthat::skip_if(lengths(regmatches(h, gregexpr("<table", h))) < 2L)
   expect_false(grepl("</table>\n<br>", h, fixed = TRUE))
-})
-
-testthat::test_that("jamovi moves the gap onto the scrollbox", {
-  # `overflow-x:auto` makes the box a formatting context, so a table's own trailing margin would sit
-  # above the horizontal scrollbar instead of below the whole thing.
-  s <- tabxplor:::jmv_results_style()
-  expect_match(s, paste0("margin-bottom:", tabxplor:::TX_TAIL_SPACE, ";"), fixed = TRUE)
-  expect_match(s, ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}", fixed = TRUE)
 })
 
 
@@ -327,7 +366,9 @@ rh_with_host <- function(code, bookdown = NULL, quarto = NULL, tbl_cap = NULL) {
 testthat::test_that("the caption takes one of three shapes, decided by the host", {
   t <- tab(gss, race, marital, pct = "row", caption = "A title")
   plain <- rh_strip_style(tab_html(t))
-  expect_match(plain, '<div class="tabxplor-caption">A title</div><table', fixed = TRUE)
+  # ⚠ the sibling div comes BEFORE the scrollbox, never inside it: the title must not scroll away
+  expect_match(plain, '<div class="tabxplor-caption">A title</div><div class="tx-scrollbox"><table',
+               fixed = TRUE)
   expect_false(grepl("<caption", plain, fixed = TRUE))
 
   # bookdown: a real <caption>, INSIDE the table, and no sibling div

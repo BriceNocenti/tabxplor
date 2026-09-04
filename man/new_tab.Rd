@@ -60,6 +60,12 @@ sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape ta
 footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
 \item \code{color_breaks} -- a per-table override of the colour break scales (see
 \code{\link{set_color_breaks}}), merged over the global option at render time.
+\item \code{footer_tabs} -- subordinate \code{tabxplor_tab}s rendered UNDER this one by every
+medium (console, \code{\link{tab_md}}, \code{\link{tab_html}}, \code{\link{tab_xl}}), set by
+\code{\link{set_footer_tabs}}: a second table that belongs to the first and travels with it
+through a dplyr pipeline. Not to be confused with the regression's \emph{shape table}, which is a
+grey NOTE of character columns (\code{assumptions}) rather than a table of \code{fmt} cells. A
+footer table's own \code{footer_tabs} are never rendered.
 }
 \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.}
 

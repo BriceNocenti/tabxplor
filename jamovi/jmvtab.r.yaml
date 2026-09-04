@@ -6,7 +6,8 @@ jrs:   '1.1'
 # TWO live items, and that is the whole results model: tabxplor renders ONE html table (the colour,
 # the footer and the test summary are all inside it -- see R/tab-render-html.R), so there is no
 # Table / Image element to declare. Phase 15c also removed the width-forcing `plot` Image: the
-# scroll box (tab_render_scrollbox: width:max-content; max-width; overflow-x:auto) owns the width.
+# scroll box tab_html() wraps each table in (`.tx-scrollbox`, R/tab-css.R) owns the width;
+# jmv_results_style() adds only its pixel cap.
 items:
 
     - name: html_table

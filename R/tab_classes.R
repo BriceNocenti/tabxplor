@@ -7,6 +7,9 @@
 #   - The dplyr_row_slice/dplyr_col_modify/dplyr_reconstruct trio is the core mechanism.
 #     Each calls lv1_group_vars() to decide: downgrade to tabxplor_tab or keep grouped.
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
+#   - A table may carry SUBORDINATE tables (meta$footer_tabs, set_footer_tabs()). They are not a
+#     fifth renderer: tx_with_footer_tabs() hands the exporters the LIST the table means, so the
+#     `list_method = TRUE` path already in place renders them under it in every medium.
 #   - tab_compact() stacks several row_vars ROW_VAR-MAJOR: two row_vars are two tables over the same
 #     population, the tab_vars are the sub-populations inside each. ⚠ the relocate, the group_by and
 #     the row order must state the SAME order -- tab_label_order() (R/tab-export-prep.R) derives
@@ -46,6 +49,12 @@
 #'   footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
 #'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
 #'   \code{\link{set_color_breaks}}), merged over the global option at render time.
+#'   \item \code{footer_tabs} -- subordinate \code{tabxplor_tab}s rendered UNDER this one by every
+#'   medium (console, \code{\link{tab_md}}, \code{\link{tab_html}}, \code{\link{tab_xl}}), set by
+#'   \code{\link{set_footer_tabs}}: a second table that belongs to the first and travels with it
+#'   through a dplyr pipeline. Not to be confused with the regression's \emph{shape table}, which is a
+#'   grey NOTE of character columns (\code{assumptions}) rather than a table of \code{fmt} cells. A
+#'   footer table's own \code{footer_tabs} are never rendered.
 #' }
 #' \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.
 #' @param ... Needed to implement subclasses.
@@ -195,6 +204,68 @@ set_caption <- function(x, caption) {
 #' @rdname set_caption
 #' @export
 get_caption <- function(x) get_spec(x)[["vars"]][["caption"]]
+
+#' Attach subordinate tables under a table
+#'
+#' @description
+#' Records one or more \code{tabxplor_tab}s that BELONG to \code{x} and are rendered under it by
+#' every medium --- the console, \code{\link{tab_md}}, \code{\link{tab_html}} and
+#' \code{\link{tab_xl}} --- exactly as if they had been passed in one list, and which travel with
+#' \code{x} through a dplyr pipeline (they are kept in \code{x}'s \code{meta$footer_tabs}).
+#'
+#' The use is a fact that belongs to the table without being a row of it: the eigenvalues of the axes
+#' beside a factorial-analysis summary, a sample description beside the result it describes.
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param tabs A \code{tabxplor_tab}, a list of them, or \code{NULL} to remove whatever is attached.
+#'   A named element is captioned with its name (\code{\link{set_caption}}) unless it carries a
+#'   caption already.
+#' @return \code{x}, with its subordinate tables set (\code{set_footer_tabs}) ; the list of them, or
+#'   \code{NULL} when none (\code{get_footer_tabs}).
+#' @seealso [new_tab()] for the whole `meta` record.
+#' @export
+#' @examples
+#' main <- tab(forcats::gss_cat, race, marital, pct = "row")
+#' side <- tab(forcats::gss_cat, race)
+#' main <- set_footer_tabs(main, list("Base" = side))
+#' get_footer_tabs(main)
+set_footer_tabs <- function(x, tabs) {
+  if (is.data.frame(tabs)) tabs <- list(tabs)
+  if (!is.null(tabs)) {
+    if (!is.list(tabs) || !all(vapply(tabs, is.data.frame, logical(1))))
+      cli::cli_abort("{.arg tabs} must be a table, or a list of tables.")
+    tabs <- tabs[!vapply(tabs, is.null, logical(1))]
+    # a NAME is the subordinate table's caption -- the mechanism that already exists, rather than a
+    # second way of titling a table. An element that carries one of its own keeps it.
+    nms <- names(tabs) %||% rep("", length(tabs))
+    for (i in seq_along(tabs))
+      if (nzchar(nms[[i]]) && is.null(get_caption(tabs[[i]])))
+        tabs[[i]] <- set_caption(tabs[[i]], nms[[i]])
+  }
+  set_meta_field(x, "footer_tabs", if (length(tabs)) tabs else NULL)
+}
+
+#' @rdname set_footer_tabs
+#' @export
+get_footer_tabs <- function(x) get_meta(x)[["footer_tabs"]]
+
+# THE one expansion: a table carrying subordinate tables is handed to the exporters as the LIST it
+# means, so `list_method = TRUE` renders them one-after-another and css, theme, subtext and the
+# first-table caption are all resolved by the machinery already in place.
+# DESIGN: an expansion rather than a fourth bespoke renderer. The shape table (reg_shape_table) took
+#   the other road and needed one hand-written emitter per medium -- justified there, since it is a
+#   note of character columns and not a table of `fmt` cells; here there is nothing to hand-write.
+# WARNING: the field is STRIPPED from the copy handed down, which is what stops a subordinate table
+#   from expanding in turn -- no recursion guard to keep in step.
+#' @keywords internal
+#' @noRd
+tx_with_footer_tabs <- function(tabs) {
+  if (!is_tab(tabs)) return(tabs)
+  ft <- get_footer_tabs(tabs)
+  if (!length(ft)) return(tabs)
+  c(list(set_meta_field(tabs, "footer_tabs", NULL)),
+    purrr::map(ft, ~ set_meta_field(.x, "footer_tabs", NULL)))
+}
 new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
   out <- list()
   wt <- if (length(wt)) as.character(wt)[1] else NA_character_
@@ -457,6 +528,18 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
       out[hdr] <- gsub(tg, strrep(" ", nchar(tg)), out[hdr], fixed = TRUE)
   }
 
+
+  # the subordinate tables (meta$footer_tabs), each as a grid of its own under this one. A blank line
+  # separates them, and their own footer tabs are already stripped (tx_with_footer_tabs).
+  ft <- get_footer_tabs(x)
+  if (length(ft)) {
+    one <- function(t) {
+      t <- set_meta_field(t, "footer_tabs", NULL)     # a footer table's own are never rendered
+      if (is_tab(t)) print(t, width = width, n = n, min_row_var = min_row_var, get_text = TRUE)
+      else           format(tibble::as_tibble(t), width = width, n = n)
+    }
+    out <- c(out, unlist(purrr::map(ft, ~ c("", one(.x)))))
+  }
 
   if (get_text) {
     out
@@ -738,7 +821,9 @@ tab_html <- function(tabs,
 
   # `list_method = TRUE`: a non-mergeable list is rendered table-after-table instead of erroring.
   prep <- tab_export_prep(
-    tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
+    # subordinate tables (meta$footer_tabs) enter as the list they mean -- tx_with_footer_tabs().
+    tx_with_footer_tabs(tabs),
+    backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
     theme = theme, var_names = o$var_names,

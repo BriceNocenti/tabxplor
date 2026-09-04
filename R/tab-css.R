@@ -68,10 +68,11 @@ tx_resolve_theme <- function(theme) {
 #   "console" the palette the terminal is using                (auto-detected from the editor)
 # WARNING: reaching for the console pair on the export path (or vice-versa) silently picks the wrong
 # theme -- render_footer() once did this when its `theme` argument was NULL.
-# THE AIR UNDER A FINISHED TABLE, as one value both stylesheets read: tab_css() puts it on the table
-# itself, and jamovi's own wrapper moves it onto the scrollbox (jmv_results_style), so the gap sits
-# below a horizontal scrollbar rather than above it. "About one line of text" of the SURROUNDING
-# prose -- `em` here resolves against the page's font size, the table declaring none of its own.
+# THE AIR UNDER A FINISHED TABLE, as one value the whole stylesheet reads. It hangs off the
+# SCROLLBOX for an html table and off `.tabxplor-tab` itself for a markdown one (a fenced div, never
+# boxed): a margin inside a scrolling box would sit above the horizontal scrollbar instead of below
+# the whole thing. "About one line of text" of the SURROUNDING prose -- `em` here resolves against
+# the page's font size, the table declaring none of its own.
 #' @keywords internal
 #' @noRd
 TX_TAIL_SPACE <- "1.2em"
@@ -392,14 +393,42 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # ⚠ the `.tabxplor-tab table` half of the rule above keeps `margin:0`, and out-specifies this at
     # (0,1,1): a markdown div's INNER table must not add a second gap.
     paste0(".tabxplor-tab{margin-bottom:", TX_TAIL_SPACE, ";}"),
+    # THE SCROLLBOX -- the `<div>` tx_scrollbox() wraps every html table in. A table wider than the
+    # space it has must SCROLL; without this it widens the document and drags the prose sideways
+    # with it. Idle where the table fits, so nothing has to be decided at render time.
+    # ⚠ `width:max-content` WITH `max-width:100%`: the box hugs a narrow table (its trailing margin
+    # and any ground a host paints then stop at the table's own edge) and caps at the space
+    # available for a wide one, which is what makes the content overflow and the bar appear.
+    # ⚠ THE AIR MOVES ONTO THE BOX. `overflow-x` makes it a formatting context, so the table's own
+    # trailing margin would sit INSIDE it -- above the horizontal scrollbar rather than below the
+    # whole thing. The box takes TX_TAIL_SPACE and the table gives its own up.
+    # ⚠ `display:table;overflow:visible` is A HOST RESET, not decoration: pkgdown makes every table
+    # its own scroll box (`main table{display:block;overflow:auto}`), which would nest a second
+    # scrollbar inside ours AND cost the table its shrink-to-fit width. (0,2,0) beats its (0,0,2).
+    paste0(".tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;",
+           "overscroll-behavior-x:contain;margin-bottom:", TX_TAIL_SPACE, ";}"),
+    ".tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}",
+    # (on paper the box must not clip -- that declaration is in tx_print_block(), which owns the
+    # sheet's ONE @media print block.)
     # the table TITLE is ONE class on one of two elements: a `<div>` sibling emitted BEFORE the
     # <table>, or -- under bookdown, the one host that numbers tables by scanning for a `<caption>` --
     # a `<span>` inside a real `<caption>` (R/tab-render-html.R, tx_caption_host()). `width:0;
-    # min-width:100%` is the same idiom as `.tx-foot` below: otherwise a long title would SIZE a
-    # shrink-to-fit container (jamovi's `.tx-scrollbox`), and `display:block` is what lets the span
-    # honour it. Its colour (full-contrast) is added to the rule table below.
-    paste0(".tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;",
-           "white-space:normal;width:0;min-width:100%;}"),
+    # min-width:100%` is the same idiom as `.tx-foot` below: otherwise a long title would SIZE the
+    # shrink-to-fit container it sits in (jamovi's `.jmv-results-html`), and `display:block` is what
+    # lets the span honour it. Its colour (full-contrast) is added to the rule table below.
+    # ⚠ the title is emitted OUTSIDE the scrollbox, so it stays put while the table scrolls under it.
+    # ITALIC as well as bold: a table's title is a caption, not a heading -- it names the table
+    # rather than opening a section, and the italic is what says so at a glance on a page where a
+    # heading is also bold. Carried here since 2.0.0.9000, from the courses' own stylesheet, which
+    # had been restating it under every document.
+    # `margin-top` for the same reason it is here rather than in a document's own sheet: a caption
+    # opens a table and belongs to it, so the air that separates the pair from the paragraph above
+    # is the TABLE's, in every medium. Without it the title sat flush against the previous line and
+    # read as its continuation. `margin-bottom: 0` keeps the caption tight against the table it
+    # names -- the gap must be above the pair, never inside it.
+    paste0(".tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;",
+           "font-size:110%;white-space:normal;width:0;min-width:100%;",
+           "margin-top:1.2em;margin-bottom:0;}"),
     # ⚠ `caption-side` is not decoration: BOOTSTRAP puts a caption at the BOTTOM, and tabxplor injects
     # bootstrap into every knitted document (tx_html_deps()) -- so without this the bookdown arm's
     # title would sit under its table. The padding reset is Bootstrap's too; text-align and colour
@@ -504,10 +533,10 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # the footnote must not SIZE the table: `width:0` is a definite size (contributes 0 to
     # max-content), and once the cell's own width is definite `min-width:100%` resolves and the text
     # fills it -- the same idiom as `.tabxplor-caption` above.
-    # `padding-bottom` is the strip a HOST's scrollbar sits in. pkgdown makes every table its own
-    # scroll box (`main table{display:block;overflow:auto}`), and an overlay scrollbar -- the default
-    # on Windows and on Chrome -- is drawn OVER the content at the box's bottom edge, which is the
-    # legend's last line. 5px is enough to clear it and too little to read as space.
+    # `padding-bottom` is the strip the SCROLLBAR sits in -- ours (`.tx-scrollbox`) on a table that
+    # overflows, a host's on one it boxes itself. An overlay scrollbar (the default on Windows and
+    # on Chrome) is drawn OVER the content at the box's bottom edge, which is the legend's last
+    # line. 5px is enough to clear it and too little to read as space.
     ".tabxplor-tab .tx-foot{width:0;min-width:100%;padding-bottom:5px;}",
     # a background HUGS its text (rounded, inline) rather than flooding the cell: a full fill reads as
     # a blocky grid and swallows the row hover.
@@ -581,8 +610,12 @@ tx_print_rules_palette <- function(print_rules) {
 tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
   if (!isTRUE(print_rules)) return(character(0))
   inner <- c(
-    if (isTRUE(chrome))
+    if (isTRUE(chrome)) c(
       "  .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
+      # A PRINTER HAS NO SCROLLBAR: left clipping, the box would simply lose the table's right-hand
+      # columns. ⚠ `overflow`, not `overflow-x` -- the computed `overflow-y:auto` that `overflow-x:
+      # auto` leaves behind forces `overflow-x` back to `auto`, and it would clip all the same.
+      "  .tx-scrollbox{max-width:none;overflow:visible;}"),
     # a print theme already IS the publication palette: re-stating it would be dead weight.
     if (!tx_is_print(theme)) c(
       tx_css_layer(rules, "print", indent = "  "),
@@ -646,6 +679,11 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' background-coloured value), `.tx-span` (the variable-name header row), `.tx-foot` (the footnote).
 #' Rows carry `.tx-bt`/`.tx-bb`/`.tx-bb2` (top / bottom / thick-bottom rules).
 #'
+#' Each html table is wrapped in a `.tx-scrollbox`, which scrolls it sideways rather than let it
+#' widen the page. Its title stays outside, so it does not scroll away, and the `@media print` block
+#' lifts the clip (a printer has no scrollbar). To let a table widen the page on screen too:
+#' `.tx-scrollbox { overflow-x: visible; max-width: none; }`.
+#'
 #' @param theme `"light"`, `"dark"`, a black-and-white publication palette (`"print_ready"`,
 #'   `"print_marks"`, `"print_emphasis"`, `"print_minimalistic"`; `"bw"` is a synonym of the last --
 #'   see the section below), or -- opt-in -- `"auto"` to follow the reader's colour scheme (their
@@ -659,7 +697,9 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #'   and the colours are the point, or name a palette (`"print_emphasis"`) to print in that one.
 #'   `"print_marks"` cannot be used here: its marks are cell text, and a print rule can restyle a
 #'   page but not add characters to it. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and
-#'   6 KB to an `"auto"` one.
+#'   6 KB to an `"auto"` one. `FALSE` drops the whole block, including the two declarations that are
+#'   not about colour: the one that makes a background fill reach the paper, and the one that stops
+#'   the scrollbox clipping a wide table there.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
 #'   by `color = c(text, background)` (see [tab()]).
