@@ -7,8 +7,8 @@
 #     inline `style` beats every stylesheet rule short of !important, so inline hex could never
 #     follow a dark-mode toggle. R/tab-css.R owns what each class looks like; this file only names
 #     them. Do not reintroduce inline colour. ⚠ The ONE inline `style` this engine writes is the data
-#     bar's LENGTH (`--tx-bar`, set_bars()): a length is not a look, its ink stays `currentColor`
-#     mixed in the stylesheet, and a class per percent would mean a hundred rules.
+#     bar's LENGTH (`--tx-bar`, set_bars()): a length is not a look, its ink stays a stylesheet
+#     custom property, and a class per percent would mean a hundred rules.
 #   - The <thead> is the prep's three rows (R/tab-export-prep.R). An INDEX column has no unit, so its
 #     header spans both rows and sits bottom-aligned, putting "levels" on the line of the "<row%>"
 #     beside it; Excel merges the same two.
@@ -400,13 +400,14 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     }
     if (!is.null(ovr)) cell_html <- tx_cells_write(cell_html, ovr[[name]])
     # THE DATA BAR (set_bars()). ⚠ The ONE inline `style` this engine writes, and the file header's
-    #   rule survives it: what is inline is a LENGTH, never a colour -- the ink is `currentColor`
-    #   mixed in the stylesheet, so `theme = "auto"` and every publication palette still decide how
-    #   the bar looks. A class per width would need one rule per percent.
+    #   rule survives it: what is inline is a LENGTH, never a colour -- the ink is a stylesheet
+    #   custom property, so `theme = "auto"` and every publication palette still decide how the bar
+    #   looks. A class per width would need one rule per percent.
+    # A bar of length zero is not a bar: with no class, its 2 px of border draws nothing at all.
     sty <- ""
     bar <- rd$bars[[name]]
     if (!is.null(bar)) {
-      hit <- !is.na(bar)
+      hit <- !is.na(bar) & bar > 0
       cls[hit] <- trimws(paste(cls[hit], "tx-bar"))
       sty <- ifelse(hit, paste0(' style="--tx-bar:', round(bar * 100, 1), '%"'), "")
     }

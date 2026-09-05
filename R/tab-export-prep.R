@@ -317,18 +317,23 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
       sub$tip[match(key0, paste(sub$var, sub$level, sep = "\r"))])
   }
 
-  # The per-cell DATA-BAR fraction, for the columns set_bars() names: the value as a share of its own
-  # column's largest, so the tallest bar fills its cell -- a bar chart inside the table. Data rows
-  # only: a total is not on the same scale as what it totals.
-  bars <- purrr::map(purrr::set_names(intersect(get_bars(tab) %||% character(0), names(tab))),
-                     function(nm) {
+  # The per-cell DATA-BAR fraction, for the columns set_bars() names -- a bar chart inside the table.
+  # ONE reference per column, or two bars could not be compared: the ceiling set_bars(max =) states,
+  # and the column's own largest data cell where it states none (which is what spreads the bars over
+  # the width available). Data rows only: a total is not on the same scale as what it totals.
+  # ⚠ THE RESOLVED CEILING RIDES AS AN ATTRIBUTE of the fractions, not as a second render-model
+  #   member: `bars` is re-keyed after the wrap by follow_wrap() below, and a second list keyed by
+  #   column name would be a second place to re-key. Excel reads it to pin its own bar bounds.
+  bar_max <- tab_bar_ceilings(tab)
+  bars <- purrr::map(purrr::set_names(intersect(names(bar_max), names(tab))), function(nm) {
     col <- tab[[nm]]
     if (!is_fmt(col)) return(NULL)
     v <- abs(get_num(col))
     v[get_row_kind(col) != "data"] <- NA_real_
-    m <- suppressWarnings(max(v, na.rm = TRUE))
+    m <- unname(bar_max[[nm]])
+    if (is.na(m)) m <- suppressWarnings(max(v, na.rm = TRUE))
     if (!is.finite(m) || m <= 0) return(NULL)
-    pmin(v / m, 1)
+    structure(pmin(v / m, 1), max = m)
   })
   bars <- purrr::compact(bars)
 

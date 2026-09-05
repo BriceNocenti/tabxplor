@@ -345,7 +345,7 @@ tab_xl <-
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
-           bold_rows = purrr::map(rd, "bold_rows"),
+           bold_rows = purrr::map(rd, "bold_rows"), bars = purrr::map(rd, "bars"),
            col_var_header = purrr::map(rd, "col_var_header"),
            start = start, sheet = sheet, title = titles, subtext = subtext, shape = shapes,
            check_imgs = check_imgs,
@@ -668,7 +668,7 @@ note_xl <- function(shape, row0, index_cols = 1L) {
 
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
                             shape = NULL, check_imgs = NULL, legend_runs = list(), colwidth, o,
-                            transposed = FALSE) {
+                            transposed = FALSE, bars = NULL) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   # a col_var spanning-NAME header row sits above the level-name header (whenever the table has a
@@ -799,6 +799,30 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     xl_data[[cl]] <- as.character(xl_data[[cl]])
     xl_data[[cl]][!roles$label_runs[[cl]]$show] <- NA_character_
   }
+
+  # THE DATA BAR (set_bars()), Excel's half: one dataBar per barred column, over its DATA rows only,
+  # bounded by the very ceiling the prep resolved (it rides on the fractions as `max`). Name -> index
+  # is done HERE and nowhere earlier: this `tab` is the materialised one, aside columns included.
+  # ⚠ THE GATE, one rule: Excel draws from the number IT holds, so the bar is written only where that
+  #   number IS the one html measured -- which excludes a negative value (html reads a magnitude, a
+  #   cfvo cannot) and a multiplicative column (the cell holds the signed fold, not get_num()).
+  #   Anything else would put a bar of one length under a figure of another.
+  databars <- purrr::list_rbind(purrr::imap(bars %||% list(), function(frac, nm) {
+    ci <- match(nm, names(tab)); m <- attr(frac, "max")
+    if (is.na(ci) || is.null(m) || !is_fmt(tab[[ci]])) return(NULL)
+    at <- which(!is.na(frac) & frac > 0)
+    if (!length(at)) return(NULL)
+    v <- xl_data[[ci]]
+    if (!is.numeric(v) || !isTRUE(all.equal(unname(v[at]), unname(get_num(tab[[ci]])[at]))) ||
+        any(v[at] < 0)) {
+      tx_inform_once(paste0("bars_xl_", nm), c(
+        "No data bar in Excel for {.val {nm}}.",
+        i = "A bar reads a magnitude, and Excel can only draw the value the cell holds."))
+      return(NULL)
+    }
+    tibble::tibble(col = as.integer(ci), dims = xl_coalesce(rep(ci, length(at)), at + data_row0),
+                   max = as.double(m))
+  }))
 
   # fold significance stars into the numFmt literal (0.0%\*\*\*), keeping the cell a real number; a
   # "TEXT"-coded column (ci / OR) is written as a string with Excel's "@" text format; NA codes stay
@@ -966,6 +990,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # one narrow column; a kept tab_var is merged but never rotated -- its values are levels.
     label_merges = label_merges, vname_col = unname(roles$var_name_col),
     col_widths = col_widths,
+    databars = databars,                               # set_bars(): one dataBar range per barred column
     spark_cells = spark_cells,                         # base-count cells holding a sparkline, not a count
     text_cells = text_cells,                           # cells no number can hold (a `{ci}`, an `{n_range}`)
     styles = styles, numfmt = numfmt
@@ -1308,6 +1333,15 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
         xlb_write_richtext(wb, s, xl_cell(plan$legend_row + i - 1L, 1L), runs,
                            size = o$text_size_subtext, font = o$font_text)
     }
+  }
+
+  # --- the data bars: a conditional-format pass of their own (a dataBar is a range property, so it
+  #     cannot ride the precomposed xf the styles pass applies), reading the accent from the one
+  #     chrome resolver -- a publication theme therefore exports a grey bar. ---
+  if (!is.null(plan$databars) && nrow(plan$databars)) {
+    ink <- tx_chrome_hex(tx_palette_theme(o$theme))$accent
+    purrr::pwalk(plan$databars, function(col, dims, max)
+      xlb_databar(wb, s, dims, ink, 0, max))
   }
 
   # --- column widths / row heights: set per SHEET (pmax over every table stacked on it), not per table ---

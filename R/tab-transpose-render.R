@@ -254,8 +254,8 @@ tx_transpose_render <- function(rd, backend) {
   rd2$color_src <- tab
   rd2$cells     <- cells_all
   # ⚠ ANYTHING KEYED BY A COLUMN NAME DIES HERE, silently, because a transposed column IS a row level:
-  # `bars` would keep the pre-transpose names and match nothing. A data bar is a per-COLUMN scale, so
-  # after a flip there is nothing for it to be a share of -- it goes, rather than mis-drawing.
+  # `bars` would keep the pre-transpose names and match nothing. A data bar carries ONE reference per
+  # column, and a flipped column is a row level -- so it goes, rather than mis-drawing.
   # (Same rule as follow_wrap()'s in tab_export_prep(): a stale key is not an error, it quietly does
   # nothing -- so every such member is re-keyed or dropped at the seam that invalidates it.)
   rd2$bars      <- NULL

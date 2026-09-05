@@ -246,16 +246,29 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
         "transparent", "transparent", cp$bg)
-    # THE DATA BAR (set_bars()): a bar chart inside the table. Its INK is `currentColor` mixed here,
-    # so it follows the theme and every publication palette; only its LENGTH is inline, in the custom
-    # property `--tx-bar` the html engine writes per cell. `background-image`, not `background-color`,
-    # so the transparent ground above still holds and the row hover still reads through.
-    bar_ink <- function(pct) paste0(
-      "linear-gradient(to right,color-mix(in oklch,currentColor ", pct,
-      "%,transparent) var(--tx-bar,0%),transparent var(--tx-bar,0%))")
-    add(".tabxplor-tab td.tx-bar", "background-image",
-        bar_ink(14), bar_ink(20), bar_ink(14))
-    add(".tabxplor-tab td.tx-bar", "background-repeat", "no-repeat", "no-repeat", "no-repeat")
+    # THE DATA BAR (set_bars()): a bar chart inside the table, drawn as a ::before ELEMENT -- a
+    # gradient cannot be rounded, and a bar needs a border to read as a bar rather than as a wash.
+    # Only its LENGTH is inline, in the `--tx-bar` custom property the html engine writes per cell.
+    # ⚠ `isolation:isolate` + `z-index:-1` is what puts it ABOVE the cell's own ground and UNDER its
+    #   digits; the row hover, painted outside that stacking context, still reads through.
+    # THE INK is `--tx-bar-ink`: the cell's own slot colour where it HAS one, so a bar agrees with the
+    # shade beside it (and a deviation still reads its direction), the chrome's `accent` where it has
+    # none -- which is the ordinary case, a bar column being a count or a share nobody grades.
+    # ⚠ NOT the `.o3` fill hex: the DARK fills are light panels, not tints (see COLOR_RAMPS), and a
+    #   digit sitting half on the bar's edge could then have no readable ink -- `on_fill` decides for a
+    #   whole cell, never for half of one. The mix says the same thing and holds in both themes:
+    #   #0267c7 at 30 % on white is #B3D1EE against .o3's #B2D0F8, and the border at full strength IS
+    #   .p3, while in dark the same mix darkens instead of turning into a panel.
+    add(".tabxplor-tab td.tx-bar", "position", "relative", "relative", "relative")
+    add(".tabxplor-tab td.tx-bar", "isolation", "isolate", "isolate", "isolate")
+    add(".tabxplor-tab td.tx-bar", "--tx-bar-ink", "currentColor", "currentColor", "currentColor")
+    add(paste0(".tabxplor-tab td.tx-bar", notxt), "--tx-bar-ink", cl$accent, cd$accent, cp$accent)
+    bar <- function(prop, v) add(".tabxplor-tab td.tx-bar::before", prop, v, v, v)
+    bar("content", '""'); bar("position", "absolute"); bar("z-index", "-1")
+    bar("inset", "2px auto 2px 0"); bar("width", "var(--tx-bar,0%)"); bar("border-radius", "3px")
+    bar("border", "1px solid var(--tx-bar-ink)")
+    mix <- function(pct) paste0("color-mix(in oklch,var(--tx-bar-ink) ", pct, "%,transparent)")
+    add(".tabxplor-tab td.tx-bar::before", "background", mix(30), mix(30), mix(18))
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND (`border-right:1px solid`
     # would reset border-right-color to the CELL's palette hex). Longhands only; locked by

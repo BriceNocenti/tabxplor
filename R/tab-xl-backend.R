@@ -149,6 +149,20 @@ xlb_dims_each <- function(dims, f) {
 xlb_numfmt <- function(wb, sheet, dims, code)
   xlb_dims_each(dims, function(d) wb$add_numfmt(sheet = sheet, dims = d, numfmt = code))
 
+# THE DATA BAR (set_bars()), as Excel says it: a dataBar conditional format over one column's data
+# rows. ⚠ The bounds are PINNED (`rule = c(min, max)` -> `cfvo type="num"`), never Excel's own auto
+# min/max, which would read the Total rows the html bar excludes -- so both media scale on the one
+# ceiling the prep resolved. `style` must match `rule` in length: its second entry is the bar, its
+# first the (gated-out) negative one. Excel holds ONE colour per bar, so the aplat is the accent
+# itself where html lays a 30 % tint under a full-strength border -- the same ink, Excel's own idiom.
+# ⚠ the R6 METHOD, not wb_add_conditional_formatting(), which clones the workbook and would drop the
+# rule on the floor -- every wrapper here writes in place, as wb$add_numfmt() does.
+xlb_databar <- function(wb, sheet, dims, color, min, max)
+  xlb_dims_each(dims, function(d) wb$add_conditional_formatting(
+    sheet = sheet, dims = d, type = "dataBar", rule = c(min, max),
+    style = c(color, color),
+    params = list(showValue = TRUE, gradient = FALSE, border = TRUE)))
+
 # apply a precomposed style id over a (possibly multi-area) dims -- one set_cell_style per range.
 xlb_set_cell_style <- function(wb, sheet, dims, style)
   xlb_dims_each(dims, function(d) wb$set_cell_style(sheet = sheet, dims = d, style = style))

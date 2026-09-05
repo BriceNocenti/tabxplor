@@ -314,7 +314,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, each bar the cell's share of its column's largest. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is `currentColor` mixed in the stylesheet, and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, in html and in Excel. **One reference per column**, or two bars could not be compared — the ceiling `max =` states, and the column's own largest data cell where it states none; the prep resolves it once and both media read that one number, Excel pinning it as its `cfvo` bounds rather than auto-scaling over rows the bar excludes. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is a stylesheet custom property (the cell's own slot colour where it has one, the chrome's `accent` where it has none), and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content.** A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone; a *variable* name is written vertically only where the rotation actually saves width — the names that cannot turn, a one-row block like `Constant`, set the floor every other name is weighed against, and a rotated one wraps to its block's own height. That decision is one prep fact both media read. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
@@ -936,7 +936,78 @@ légende engendrée revenait sous ses tableaux d'AGD (sa phase 1h).
 aucune section `reference:` de `_pkgdown.yml`. Ils n'apparaîtront donc pas à l'index du site, et
 `pkgdown` avertira qu'ils ne sont pas référencés.
 
-#### v2.0.1 — Phase 8 — noms de col_vars plus compacts dans les exports
+
+#### v2.0.1 — Phase 9 — la barre de données : son échelle, et son encre **DONE**
+
+**Le cas d'usage : l'éboulis d'une AGD.** `ggfacto::mca_interpret()` fait suivre chaque tableau-résumé
+d'un tableau des valeurs propres, et la colonne `% variance` y portait une barre par `set_bars()` —
+appel retiré (sa phase 1w-ii) parce que l'axe 1 d'une ACM, à 9,9 % de l'inertie, recevait
+`--tx-bar:100%`.
+
+**L'échelle ne change pas, et c'est une décision.** Un plafond à 100 % ne montrerait rien là où le
+premier axe pèse 9,9 % : la référence reste **le plus grand des cellules de données de la colonne**.
+Ce qui compte est ailleurs, et c'est ce que la phase énonce : **une seule référence par colonne**, sans
+quoi deux barres ne se comparent pas. Le mot-clé `"total"` de l'esquisse est abandonné — mesuré dans
+`gda_eig_tab()`, la ligne Total de `% variance` porte la somme des axes **gardés** (34,1 % sous un `ncp`
+tronqué), donc il n'aurait pas même servi le cas qui ouvre la phase, et il aurait fallu trancher entre
+plusieurs lignes Total.
+
+**`set_bars(x, cols, max = NULL)`** rend ce plafond énonçable — pour lire deux tableaux l'un contre
+l'autre, et parce qu'Excel ne peut dessiner juste qu'avec des bornes épinglées. `meta$bars` devient un
+**vecteur numérique nommé** : nom = la colonne, valeur = le plafond, `NA` = « le plus grand ». La
+grammaire est celle de la maison (non nommé = le repli, recyclé ; nommé = cette colonne), le plafond est
+dans l'unité **stockée** (`max = 1` sur un pourcentage = 100 %), et `tab_bar_ceilings()` relit un champ
+écrit avant la phase — un vecteur de NOMS — comme « aucun plafond énoncé », donc un tableau sauvegardé
+dessine encore ses barres. ⚠ **Le plafond résolu voyage en ATTRIBUT du vecteur de fractions** et non en
+second membre du modèle de rendu : `bars` est ré-clé après `tab_wrap_text()` par `follow_wrap()`, et une
+seconde liste clé par nom serait un second endroit à ré-clé — le piège même que l'en-tête du fichier
+signale. Un objet, une clé.
+
+**L'encre : la barre devient un élément.** Un `linear-gradient` ne s'arrondit pas, donc un `::before`,
+`isolation:isolate` + `z-index:-1` la posant **au-dessus** du fond de la cellule et **sous** ses
+chiffres (le survol de ligne, peint hors de ce contexte, se lit toujours) : bordure `1px` à pleine
+force, fond au mélange 30 % (18 % sur papier), `border-radius:3px`. ⚠ **Le `.o3` sombre (`#b3cffd`)
+n'est pas utilisé, et c'est ce qui décide de la forme** : les fonds sombres sont des **panneaux clairs**,
+pas des teintes, et un chiffre à cheval sur le bord d'un panneau ne peut pas avoir d'encre — `on_fill`
+tranche pour une cellule entière, jamais pour la moitié d'une. Le mélange dit pourtant le souhait
+exactement : `#0267c7` à 30 % sur blanc donne **#B3D1EE** contre **#B2D0F8** pour `.o3` (10/255 d'écart,
+sur le seul canal bleu), la bordure à pleine force EST `.p3`, et en sombre le même mélange fonce
+(#394C6B) au lieu de virer au panneau.
+
+**Et l'encre a désormais une source pour la colonne qui n'est pas colorée.** `--tx-bar-ink` vaut
+`currentColor` sur une cellule qui porte une couleur — la barre s'accorde à la nuance d'à côté et un
+écart garde son sens de lecture — et un **`accent`** déclaré dans `tx_chrome_hex()` partout ailleurs,
+qui est le cas ordinaire (une colonne à barres est un comptage ou une part que personne ne gradue).
+L'accent est le 3ᵉ barreau de la rampe haute lu dans le magasin **vivant** (`tx_accent_hex()`), donc
+`set_color_palette()` le déplace, et il est noir sous une palette de publication. La sélection est le
+`:not(.p1,…,.m4)` que la feuille construit déjà. ⚠ Une barre de longueur nulle ne reçoit plus ni classe
+ni style : sa bordure aurait dessiné un trait sur rien.
+
+**Excel dessine enfin la barre** (dette de la phase 6) : un `dataBar` par colonne, sur ses seules lignes
+de **données**, aux bornes `cfvo type="num"` **épinglées** sur le plafond que la prep a résolu — les
+bornes automatiques d'Excel liraient les lignes Total que la barre html exclut, et les deux médias
+diraient deux longueurs sous le même chiffre. ⚠ `xlb_databar()` appelle la **méthode R6**, pas
+`wb_add_conditional_formatting()`, qui clone le classeur et jetterait la règle. ⚠ **Une seule porte,
+énoncée une fois** : Excel dessine à partir du nombre qu'il DÉTIENT, donc la barre n'est écrite que si
+ce nombre est celui que la barre mesure — ce qui exclut une valeur négative (le html lit une magnitude,
+un `cfvo` ne le peut pas) et une colonne multiplicative (la cellule porte le pli signé) ; sinon rien,
+et un `tx_inform_once()` clé sur la colonne. ⚠ Excel n'a qu'une couleur par barre : l'aplat y est
+l'accent plein là où le html pose une teinte sous une bordure — même encre, idiome d'Excel.
+
+**Un défaut trouvé en chemin.** `tx_print_html()` écrivait `getOption("tabxplor.print") %in% …`, qui
+vaut `logical(0)` sur une option absente et arrête le `if`. `.onLoad()` sème l'option, mais un paquet
+qui n'atteint tabxplor que par `tabxplor::` ne charge pas son *namespace* : `library(ggfacto)` puis le
+premier `print()` d'un `tab()` plantait. `isTRUE()` suffit, et un test le tient.
+
+Suite livrée verte : **4 816** (4 797 avant). `_snaps/golden.md` accepté — 128 lignes, toutes la
+règle de la barre, vérifiées une par une ; les 36 fixtures `_golden/*.rds` ne bougent pas, aucun
+nombre ne changeant. Dans `dev/tests/`, l'inventaire des `width:` de la feuille gagne celui de la
+barre — une longueur posée sur un `::before` absolu, qui ne dimensionne donc rien.
+
+⚠ **Relevé au passage, et non traité** : `set_bars` / `get_bars` ne sont dans aucune section
+`reference:` de `_pkgdown.yml`, comme les six topics du cadre de pied relevés en phase 7c.
+
+#### v2.0.1 — Phase 10 — noms de col_vars plus compacts dans les exports
 
 Les noms de variables en html rendent les tableaux `levels="first"` exportés (html, Excel, md) moins compacts, c’est un problème pour lequel je voudrais une solution générale user-friendly et bien pensée, pour utiliser l’espace horizontal quand il y en a, mais avoir un auto wrap intelligent quand l’espace est compté (et notamment quand chaque colonne à sa propre col_var avec `levels="first"`).
 - Je voudrais une politique plus agressive, using the sum of the maximums length of all already wrapped columns names (from `wrap_cols =`) *grouped under the same col_var*. It should cut preferentially at " ", "_", etc. (assuming the general case is snake_case variables names), but cut inside a "word" anyway if a "word" is longer that the maximum length.
@@ -948,8 +1019,6 @@ Other related improvements, from `~github/ggfacto/` and `~github/formations_stat
 - A rotated name should be allowed to wrap to several vertical lines ? tab_vname_plan() gives it exactly one, so rotation is unreachable for any heading longer than ~1.75 × block height. The horizontal path already wraps; letting the vertical one do the same would make Axe 1: 9.9% of variance (mod. 57%) turn in a 5-row block.
 
 Dettes de la phase 6 à regler :
-- **La barre de données en Excel.** `openxlsx2::wb_add_conditional_formatting(type = "dataBar")` est à
-  portée ; c'est la géométrie d'une feuille `tab_xl()` qui est le sujet.
 - **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
   à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
   la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche peut-être `cv`,
@@ -964,6 +1033,7 @@ Dettes de la phase 6 à regler :
   tout ce que le modèle de rendu indexe par un nom de colonne (`bars`, `emp_tips`, `tooltips`) cesse de
   correspondre après `tab_wrap_text()`, en silence. Même sujet que le `rowspan` perdu par un nom
   espacé, en phase 8. ⚠ La phase 7 a tenu la leçon en clé **par mesure**, jamais par colonne.
+
 
 #### Phase xx — jamovi 2.0.0 release
 

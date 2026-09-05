@@ -366,31 +366,76 @@ get_legend_words <- function(x) get_meta(x)[["legend_words"]]
 #' Draw a column as data bars
 #'
 #' @description
-#' Names the columns whose cells carry a horizontal bar behind their figure, in html --- a bar chart
-#' inside the table, at no cost in width. Each bar is the cell's value as a share of its own column's
-#' largest, so the biggest fills its cell; total and footer rows take none.
+#' Names the columns whose cells carry a horizontal bar behind their figure --- a bar chart inside the
+#' table, at no cost in width, in html and in Excel. Total and footer rows take none.
 #'
-#' It is a display intent, like a caption: the numbers are untouched, and every other medium ignores
-#' it (a pipe table and an Excel cell have nowhere to put it).
+#' \strong{One reference per column}: every bar in a column is a share of the same ceiling, or two bars
+#' could not be compared. That ceiling is the column's own largest data cell by default, which is what
+#' spreads the bars over the width available; \code{max} states it instead, so that two tables can be
+#' read against each other.
+#'
+#' It is a display intent, like a caption: the numbers are untouched, and a medium with nowhere to put
+#' a bar (the console, a pipe table) ignores it.
 #'
 #' @param x A \code{tabxplor_tab}.
 #' @param cols Column names, or \code{NULL} to remove.
-#' @return \code{x}, with its bar columns set (\code{set_bars}) ; their names, or \code{NULL}
-#'   (\code{get_bars}).
+#' @param max The ceiling a full bar means, in the column's \strong{stored} unit --- a percentage is
+#'   stored between 0 and 1, so \code{max = 1} means 100 %. \code{NULL} (the default) or \code{NA}
+#'   takes the column's largest data cell. Unnamed values are recycled over \code{cols}, a named one
+#'   applies to that column.
+#' @return \code{x}, with its bar columns set (\code{set_bars}) ; a named vector of their ceilings,
+#'   \code{NA} where the column's largest is used, or \code{NULL} (\code{get_bars}).
 #' @seealso [new_tab()] for the whole `meta` record.
 #' @export
 #' @examples
 #' t <- tab(forcats::gss_cat, race, marital, pct = "row")
 #' t <- set_bars(t, "Married")
 #' get_bars(t)
-set_bars <- function(x, cols) {
+#'
+#' # a full bar means 100 %, whatever the column holds
+#' get_bars(set_bars(t, "Married", max = 1))
+set_bars <- function(x, cols, max = NULL) {
   if (!is.null(cols)) cols <- as.character(cols)[nzchar(as.character(cols))]
-  set_meta_field(x, "bars", if (length(cols)) cols else NULL)
+  if (!length(cols)) return(set_meta_field(x, "bars", NULL))
+  set_meta_field(x, "bars", bars_ceilings(cols, max))
 }
 
 #' @rdname set_bars
 #' @export
 get_bars <- function(x) get_meta(x)[["bars"]]
+
+# THE reader every renderer uses: the stored field as a named ceiling vector, whatever shape it was
+# written in. A table built before the ceilings existed stored a bare vector of column NAMES -- read
+# as "no ceiling stated", so an old saved table still draws its bars.
+tab_bar_ceilings <- function(x) {
+  b <- get_bars(x)
+  if (is.null(b) || !length(b)) return(stats::setNames(double(0), character(0)))
+  if (is.numeric(b) && !is.null(names(b))) return(b)
+  bars_ceilings(as.character(b))
+}
+
+# cols + `max` -> the named ceiling vector `meta$bars` IS. The house grammar of a per-variable
+# argument: unnamed entries are the fallback, recycled; a named one applies to that column alone.
+# NA = "no ceiling stated", which prep_one_table() reads as the column's own largest data cell.
+bars_ceilings <- function(cols, max = NULL) {
+  out <- stats::setNames(rep(NA_real_, length(cols)), cols)
+  if (is.null(max) || !length(max)) return(out)
+  nmd <- names(max) %||% rep("", length(max))
+  max <- suppressWarnings(as.double(max))   # as.double() drops names -- keep them beside it
+  names(max) <- nmd
+  free <- max[!nzchar(nmd)]
+  if (length(free)) out[] <- rep_len(free, length(cols))
+  named <- max[nzchar(nmd)]
+  hit   <- intersect(names(named), cols)
+  if (length(hit)) out[hit] <- named[hit]
+  bad <- !is.na(out) & (!is.finite(out) | out <= 0)
+  if (any(bad)) cli::cli_abort(c(
+    "A data bar's ceiling must be a positive number.",
+    x = "{.val {names(out)[bad]}} got {.val {unname(out[bad])}}.",
+    i = "Leave {.arg max} out to scale on the column's own largest value."
+  ))
+  out
+}
 
 # THE one expansion: a table carrying subordinate tables is handed to the exporters as the LIST it
 # means, so `list_method = TRUE` renders them one-after-another and css, theme, subtext and the
@@ -501,7 +546,7 @@ TAB_ATTRS <- tx_grid(tibble::tribble(
   "footer_tabs", "meta", "set_footer_tabs", FALSE, NULL,
   "the tables and notes rendered UNDER this one by every medium, set by \\code{\\link{set_footer_tabs}}: a \\code{tabxplor_tab} renders as a table, any other data.frame as a grey note (\\code{\\link{tab_note}}). In the console they print ABOVE the table, so the last thing printed is the object you can go on to pipe. A footer table's own are never rendered.",
   "bars", "meta", "set_bars", TRUE, NULL,
-  "the columns drawn as data bars in html (\\code{\\link{set_bars}}).",
+  "the columns drawn as data bars in html and in Excel, each named with the ceiling a full bar means (\\code{NA} = the column's own largest data cell, so that one reference serves the whole column --- \\code{\\link{set_bars}}).",
 ))
 
 stopifnot(all(vapply(TAB_ATTRS, function(a)
@@ -705,8 +750,11 @@ new_test_tibble <- local({
 
 # THE one predicate for "does options(tabxplor.print) ask for an html render?". "html" is the taught
 # value; "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
+# ⚠ isTRUE(), not a bare `%in%`: on an option that was never set the comparison is `logical(0)` and
+# the calling `if` stops. .onLoad() seeds it, but a package reaching tabxplor only through `tabxplor::`
+# never loads its namespace -- so `library(ggfacto)` alone left the first print() of a tab() erroring.
 tx_print_html <- function() {
-  getOption("tabxplor.print") %in% c("html", "kable")
+  isTRUE(getOption("tabxplor.print") %in% c("html", "kable"))
 }
 
 #' Printing method for class tabxplor_tab

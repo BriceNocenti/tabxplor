@@ -640,9 +640,20 @@ testthat::test_that("tab_pipe() is tab_md() with three arguments fixed", {
 # should decide -- both look right and are wrong the moment the reader switches to dark.*
 testthat::test_that("set_bars() draws a length inline and leaves every colour to the stylesheet", {
   t <- set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married")
-  testthat::expect_identical(get_bars(t), "Married")
+  # the stored field is the CEILING of each barred column, NA = "the column's own largest"
+  testthat::expect_identical(get_bars(t), c(Married = NA_real_))
   testthat::expect_null(get_bars(set_bars(t, NULL)))
   testthat::expect_length(get_bars(dplyr::mutate(t, dummy = 1L)), 1L)   # rides `meta`
+  # the house grammar of a per-variable argument: unnamed = the fallback, named = that column
+  testthat::expect_identical(get_bars(set_bars(t, c("Married", "Divorced"), max = 1)),
+                             c(Married = 1, Divorced = 1))
+  testthat::expect_identical(
+    get_bars(set_bars(t, c("Married", "Divorced"), max = c("Divorced" = 0.5))),
+    c(Married = NA_real_, Divorced = 0.5))
+  testthat::expect_error(set_bars(t, "Married", max = 0), "positive")
+  # a table stored before the ceilings existed carried the NAMES alone, and still draws its bars
+  old_shape <- set_meta_field(t, "bars", "Married")
+  testthat::expect_true(grepl("--tx-bar:100%", as.character(tab_html(old_shape)), fixed = TRUE))
 
   h <- as.character(tab_html(t))
   # one bar per DATA row -- a total is not on the same scale as what it totals
@@ -655,6 +666,26 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   testthat::expect_false(any(grepl("#|rgb|oklch", sty)))
   testthat::expect_true(grepl("td.tx-bar", h, fixed = TRUE))
   testthat::expect_true(grepl("currentColor", h, fixed = TRUE))
+
+  # ONE reference per column, or two bars could not be compared: the ceiling is the largest data cell
+  # of the WHOLE column, never of a sub-table, and `max` states it instead.
+  tg <- set_bars(tab(fx_gss(), race, marital, tab_vars = "year", filter = "year %in% 2000:2002",
+                     pct = "row"), "Married")
+  hg <- as.character(tab_html(tg))
+  testthat::expect_identical(
+    lengths(regmatches(hg, gregexpr("--tx-bar:100%", hg, fixed = TRUE))), 1L)
+  # a stated ceiling: nothing reaches the full width any more
+  hm <- as.character(tab_html(set_bars(t, "Married", max = 1)))
+  wm <- as.numeric(sub("%$", "", sub("^--tx-bar:", "",
+                       unlist(regmatches(hm, gregexpr("--tx-bar:[0-9.]+%", hm))))))
+  testthat::expect_length(wm, 3L)
+  testthat::expect_true(max(wm) < 100 && max(wm) > 40)   # a share of 100 %, not of the largest
+
+  # a bar of length zero is not a bar: no class, no style -- its border would draw a tick on nothing
+  t0 <- t; t0$Married <- set_num(t0$Married, c(0, get_num(t0$Married)[-1]))
+  h0 <- as.character(tab_html(t0))
+  testthat::expect_identical(
+    lengths(regmatches(h0, gregexpr("--tx-bar:", h0, fixed = TRUE))), 2L)
 
   # ⚠ A NAME WITH A SPACE IS A DIFFERENT NAME BY THE TIME THE HTML BACKEND LOOKS IT UP:
   # tab_wrap_text() rewrites every space to U+202F and renames the column, so a `bars` list keyed
@@ -671,6 +702,16 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   h3 <- as.character(tab_html(set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married"),
                               transpose = TRUE))
   testthat::expect_false(grepl("--tx-bar:", h3, fixed = TRUE))
+})
+
+# *`getOption()` of an option nobody set is NULL, and `NULL %in% x` is `logical(0)`, which stops an
+# `if`. .onLoad() seeds it -- but a package reaching tabxplor only through `tabxplor::` never loads
+# its namespace, so a user of THAT package could not print a table at all.*
+testthat::test_that("printing works with no tabxplor.print option set", {
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  withr::local_options(tabxplor.print = NULL)
+  testthat::expect_null(getOption("tabxplor.print"))
+  testthat::expect_no_error(print(t, get_text = TRUE))
 })
 
 

@@ -5,7 +5,7 @@
 \alias{get_bars}
 \title{Draw a column as data bars}
 \usage{
-set_bars(x, cols)
+set_bars(x, cols, max = NULL)
 
 get_bars(x)
 }
@@ -13,23 +13,35 @@ get_bars(x)
 \item{x}{A \code{tabxplor_tab}.}
 
 \item{cols}{Column names, or \code{NULL} to remove.}
+
+\item{max}{The ceiling a full bar means, in the column's \strong{stored} unit --- a percentage is
+stored between 0 and 1, so \code{max = 1} means 100 \%. \code{NULL} (the default) or \code{NA}
+takes the column's largest data cell. Unnamed values are recycled over \code{cols}, a named one
+applies to that column.}
 }
 \value{
-\code{x}, with its bar columns set (\code{set_bars}) ; their names, or \code{NULL}
-(\code{get_bars}).
+\code{x}, with its bar columns set (\code{set_bars}) ; a named vector of their ceilings,
+\code{NA} where the column's largest is used, or \code{NULL} (\code{get_bars}).
 }
 \description{
-Names the columns whose cells carry a horizontal bar behind their figure, in html --- a bar chart
-inside the table, at no cost in width. Each bar is the cell's value as a share of its own column's
-largest, so the biggest fills its cell; total and footer rows take none.
+Names the columns whose cells carry a horizontal bar behind their figure --- a bar chart inside the
+table, at no cost in width, in html and in Excel. Total and footer rows take none.
 
-It is a display intent, like a caption: the numbers are untouched, and every other medium ignores
-it (a pipe table and an Excel cell have nowhere to put it).
+\strong{One reference per column}: every bar in a column is a share of the same ceiling, or two bars
+could not be compared. That ceiling is the column's own largest data cell by default, which is what
+spreads the bars over the width available; \code{max} states it instead, so that two tables can be
+read against each other.
+
+It is a display intent, like a caption: the numbers are untouched, and a medium with nowhere to put
+a bar (the console, a pipe table) ignores it.
 }
 \examples{
 t <- tab(forcats::gss_cat, race, marital, pct = "row")
 t <- set_bars(t, "Married")
 get_bars(t)
+
+# a full bar means 100 \%, whatever the column holds
+get_bars(set_bars(t, "Married", max = 1))
 }
 \seealso{
 \code{\link[=new_tab]{new_tab()}} for the whole \code{meta} record.

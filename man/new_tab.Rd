@@ -50,7 +50,7 @@ ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.}
 \item \code{color_breaks} --- a per-table override of the colour break scales, set by \code{tab(color_breaks =)} and merged over the global option (\code{\link{set_color_breaks}}) at render time.
 \item \code{legend_words} --- what this table's colour legend CALLS each measure --- naming only, never a number (see \code{\link{set_legend_words}}).
 \item \code{footer_tabs} --- the tables and notes rendered UNDER this one by every medium, set by \code{\link{set_footer_tabs}}: a \code{tabxplor_tab} renders as a table, any other data.frame as a grey note (\code{\link{tab_note}}). In the console they print ABOVE the table, so the last thing printed is the object you can go on to pipe. A footer table's own are never rendered.
-\item \code{bars} --- the columns drawn as data bars in html (\code{\link{set_bars}}).
+\item \code{bars} --- the columns drawn as data bars in html and in Excel, each named with the ceiling a full bar means (\code{NA} = the column's own largest data cell, so that one reference serves the whole column --- \code{\link{set_bars}}).
 }
 \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no
 attribute.}
