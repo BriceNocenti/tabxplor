@@ -399,3 +399,62 @@ testthat::test_that("a rotated variable name may take several turned lines", {
   testthat::expect_match(h, "variance<br>", fixed = TRUE)
   testthat::expect_false(grepl("varian<br>", h, fixed = TRUE))
 })
+
+
+# === SECTION: the ink of a summary row ============================================================
+# Phase 11. A GRADED row's uncoloured cell recedes to the greyed ink; an UNGRADED one -- a base
+# count, a share, a test -- states a number, so it keeps the table's own ink and is never bolded by
+# structure. Declared once in ROW_KINDS (R/row-model.R) and read by fmt_col_ann() and the console.
+
+tx_ann_of <- function(t, backend = "kable") {
+  rd <- tabxplor:::tab_export_prep(t, backend = backend)$tables[[1]]
+  list(rd = rd, kinds = tabxplor:::tab_row_roles(rd$tab))
+}
+
+testthat::test_that("a summary row keeps the table's ink, in EVERY column", {
+  # the defect: `n` / `pct` rows greyed, and a column with no colour measure greyed them to ANOTHER
+  # grey -- one row printed in two inks.
+  p <- tx_ann_of(tab(gss, marital, race, pct = "col", color = "diff", add_pct = TRUE))
+  rows <- which(p$kinds %in% c("n", "pct"))
+  testthat::expect_gt(length(rows), 0L)
+  ink <- tabxplor:::tx_chrome_hex("light")$text
+  for (a in p$rd$ann) {
+    testthat::expect_true(all(a$anchor[rows]))
+    testthat::expect_identical(a$font[rows], rep(ink, length(rows)))
+    testthat::expect_false(any(a$bold[rows]))          # ink is not weight
+  }
+  testthat::expect_length(intersect(p$rd$bold_rows, rows), 0L)
+})
+
+testthat::test_that("a crosstab's test rows read like a regression's, in one ink", {
+  # they never did: the old gate reduced footer DISPLAY tokens with `&`, so one base-count column
+  # defeated it and `footer_rows` was empty on every crosstab.
+  p <- tx_ann_of(tab(gss, marital, race, pct = "row", color = "diff",
+                     test = TRUE, add_pct = TRUE))
+  rows <- which(p$kinds %in% c("pvalue", "gof"))
+  testthat::expect_gt(length(rows), 0L)
+  inks <- unique(unlist(lapply(p$rd$ann, function(a) a$font[rows])))
+  testthat::expect_identical(inks, tabxplor:::tx_chrome_hex("light")$text)
+})
+
+testthat::test_that("html gives a summary row no grey class", {
+  h <- as.character(tab_html(tab(gss, marital, race, pct = "col", color = "diff",
+                                 add_pct = TRUE), css = FALSE))
+  rows <- strsplit(h, "<tr>", fixed = TRUE)[[1]]
+  rows <- rows[grepl("<td", rows, fixed = TRUE)]
+  # the last two body rows are the pct / n summary rows: no g1, no g2 anywhere in them
+  testthat::expect_true(any(grepl('class="[^"]*\\bg[12]\\b', rows)))          # the data rows do
+  testthat::expect_false(any(grepl('class="[^"]*\\bg[12]\\b', utils::tail(rows, 2L))))
+})
+
+testthat::test_that("a Total row stays GRADED: under ref = \"first\" it greys out where it may", {
+  # the maintainer's decision: a Total row IS a deviation from the reference row there, and every
+  # export already names it with a rule above it -- so nothing about it moved.
+  p <- tx_ann_of(tab(gss, marital, race, pct = "row", color = "diff", ref = "first"))
+  tot   <- which(p$kinds == "total")
+  # ...in its GRADED columns: a Total COLUMN is all-anchor by its own (column) axis.
+  graded_cols <- setdiff(names(p$rd$ann), names(which(tabxplor:::is_totcol(p$rd$tab))))
+  testthat::expect_true(all(tabxplor:::row_kind_graded(p$kinds)))
+  testthat::expect_false(any(unlist(lapply(p$rd$ann[graded_cols], function(a) a$anchor[tot]))))
+  testthat::expect_length(intersect(p$rd$bold_rows, tot), 0L)
+})

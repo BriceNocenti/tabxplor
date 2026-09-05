@@ -224,7 +224,7 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
   expect_true(any(refr))
   # the empirical-column reference CATEGORY cells are kept black + bold (were greyed: ref_type "tot"
   # yet marked per-category via in_refrow, so get_reference("all_totals") missed them)
-  expect_true(all(ann_e$keep_black[refr]))
+  expect_true(all(ann_e$anchor[refr]))
   expect_true(all(ann_e$bold[refr]))
 
   # the GOF footer rows (all fmt cells are gof/pvalue/blank) are black + bold in EVERY column
@@ -233,13 +233,13 @@ test_that("reg reference cells and GOF footer render black + bold, data cells st
     tabxplor:::get_display(tabm[[.x]])) %in% c("gof", "pvalue", "blank")), `&`)
   expect_true(any(footer))
   for (nm in fmt_nm) {
-    expect_true(all(rd$ann[[nm]]$keep_black[footer]))
+    expect_true(all(rd$ann[[nm]]$anchor[footer]))
   }
 
-  # a plain uncoloured, non-reference, non-footer data cell is STILL greyable (keep_black FALSE) --
+  # a plain uncoloured, non-reference, non-footer data cell is STILL greyable (anchor FALSE) --
   # greying still makes the coloured cells pop
   data_rows <- !refr & !footer
-  expect_false(all(ann_e$keep_black[data_rows]))
+  expect_false(all(ann_e$anchor[data_rows]))
 })
 
 

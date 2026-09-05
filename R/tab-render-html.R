@@ -338,10 +338,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       bsl <- slot(a$bg_slot)
       cls <- tx_slot_class("text", tsl)
       bgc <- tx_slot_class("bg",   bsl)
-      # keep_black = ref_alltot | is_refrow | footer -- the cells kept as black reading anchors rather
-      # than greyed; falls back to ref_alltot alone (a degraded-model guard) when absent.
-      keep <- if (is.null(a$keep_black)) a$ref_alltot else { stopifnot(length(a$keep_black) == n_row)
-                                                             a$keep_black }
+      # `anchor` -- the cells that read in the table's own ink rather than greyed (fmt_row_look(),
+      # R/row-model.R); falls back to ref_alltot alone (a degraded-model guard) when absent.
+      keep <- if (is.null(a$anchor)) a$ref_alltot else { stopifnot(length(a$anchor) == n_row)
+                                                         a$anchor }
       grey <- !nzchar(cls) & !nzchar(bgc) & !keep
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
       cls[a$bold] <- trimws(paste(cls[a$bold], "tx-b"))

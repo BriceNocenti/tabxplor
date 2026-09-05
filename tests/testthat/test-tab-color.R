@@ -380,3 +380,55 @@ testthat::test_that("a homogeneous column is untouched by the mixed gate", {
   testthat::expect_no_message(fmt_color_channels(t[[2]]))
   testthat::expect_identical(get_scale(t[[2]]), "level_pct")
 })
+
+
+# === SECTION: a test cell is a WARNING, not a data effect =========================================
+# A non-significant test row reads deep red whatever the table is coloured by -- significance does
+# not depend on which geometry the column reports -- and always in INK, never as a fill.
+
+testthat::test_that("a non-significant test row is red under every measure, and never filled", {
+  set.seed(1)
+  d <- fx_gss()[1:600, ] |>
+    dplyr::mutate(noise = factor(sample(c("a", "b"), 600, replace = TRUE)))
+  red <- tabxplor:::tx_chrome_hex("light")   # the m4 rung is the palette's, not the chrome's
+  for (cm in list("diff", "ratio", "or", "contrib", c("diff", "ratio"), c("ratio", "diff"))) {
+    t  <- tab(d, marital, noise, pct = "row", color = cm, test = TRUE, tot = "both")
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    testthat::expect_length(pv, 1L)
+    nm <- names(rd$ann)[[1]]
+    ch <- tabxplor:::fmt_color_channels(rd$tab[[nm]])
+    testthat::expect_identical(ch$text_slot[pv], max(tabxplor:::fmt_color_plan(
+      rd$tab[[nm]], "text", color = tabxplor::get_color(rd$tab[[nm]]))$under_slots))
+    testthat::expect_identical(ch$bg_slot[pv], 0L)              # never a fill
+    testthat::expect_identical(rd$ann[[nm]]$back[pv], "none")
+  }
+})
+
+testthat::test_that("a significant test row stays uncoloured, whatever the measure", {
+  for (cm in c("diff", "or")) {
+    t  <- tab(fx_gss(), marital, race, pct = "row", color = cm, test = TRUE, tot = "both")
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    nm <- names(rd$ann)[[1]]
+    testthat::expect_lt(tabxplor::get_pvalue(rd$tab[[nm]])[pv], 0.05)
+    testthat::expect_identical(tabxplor:::fmt_color_channels(rd$tab[[nm]])$text_slot[pv], 0L)
+  }
+})
+
+testthat::test_that("a model-fit p-value reads the same on a logistic and a linear model", {
+  set.seed(1)
+  d <- fx_gss()[1:1500, ] |> dplyr::mutate(
+    married = factor(dplyr::if_else(marital == "Married", "yes", "no")),
+    noise   = factor(sample(letters[1:3], 1500, replace = TRUE)),
+    num     = stats::rnorm(1500))
+  ink <- vapply(list(quote(married), quote(num)), function(y) {
+    t  <- suppressMessages(tab_reg(d, !!y, noise, stats = "global"))
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    nm <- names(rd$ann)[[length(rd$ann)]]
+    testthat::expect_gt(tabxplor::get_pvalue(rd$tab[[nm]])[pv][[1]], 0.05)
+    rd$ann[[nm]]$font[pv][[1]]
+  }, character(1))
+  testthat::expect_identical(ink[[1]], ink[[2]])   # the link chose the colour, before this rule
+})

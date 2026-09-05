@@ -235,11 +235,11 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("names(MEASURE_PRODUCER_FN)", function() names(MEASURE_PRODUCER_FN),
         function() MEASURE_PRODUCERS),
   tx_fk("REG_CHECKS$kind",         function() tx_fk_scalar(REG_CHECKS, "kind"),
-        function() ROW_KINDS),
+        function() names(ROW_KINDS)),
 
   # --- into TEST_ROWS: what kind of statistical row this is -----------------------------------
   tx_fk("TEST_ROWS$kind",          function() tx_fk_scalar(TEST_ROWS, "kind"),
-        function() ROW_KINDS),
+        function() names(ROW_KINDS)),
   tx_fk("TEST_ROWS$stat",          function() tx_fk_scalar(TEST_ROWS, "stat"),
         function() reg_stat_keys()),
   tx_fk("TEST_ROWS$var_kind",      function() tx_fk_scalar(TEST_ROWS, "var_kind"),

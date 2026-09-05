@@ -149,7 +149,7 @@ The main fact tables:
 | `PRINT_PALETTES`   | `tab-palettes.R`     | The black-and-white publication palettes: a row per break slot (ink, face, mark)        |
 | `TAB_ARGS`         | `tab-args.R`         | The argument surface (signatures, values, option twins, prose; + `EXPORT_ARGS`)         |
 | `TAB_OPTIONS`      | `tab-options.R`      | The package options and their defaults                                                  |
-| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary                                                                 |
+| `ROW_KINDS`        | `row-model.R`        | The row-kind vocabulary, and whether a kind's cells are graded (so how the row reads)   |
 | `TEST_ROWS`        | `tab-test-display.R` | The footer / statistical-row catalogue                                                  |
 | `TOOLTIP_LINES`    | `tab-tooltip.R`      | The hover tooltip's lines: which token each renders, its label, its gates, their order  |
 | `FOOTER_BLOCKS`    | `tab-footer.R`       | The region under a table: one row per member, its `<placeholder>`, kind, and what it reads |
@@ -234,7 +234,7 @@ The attribute list is **derived** from `new_fmt()`'s formals (attributes = forma
 
 #### The row model
 
-Rows describe themselves the way columns do. The `row_kind` field (`ROW_KINDS`: `data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`) says what kind of row a cell sits in, `is_totrow()` being the derived read; the index columns are a `tabxplor_lvl` factor subclass carrying each level's `role` and originating `var`, so variable detection and rendering read stored facts rather than guessing from labels.
+Rows describe themselves the way columns do. The `row_kind` field (`ROW_KINDS`: `data`/`total`/`n`/`pct`/`pvalue`/`gof`/`blank`) says what kind of row a cell sits in — `is_totrow()` being the derived read, and `graded` the declared one that decides how the row READS, since a summary row states a number where a data row grades a deviation; the index columns are a `tabxplor_lvl` factor subclass carrying each level's `role` and originating `var`, so variable detection and rendering read stored facts rather than guessing from labels.
 
 ### The calculation pipeline
 
@@ -279,6 +279,8 @@ Colour has three orthogonal axes: a **measure** (which deviation to grade — `d
 1. **Palettes** (`tab-palettes.R`, which holds every one of them) — OKLCH colour ramps, hand-tuned so intensity levels stay distinguishable, in light, dark and 8-bit variants, set via `set_color_palette()`; the **chrome** beside them (`tx_chrome_hex()`: the table's own ink, the greyed-out cell, the aside — of which the *ground* is the one a rendered table does not paint, following the page instead unless `tabxplor.background` says otherwise); and, where a page has no colour, three **publication palettes** (`PRINT_PALETTES`) saying the same thing typographically — one declared grid each, a row per break slot carrying its ink, face and mark, `theme = "print_ready"` choosing between them from what the table IS. A palette is always hex **and** face: a backend must never derive "is this bold" from "does this have a hex".
 2. **Breaks** — per-scale thresholds (`COLOR_SCALES`). Every ladder is the SAME ladder written in another measure at one reference cell of 50 %, so a shade means the same size of deviation whichever measure a table is read on; each declares its `quantity`, its `anchor`, whether its two `sides` mirror (only where the quantity is unbounded above), and how many loud rungs it keeps on the background channel (`bg_keep` — a fill is the corrective voice). The shape rule is checked at load.
 3. **Selection** — a vectorised `findInterval` engine (`fmt_color_plan` → `fmt_color_slots` → `fmt_color_channels`) that folds each cell per side and picks the strongest matching threshold.
+
+A **test cell is a warning, not a graded effect**, and so is scoped by CHANNEL rather than by measure: a non-significant p-value row (`p > 1 - conf_level`, read per column) takes the deepest under-rung, a flagged model check the faintest, both in INK on the text channel only — a fill is the corrective voice a ladder rations, and significance does not depend on which geometry the table happens to report.
 
 The measure's behaviour — raw getter, scale keys, significance source, gating — lives in its `MEASURES` row, which drives both the plan and the legend with no per-measure branches; every backend then consumes the one artifact `fmt_color_channels` produces, which is why console, HTML, Excel, Markdown and plots colour identically. **`dev/colors.md`** derives where each ladder's anchor comes from, what colour-vision deficiency requires of a palette, and why a page with no colour needs a different palette rather than a desaturated one.
 
@@ -334,6 +336,7 @@ Rules that span subsystems — do not undo them without reading why:
 - **Facts live in one table.** Add a row and read it through its accessor; the foreign keys checked at load keep cross-table references honest.
 - **The `fmt` record is dense.** Every column carries all fields; "not applicable" is `NA`, never an absent field.
 - **`format()` is the one display source of truth** — text backends and the Excel numFmt codes both come from it.
+- **An uncoloured cell recedes only in a GRADED row.** There "no colour" says "no deviation worth reading"; in a row that states a number — a base count, a share, a test — it says nothing, so the cell keeps the table's own ink and structure never bolds it. One rule (`fmt_row_look()`), read by the exporters and by the console.
 - **Levels drop after the tests.** Non-first levels (`levels = "first"`) are removed only after chi²/CI, so tests see the full level set.
 - **Theme detection must never error** — it rests on no supported API; anything unknown resolves to "light".
 - **A variable list is a list of SYMBOLS**: read it with `vars_chr()`, never `as.character()`, which deparses a non-syntactic name back into backticks.
@@ -1172,6 +1175,121 @@ précoce là où celle de `tab_label_runs()` ne l'était pas.
 
 
 
+#### v2.0.1 — Phase 11 — l'encre d'une ligne de résumé **DONE**
+
+Demandé par `ggfacto` : les deux lignes de résumé de `HCPC_tab()` (`% of population`, `n`) sortaient
+en gris, l'encre qui dit « cette cellule aurait pu être graduée et ne l'est pas », alors qu'elles
+portent ce que le lecteur va chercher en premier. Mesuré : le défaut est celui de tabxplor, pas de
+`ggfacto` — sous `tab(pct = "col", add_pct = TRUE, test = TRUE)` les lignes `n`, `pct`, `pvalue` et
+`gof` sortent toutes `#949494`, et la ligne `pvalue` sort **en deux gris** (`#949494` dans les
+colonnes colorées, `#444444` dans la colonne d'effectifs).
+
+**La cause : la règle d'ancre ne connaissait pas les lignes.** `fmt_col_ann()` posait deux
+questions — cette cellule est-elle un total ou une référence, sa COLONNE déclare-t-elle une couleur —
+et rien d'autre. Trois conséquences, toutes mesurées. (1) La règle était **écrite deux fois**, dans
+`fmt_col_ann()` et à la main dans la console, dont le commentaire revendiquait pourtant la parité.
+(2) Deux **rustines** de `tab_export_prep()` re-dérivaient déjà la moitié de la réponse manquante :
+celle des lignes de pied lisait les jetons d'AFFICHAGE réduits par `&`, donc **une seule colonne
+d'effectifs la mettait en échec** — `rd$footer_rows` était **vide sur tout croisement** et la règle ne
+tirait que sur les régressions ; celle des lignes `n` lisait le bon vocabulaire, pour une valeur sur
+sept. (3) `ROW_KINDS` était un simple vecteur de caractères, alors que l'en-tête de son propre fichier
+dit que les lignes « se décrivent elles-mêmes ».
+
+**Un seul fait déclaré, une seule colonne : `graded`.** Une ligne graduée (`data`, `total`) porte des
+ÉCARTS que le moteur de couleur gradue : une cellule non colorée y **recule** vers le gris, parce que
+« pas de couleur » y veut dire « pas d'écart à lire », et sa cellule de référence avance, en encre
+pleine et en gras. Une ligne non graduée (`n`, `pct`, `pvalue`, `gof`, `blank`) **énonce** un nombre :
+une cellule non colorée n'y dit rien du tout, donc elle garde l'encre du tableau quoi qu'ait fait la
+graduation, et la structure ne la met jamais en gras — une couleur étant la seule emphase qu'elle
+garde (le rouge d'un p non significatif). ⚠ **Une colonne et non deux** (`anchor` + `bold`) : mesurées
+contre les sept clés elles sont complémentaires, c'est-à-dire un fait écrit deux fois. Encre et
+graisse sont une seule décision — cette ligne prend-elle part à la graduation ?
+
+⚠ **`total` reste GRADÉ** (décision du mainteneur) : sous `pct = "row", ref = "first"` la ligne Total
+EST un écart à la ligne de référence et doit griser là où elle n'est pas significative, et tous les
+exports la nomment déjà par la bordure horizontale au-dessus d'elle. Son encre pleine sous
+`ref = "tot"` vient de ce qu'elle est la RÉFÉRENCE. Conséquence mesurée : **aucune ligne Total ne
+bouge nulle part**.
+
+`fmt_row_look()` (`R/row-model.R`) est **toute** la règle d'ancre, et elle a exactement deux
+lecteurs : `fmt_col_ann()` pour les exports, `pillar_shaft.tabxplor_fmt()` pour la console — qui
+cessent ainsi de pouvoir dire deux choses d'une même cellule. Le champ `ann$keep_black` devient
+`ann$anchor` : c'était un faux nom depuis le thème sombre, où la valeur posée est `theme_cols$text`,
+un blanc cassé.
+
+**Trois suppressions.** La mutation de `ann` des lignes de pied, le dé-graissage des lignes `n`, et
+l'un des deux `setdiff` de `bold_rows`, réduits à un seul. L'exception `gof_warn` part avec : sur une
+cellule marquée le hex de son palier gagne dans `font` et sa classe gagne en html de toute façon, donc
+elle ne jouait que pour un contrôle marqué dans une colonne sans mesure de couleur — vérifié, la suite
+ne bouge pas. ⚠ **`footer_rows` reste, et garde sa dérivation par jetons d'affichage** : il a un
+second métier sans rapport, dire où le bloc d'ajustement d'une régression tire son filet de 2 px ; le
+re-dériver du `row_kind` aurait posé ce filet au-dessus de chaque ligne `add_pct` d'un croisement, là
+où `tot_block` en trace déjà un. Son commentaire dit désormais ce qu'il est et ce qu'il n'est pas.
+
+**Deux consolidations du même défaut.** `tab-tooltip.R` : `data_row` était le littéral
+`c("data", "total")`, ensemble pour ensemble `row_kind_graded()`. `tab_xl.R` : une colonne de
+référence mettait en gras la cellule d'une ligne de résumé, là où html la laisse nue — c'est le défaut
+que la rustine supprimée nommait (« a base count is not a reading anchor »), sur l'axe des colonnes.
+En revanche `tab-export-prep.R` garde son `!= "data"` pour les barres (une barre exclut aussi un
+Total, ce que `graded` ne dit pas — phase 9), et `stat_row` comme `is_summary` gardent les leurs :
+deux autres sous-ensembles des mêmes sept clés, lus une fois chacun, qu'il aurait fallu déclarer en
+une seconde taxonomie plutôt qu'en un fait énoncé une fois.
+
+⚠ **Markdown ne montre rien de tout cela et c'est inchangé** : une cellule non colorée n'y porte
+aucun span, son remplissage absorbant le balisage manquant (règle de `md_span_attr()`).
+
+Parité mesurée sur `tab_reg()` : les lignes 11-18 sont `gof`/`pvalue`, `anchor` y était déjà `TRUE`
+et `bold` déjà `FALSE`, et `bold_rows` vaut `1,2,8` des deux côtés — **le chemin des régressions est
+octet pour octet identique**, la grille énonce simplement ce que la rustine faisait.
+
+Suite livrée verte : **4 896** (4 864 avant), suite `dev/tests/` verte (**5 900**). Les 36 fixtures
+`_golden/*.rds` **ne bougent pas** (`graded` est un fait de rendu, rien n'est stocké sur le tableau)
+et un seul instantané bouge, `_snaps/tab-render-html.md` : deux lignes, celles de `pvalue (Chi2)` et
+de `Cramér's V`, qui perdent leur `g2` et leur `tx-b` de colonne Total. `?fmt_fields` gagne une
+section « Row kinds » engendrée depuis la colonne `doc` de la grille, comme `?tabxplor-footer` l'est
+depuis `FOOTER_BLOCKS`.
+
+⚠ **Une assertion de `dev/tests/` était périmée AVANT cette phase** (vérifiée contre `HEAD`) et est
+remise à jour au passage : `test-tab-render-html-sweep.R` exigeait que `tvhours*marital` tourne **et**
+se coupe en deux lignes, alors que le recalibrage vertical de la phase 10 (~14 caractères tournés par
+5 rangs en html) le fait tenir entier sur un bloc de 6 rangs. L'assertion dit maintenant ce que la
+règle dit : un nom tourne quand tourner économise de la largeur, et il tient entier quand il tient.
+
+
+#### v2.0.1 — Phase 11b — une ligne de test est un avertissement **DONE**
+
+Relevé en relisant la phase 11 : une ligne de p-value non significative ne rougissait que si la
+mesure de couleur de la colonne était `difference`. Mesuré, ce n'était pas une décision mais un
+défaut, sur trois preuves. (1) Rien n'était protégé : `under_slots` vaut `0,5,6,7,8` sous **toutes**
+les mesures (`difference`, `ratio`, `odds_ratio`, `contrib`), donc le garde ne préservait aucune
+échelle dégénérée. (2) Il coupait en deux des lignes identiques : deux régressions dont le test
+d'association globale donne p ≈ 0,76, la linéaire (lien identité → `difference`) en rouge profond, la
+logistique (lien logit → `odds_ratio`) en noir — la même ligne de pied, le même énoncé, coloriée
+selon le lien du modèle. (3) Le paquet se contredisait déjà : le bloc de tests de la CONSOLE fait
+`red[r, ] <- row$nonsig` (`tab-test-display.R`), sans aucun garde de mesure.
+
+**La vraie question n'était pas la mesure mais le CANAL.** `fmt_color_slots()` tourne par canal, et
+le garde étant clé sur la mesure, il tombait où personne ne l'avait choisi : sous
+`color = c("ratio", "diff")` une p-value non significative recevait un **aplat** saumon et un texte
+noir, parce que le canal de FOND se trouvait être l'additif. La règle est donc désormais :
+`identical(plan$channel, "text")`, et `fmt_color_plan()` porte son `channel` dans le plan qu'il rend
+(un champ, la fonction le recevait déjà en argument).
+
+**Un avertissement est de l'encre, jamais un fond.** Une p-value non significative (`p > 1 -
+conf_level`, lu sur la colonne, donc `conf_level = 0.90` déplace le seuil à 10 %) prend le barreau
+inférieur le plus profond (`.m4`) sur le canal de texte, sous toute mesure et quelle que soit la
+disposition des deux canaux ; un fond est la voix corrective qu'une échelle rationne (`bg_keep`).
+⚠ **`gof_warn` prend le même cadrage** : un contrôle de modèle marqué garde le barreau le plus pâle,
+mais sur le texte seulement — il n'avait aucun garde de mesure, donc il peignait bel et bien un aplat
+sur le canal de fond, dans le même bloc « Model fit » où une p-value n'en peignait pas.
+
+⚠ **La légende ne dit rien de ce rouge, et c'est assumé** (décision du mainteneur) : rouge = mauvais
+se lit tout seul, et la légende énonce des MESURES quand ceci n'en est pas une.
+
+Suite livrée verte : **4 927** (4 896 avant, 31 assertions neuves dans `test-tab-color.R` : le rouge
+sous les six combinaisons de mesure et de canal, l'absence d'aplat, une ligne significative qui reste
+sans couleur, et la parité logistique/linéaire qui est le défaut d'origine). Aucun instantané ni
+aucune fixture `_golden` ne bouge : aucune n'a de test non significatif.
 
 #### Phase xx — jamovi 2.0.0 release
 

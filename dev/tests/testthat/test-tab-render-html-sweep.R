@@ -494,16 +494,15 @@ testthat::test_that("tabxplor.tab_kable_tooltips = FALSE strips tooltips documen
 })
 
 
-testthat::test_that("a rotated name wraps to its block's height, breaking before the operator", {
+testthat::test_that("a name rotates when turning it saves width, and not otherwise", {
   d <- fx_gss() |>
     dplyr::mutate(married = factor(dplyr::if_else(marital == "Married", "Married", "Not married")))
-  # `tvhours*marital` (15 chars over a 6-row block) is longer than the floor "Constant" sets, so it
-  # rotates; two vertical lines then fit, and the break falls before the cross operator.
+  # `tvhours*marital` (15 chars) is longer than the floor "Constant" sets, so it rotates -- and a
+  # 6-row block holds it whole, at html's measured ~14 turned characters per 5 rows.
   t <- suppressMessages(tab_reg(d, "married", c("relig", "tvhours*marital"), family = "binomial",
                                 stats = FALSE))
   h <- as.character(tab_html(t))
-  testthat::expect_match(h, "tvhours<br>", fixed = TRUE)
-  testthat::expect_match(h, "*marital", fixed = TRUE)
+  testthat::expect_match(h, 'tx-vname[^"]*" rowspan="6">tvhours\\*marital<', perl = TRUE)
   # ... and a name no longer than that floor stays horizontal, whole: rotating it would save nothing
   t2 <- suppressMessages(tab_reg(d, "married", c("relig", "age*race"), family = "binomial",
                                  stats = FALSE))

@@ -118,7 +118,7 @@ tx_transpose_render <- function(rd, backend) {
   # doubled rule to TRUE.
   faceund_d   <- slot_chr("face_underline", "")
   refalltot_d <- slot_lgl("ref_alltot")
-  keepblack_d <- slot_lgl("keep_black")
+  anchor_d    <- slot_lgl("anchor")
   font_d      <- slot_chr("font", NA_character_)
   back_d      <- slot_chr("back", "none")
   texthex_d   <- slot_chr("text_hex", NA_character_)
@@ -204,7 +204,7 @@ tx_transpose_render <- function(rd, backend) {
   # ann, keyed by new data-column name -----------------------------------------------------------
   ann_new <- stats::setNames(lapply(seq_len(n_orow), function(c) {
     list(ref_alltot = refalltot_d[[c]],
-         keep_black = keepblack_d[[c]],
+         anchor     = anchor_d[[c]],
          ref_cells  = rep(FALSE, n_nrow),
          text_hex   = texthex_d[[c]], bg_hex = bghex_d[[c]],
          text_slot  = text_slot_d[[c]], bg_slot = bg_slot_d[[c]],

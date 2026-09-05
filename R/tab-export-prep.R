@@ -111,10 +111,11 @@ tab_check_same_col_vars <- function(tabs, what = "tab_export_prep()",
 fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
   ref_alltot <- get_reference(col, mode = "all_totals")
   ref_cells  <- get_reference(col, mode = "cells")
-  # WARNING: a reference/total anchor (ref_alltot) must stay black even when its column greys
-  # non-anchors; a regression EMPIRICAL column marks its reference CATEGORY via in_refrow instead,
-  # which ref_alltot alone misses.
-  keep_black <- ref_alltot | is_refrow(col)
+  # THE INK LADDER, in three rungs: a graded cell takes its slot's hex; an ANCHOR -- a cell with no
+  # grade to recede from -- takes the table's own ink; everything else recedes. fmt_row_look()
+  # (R/row-model.R) is the whole anchor rule, and the console reads the same function.
+  look   <- fmt_row_look(col, .totals = ref_alltot)
+  anchor <- look$anchor
 
   ct <- get_color(col)
   has_col <- want_colors && length(ct) != 0L && !is.na(ct) && !ct %in% c("", "no")
@@ -147,18 +148,21 @@ fmt_col_ann <- function(col, theme_cols, want_colors = TRUE) {
     bg_hex     = bg_hex,
     text_slot  = text_slot,
     bg_slot    = bg_slot,
-    keep_black = keep_black,
+    anchor     = anchor,
     # Kept FLAT (three vectors) because tx_transpose_render() flips per-cell logicals with a flat
-    # helper. These are the MEASURE's face only -- `keep_black`'s structural bold is folded into
+    # helper. These are the MEASURE's face only -- the anchor's structural bold is folded into
     # `bold` below, never into these, since structural bolding is a row/column SET, not a per-cell flag.
     face_bold      = face$bold,
     face_italic    = face$italic,
     face_underline = face$underline,
     font = dplyr::case_when(!is.na(text_hex) ~ text_hex,
-                            keep_black       ~ theme_cols$text,
+                            anchor           ~ theme_cols$text,
                             TRUE             ~ grey_this),
     back = dplyr::if_else(is.na(bg_hex), "none", bg_hex),
-    bold = face$bold | keep_black,
+    # DESIGN: ink and weight are two questions, and only a GRADED row answers the second. A row that
+    # states a number reads at full strength without being shouted, so a colour -- a flagged check's
+    # shade, a non-significant p-value's red -- is the only emphasis it keeps.
+    bold = look$graded & (face$bold | anchor),
     has_color = has_col || has_bgc,
     has_bgc   = has_bgc
   )
@@ -525,51 +529,29 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
   )
   color_flags <- roles_color_flags(ann, color_cols)
   any_bg      <- color_flags$any_bg
-  # row-anchor signal for tab_bold_rows(), captured BEFORE the footer override below needs the pure signal.
-  anchors <- purrr::map(ann, "keep_black")
+  anchors <- purrr::map(ann, "anchor")   # the row-anchor signal tab_bold_rows() folds
 
-  # A REGRESSION GOF FOOTER ROW READS BLACK, AND NOT BOLD: a model-fit number is a report card under
-  # the table, so COLOUR is the only emphasis it keeps -- a marked check (`gof_warn`) keeps its own
-  # shade, a non-significant p-value its red. Bolding the numbers and the stat names beside them put
-  # the footer in front of the table it describes, in dark mode especially. The one thing still bold
-  # is the "Model fit" label in the predictor-names column, which each backend bolds through that
-  # COLUMN (html `tx-b` on the named cell, xl's var_name_col source) and not through the row.
-  # Never touches a crosstab.
+  # WHERE THE MODEL-FIT BLOCK STARTS -- a BORDER, not an ink fact: its first row draws a 2px rule
+  # across the whole table (render_html_engine()). What each of those rows LOOKS like is the row
+  # kind's own business (ROW_KINDS$graded, R/row-model.R), and `tot_block` above already rules a
+  # crosstab's summary rows, which is why this stays keyed on the footer DISPLAY tokens.
   footer_rows <- if (length(fmt_cols) > 0) {
     purrr::reduce(purrr::map(names(fmt_cols),
       ~ display_primary(get_display(tab[[.x]])) %in% DISPLAY_FOOTER_TOKENS), `&`)
   } else logical(nrow(tab))
-  if (any(footer_rows)) {
-    ann <- purrr::imap(ann, function(a, nm) {
-      blk <- footer_rows & display_primary(get_display(tab[[nm]])) != "gof_warn"
-      a$keep_black[blk] <- TRUE
-      a$font[blk]       <- theme_cols$text
-      a$bold[footer_rows] <- FALSE
-      a
-    })
-  }
 
-  # --- bold rows + bold cols (block D), from the pure `anchors` signal / ann$ref_alltot ---
+  # --- bold rows + bold cols (block D), from the `anchors` signal / ann$ref_alltot ---
   ref_alltot_list <- purrr::map(ann, "ref_alltot")
+  # An ungraded row is an anchor, so it reaches tab_bold_rows() -- but it is never a bold ROW: that
+  # bold would reach its LABEL cell (the stat names in the level column), putting a report card in
+  # front of the table it describes. What stays bold there is the "Model fit" label, which each
+  # backend bolds through the predictor-names COLUMN (`var_name_col`), never through the row.
   bold_rows <- if ("bold" %in% compute) {
-    tab_bold_rows(anchors)
+    setdiff(tab_bold_rows(anchors), which(!row_kind_graded(tab_row_roles(tab))))
   } else integer(0)
-  # ...and a footer row is never a bold ROW either, which is what used to reach its LABEL cells (the
-  # stat names in the level column). See the block above.
-  if ("bold" %in% compute && any(footer_rows)) bold_rows <- setdiff(bold_rows, which(footer_rows))
   bold_cols <- if ("bold" %in% compute && length(ref_alltot_list) > 0) {
     names(which(purrr::map_lgl(ref_alltot_list, all)))
   } else character(0)
-
-  # a pct="col" "n" row's Total-COLUMN cell falls into the all_totals anchor -- force it plain, a
-  # base count is not a reading anchor.
-  if ("bold" %in% compute) {
-    n_rows <- which(tab_row_roles(tab) == "n")
-    if (length(n_rows)) {
-      ann       <- purrr::map(ann, function(a) { a$bold[n_rows] <- FALSE; a })
-      bold_rows <- setdiff(bold_rows, n_rows)
-    }
-  }
 
   # THE shared col_var header model (spanning name row + level labels); see tab_col_var_header() below.
   col_blocks <- tab_col_block_ids(col_var_map, tab_col_groups(tab), other_cols, totcols)

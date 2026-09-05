@@ -98,7 +98,7 @@ testthat::test_that("transpose = TRUE keeps both colour channels + the numeric m
 
 
 # Phase 19h (D1): rd2 is a MODIFICATION of rd, not a 39-slot literal. The literal had already lost two
-# slots and was losing `ann$keep_black` -- the "do not grey this cell" anchor set -- which the html
+# slots and was losing `ann$anchor` -- the "do not grey this cell" anchor set -- which the html
 # engine reads behind a length-check fallback, so a transposed regression's GOF footer cells rendered
 # GREY where the native render keeps them black, with no error and no test.
 testthat::test_that("the transposed model keeps every slot the flip does not touch (D1)", {
@@ -113,9 +113,9 @@ testthat::test_that("the transposed model keeps every slot the flip does not tou
   # longer exist (the follow_wrap() trap, on the other seam).
   testthat::expect_true(all(setdiff(names(rd), "bars") %in% names(rd2)))
   testthat::expect_false("bars" %in% names(rd2))
-  # every per-cell ann field survives too -- this is where keep_black went missing
+  # every per-cell ann field survives too -- this is where the anchor set went missing
   testthat::expect_true(all(names(rd$ann[[1]]) %in% names(rd2$ann[[1]])))
-  testthat::expect_length(rd2$ann[[1]]$keep_black, nrow(rd2$tab))
+  testthat::expect_length(rd2$ann[[1]]$anchor, nrow(rd2$tab))
 })
 
 

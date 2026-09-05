@@ -490,10 +490,10 @@ test_that("the Constant row keeps its bold under empirical = TRUE", {
   const_row <- which(as.character(t$var) == "Constant")
   expect_true(all(const_row %in% rd$tables[[1]]$bold_rows))
   # the mechanism: every column must flag the Constant as an anchor, crude columns included.
-  # Phase 19h: the anchor signal is `keep_black` -- the shipped `ann$anchor` slot was a duplicate of
+  # Phase 19h: the anchor signal is `ann$anchor` -- the cells kept at full strength.
   # it that no backend read (and the transpose silently dropped), so it is a prep-internal local now.
   # On a Constant row the two are the same value: the footer override only touches GOF footer rows.
-  expect_true(all(purrr::map_lgl(rd$tables[[1]]$ann, ~ .x$keep_black[const_row])))
+  expect_true(all(purrr::map_lgl(rd$tables[[1]]$ann, ~ .x$anchor[const_row])))
 })
 
 

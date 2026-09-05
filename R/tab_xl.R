@@ -692,6 +692,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   unit_row   <- header_row + 1L                  # used only if has_unit
   data_row0  <- header_row + unit_off            # data row i -> i + data_row0
   data_rows  <- seq_len(n) + data_row0
+  # An UNGRADED row (a base count, a share, a test -- ROW_KINDS$graded, R/row-model.R) is not bolded
+  # by structure, on the row axis or on the column one: a reference COLUMN would otherwise shout a
+  # summary row that html leaves plain.
+  graded_rows <- if (isTRUE(transposed)) data_rows
+                 else data_rows[row_kind_graded(tab_row_roles(tab))]
   last_row   <- data_row0 + n
 
   fmt_cols    <- roles$fmt_cols
@@ -724,7 +729,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   n_rows_tab <- nrow(tab)
   bold_of <- purrr::map(seq_len(ncl), function(j) {
     b <- seq_len(n_rows_tab) %in% bold_rows
-    if (j %in% ref_cols || j %in% unname(roles$var_name_col)) b <- rep(TRUE, n_rows_tab)
+    if (j %in% ref_cols) b <- seq_len(n_rows_tab) %in% (graded_rows - data_row0)
+    if (j %in% unname(roles$var_name_col)) b <- rep(TRUE, n_rows_tab)
     a <- ann[[names(tab)[[j]]]]$bold
     if (!is.null(a)) b <- b | rep_len(a, n_rows_tab)
     b
@@ -911,7 +917,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                          color = tx_chrome_hex(o$theme)$grey),
     # a variable name is a heading, so the name column is bold throughout, as html has always done.
     mk_src(c(header_row, data_rows), roles$var_name_col, bold = TRUE),
-    mk_src(c(header_row, data_rows), ref_cols, bold = TRUE),                     # reference cols
+    mk_src(c(header_row, graded_rows), ref_cols, bold = TRUE),                   # reference cols
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows
     mk_src(start, 1L, bold = TRUE, size = 12),                                   # title
     mk_src(subtext_rows, 1L, size = o$text_size_subtext),                        # subtext

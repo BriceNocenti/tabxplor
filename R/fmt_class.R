@@ -466,9 +466,9 @@ fmt <- function(n         = integer(),
     row_kind  <- dplyr::if_else(in_totrow, "total", "data")
   }
   row_kind  <- vctrs::vec_recycle(vctrs::vec_cast(row_kind , character()), size = max_size)
-  if (!all(row_kind %in% ROW_KINDS))
-    cli::cli_abort(c("{.arg row_kind} must be one of {.val {ROW_KINDS}}.",
-                     "x" = "Got {.val {setdiff(row_kind, ROW_KINDS)}}."), call = NULL)
+  if (!all(row_kind %in% names(ROW_KINDS)))
+    cli::cli_abort(c("{.arg row_kind} must be one of {.val {names(ROW_KINDS)}}.",
+                     "x" = "Got {.val {setdiff(row_kind, names(ROW_KINDS))}}."), call = NULL)
   in_tottab <- vctrs::vec_recycle(vctrs::vec_cast(in_tottab, logical()), size = max_size)
   in_refrow <- vctrs::vec_recycle(vctrs::vec_cast(in_refrow, logical()), size = max_size)
 
@@ -801,7 +801,7 @@ is_totrow.default  <-  function(x, ...) rep(FALSE, length(x)) #{
 #' @noRd
 # WARNING: NEVER NA. dplyr::bind_rows() NA-fills a fmt column absent from one of its inputs, and
 #   every field of those cells comes back NA -- an NA here poisons the masked assignments in
-#   format(), the bold/keep_black masks in tab_export_prep(), and the colour engine's gates. An
+#   format(), the bold/anchor masks in tab_export_prep(), and the colour engine's gates. An
 #   unknown row is not a total row, so the three row predicates fold NA to FALSE at the source.
 is_totrow.tabxplor_fmt <- function(x, ...) {
   k <- vctrs::field(x, "row_kind")
@@ -809,8 +809,8 @@ is_totrow.tabxplor_fmt <- function(x, ...) {
 }
 
 #' @describeIn fmt_fields get the "row_kind" field: what kind of row each cell sits in
-#' (one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
-#' \code{"gof"}, \code{"blank"}).
+#' (see the \emph{Row kinds} section).
+#' @eval row_kinds_rd()
 #' @export
 get_row_kind <- function(x) {
   if (!is_fmt(x)) return(rep("data", length(x)))
@@ -822,7 +822,7 @@ get_row_kind <- function(x) {
 #' @export
 set_row_kind <- function(x, row_kind) {
   row_kind <- vctrs::vec_recycle(vctrs::vec_cast(row_kind, character()), length(x))
-  stopifnot(all(row_kind %in% ROW_KINDS))
+  stopifnot(all(row_kind %in% names(ROW_KINDS)))
   vctrs::`field<-`(x, "row_kind", row_kind)
 }
 
@@ -4280,17 +4280,18 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     text_styles <- get_color_style()                  # current type/theme/24-bit options (ANSI, cli)
     bg_styles   <- get_color_style(type = "bg")
 
-    totals <- if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")
-    # a reference ROW is also an anchor: a regression EMPIRICAL column marks its reference CATEGORY via
-    # in_refrow, which get_reference("all_totals") misses. For crosstabs is_refrow is a subset -> no-op.
-    totals <- totals | is_refrow(x)
+    # THE anchor rule, the one fmt_col_ann() reads (fmt_row_look(), R/row-model.R) -- not a second
+    # spelling of it, so the console and the exports cannot say two things about one cell.
+    look   <- fmt_row_look(x, .totals = if (!is.null(.ref)) .ref$all_totals else NULL)
+    totals <- look$anchor
     # Cells matching no break on EITHER channel are greyed (style_subtle) so colored cells stand out;
-    # reference/total cells are exempt, staying full-strength as reading anchors.
+    # anchors are exempt, staying full-strength as reading anchors.
     unselected <- channels$text_slot == 0L & channels$bg_slot == 0L
-    # bold = the anchors PLUS the text-coloured cells (export parity, matching fmt_col_ann()). It
-    # rides the PRIMARY only, like the html span's font-weight:normal on the aside. pillar measures
-    # the ANSI-stripped width, so bold adds none -- alignment holds.
-    bolded <- if (bold_on) ok & (totals | channels$text_slot > 0L) else rep(FALSE, length(out))
+    # bold = the anchors PLUS the text-coloured cells, in a GRADED row only (export parity, matching
+    # fmt_col_ann()). It rides the PRIMARY only, like the html span's font-weight:normal on the
+    # aside. pillar measures the ANSI-stripped width, so bold adds none -- alignment holds.
+    bolded <- if (bold_on) ok & look$graded & (totals | channels$text_slot > 0L)
+              else rep(FALSE, length(out))
 
     # EVERY cell goes through paint() exactly ONCE, and the style it paints with is the COMPOSITION of
     # everything that applies to the primary: its text slot (or the greyed / anchor fallback), its
@@ -4329,7 +4330,8 @@ pillar_shaft.tabxplor_fmt <- function(x, ..., .ref = NULL) {
     # The aside still takes the secondary colour: a Total cell's "100% (1 157-2 139)" reads the same
     # way here as in every other column and in html.
     bolded <- if (bold_on) {
-      ok & ((if (!is.null(.ref)) .ref$all_totals else get_reference(x, "all_totals")) | is_refrow(x))
+      look <- fmt_row_look(x, .totals = if (!is.null(.ref)) .ref$all_totals else NULL)
+      ok & look$graded & look$anchor
     } else rep(FALSE, length(out))
     paint_cells(ok, identity, bolded)
     out[ok] <- sub("^0%$|^-0%$", pillar::style_subtle("0%"), out[ok], perl = TRUE)  # 0 in gray
@@ -4677,7 +4679,7 @@ fmt_color_plan <- function(x, channel = c("text", "bg"), color = NULL, signif = 
   degenerate <- identical(policy, "guaranteed_effect") && !is.null(scale) &&
     max(length(scale$over$breaks), length(scale$under$breaks)) <= 1L
 
-  list(measure = measure, policy = policy, scale_key = scale_key,
+  list(measure = measure, channel = channel, policy = policy, scale_key = scale_key,
        score = score, center = center, strict = strict,
        over_breaks = over_breaks, over_slots = over_slots,
        under_breaks = under_breaks, under_slots = under_slots, gate = gate,
@@ -4720,9 +4722,15 @@ fmt_color_slots <- function(x, plan) {
   disp0 <- display_primary(get_display(x))
   # DISPLAY_TOKENS' `colour` column (NOT `footer`: `pvalue` is a footer token that IS coloured below).
   slot[disp0 %in% DISPLAY_NO_COLOR] <- 0L
-  # a "pvalue" test cell colours as a SIGNIFICANCE WARNING, not a data effect: a non-significant test
-  # (p > alpha) gets the deepest under-slot (deep red), a significant one stays uncoloured. Reads the
-  # honest `pvalue` field, scoped to the additive `diff` channel (the crosstab default).
+  # A TEST CELL COLOURS AS A WARNING, NOT AS A DATA EFFECT, so it is scoped by CHANNEL and never by
+  # measure: significance does not depend on which geometry the table happens to report, and the two
+  # rules below would otherwise fire or not according to a column's `color` -- measured, the same
+  # footer p-value came out deep red on a linear model and black on a logistic one.
+  # ⚠ TEXT CHANNEL ONLY. A warning is ink, not a fill: a fill is the corrective voice a ladder
+  # rations (COLOR_SCALES$bg_keep), and painting one here put a deep panel behind a p-value whenever
+  # the BACKGROUND channel happened to be the additive one.
+  # A non-significant test (p > alpha, from the column's own conf_level) gets the deepest under-slot
+  # (deep red), a significant one stays uncoloured; it reads the honest `pvalue` field.
   # ...and a MODEL CHECK past the convention its REG_CHECKS row declares takes the FAINTEST under
   # slot: a rule of thumb earns "look at this", never the verdict's deep red.
   # ⚠ `under_slots` carries a leading 0 (the below-the-first-break slot), so the FAINTEST shade is
@@ -4730,15 +4738,17 @@ fmt_color_slots <- function(x, plan) {
   # WARNING: `disp0` can be NA -- dplyr::bind_rows() NA-fills a fmt column absent from one of its
   #   inputs, and every field of those cells, `display` included, comes back NA. Both masks are
   #   guarded (the `%in%` above already is): an NA there aborted the whole print.
+  on_text <- identical(plan$channel, "text")
   is_wn <- !is.na(disp0) & disp0 == "gof_warn"
   faint <- plan$under_slots[plan$under_slots > 0L]
-  if (any(is_wn) && length(faint)) slot[is_wn] <- min(faint)
+  if (any(is_wn)) slot[is_wn] <- if (on_text && length(faint)) min(faint) else 0L
   is_pv <- !is.na(disp0) & disp0 == "pvalue"
-  if (any(is_pv) && identical(plan$measure, "difference")) {
+  if (any(is_pv)) {
     alpha  <- 1 - get_conf_level(x)
     pv     <- get_pvalue(x)
     slot[is_pv] <- 0L                                    # significant -> uncoloured
-    slot[is_pv & !is.na(pv) & pv > alpha] <- max(plan$under_slots)   # non-significant -> deep-red warning
+    if (on_text)
+      slot[is_pv & !is.na(pv) & pv > alpha] <- max(plan$under_slots)  # non-significant -> deep red
   }
   slot
 }

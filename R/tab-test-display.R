@@ -865,7 +865,7 @@ stopifnot(exprs = {
   # `producer` is the convenience name of `block`: only the crosstab block is not a regression one
   identical(.trow_chr("producer") == "tab", .trow_chr("block") == "omnibus")
   all(.trow_chr("render")   %in% c("grid", "line", "record"))
-  all(is.na(.trow_chr("kind")) | .trow_chr("kind") %in% ROW_KINDS)
+  all(is.na(.trow_chr("kind")) | .trow_chr("kind") %in% names(ROW_KINDS))
   all(is.na(.trow_chr("method")) | .trow_chr("method") %in% c("lr", "f", "wald", "aic"))
   all(is.na(.trow_chr("var_kind")) | .trow_chr("var_kind") %in% c("pct", "mean"))
 
