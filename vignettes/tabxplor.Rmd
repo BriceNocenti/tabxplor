@@ -599,7 +599,7 @@ tab(gss_simple, race, marital, pct = "row",
 
 A handful of `options()` set your preferred defaults once for the whole session — put them at the top of a script, or in your `.Rprofile`. Each one has a per-call argument too; the option just changes the default. The everyday ones:
 
-- `options(tabxplor.print = "html")` — print tables not in console, but as html in RStudio or Positron Viewer Pane by default (recommended)
+- `options(tabxplor.print = "html")` — print tables not in console, but as html in RStudio or Positron Viewer Pane by default (recommended); `"md"` prints them as Markdown instead, which is what a notebook knitted straight to `.md` wants.
 - `options(tabxplor.cleannames = TRUE)` — strip `"1-"`-style prefixes from level names everywhere.
 - `options(tabxplor.parallel = 8)` — parallelise tables with multiples variables on different CPU cores by default (needs `mirai`)
 - `options(tabxplor.var_labels = TRUE)` — in exports, show a variable's label (from `haven`/`labelled` data) instead of its bare name.

@@ -17,6 +17,34 @@ testthat::test_that("tx_getOption() returns the first name set, else the default
     testthat::expect_identical(tx_getOption(c("tabxplor._syn_a", "tabxplor._syn_b"), "d"), "A"))
 })
 
+# *Measured before 2.0.1: tx_opt() seeded UNCONDITIONALLY, so .onLoad() overwrote whatever an
+# .Rprofile had set -- `tabxplor.print` and `tabxplor.theme`, the two the docs recommend most, were
+# silently reset to "console" / "light" by the very library() call that was supposed to honour them.*
+testthat::test_that("a value set before the load survives the seeding", {
+  withr::with_options(list(tabxplor.print = "md", tabxplor.theme = "dark"), {
+    tx_seed_options()
+    testthat::expect_identical(getOption("tabxplor.print"), "md")
+    testthat::expect_identical(getOption("tabxplor.theme"), "dark")
+  })
+  # ...and an unset one still gets its declared default
+  withr::with_options(list(tabxplor.print = NULL), {
+    tx_seed_options()
+    testthat::expect_identical(getOption("tabxplor.print"), tx_option_default("print"))
+  })
+  # no row seeds unconditionally any more
+  testthat::expect_true(all(vapply(TAB_OPTIONS, function(r) r$seed != "always", logical(1))))
+})
+
+# *It makes tab() RETURN html: the value can no longer be piped. Superseded by tabxplor.print.*
+testthat::test_that("tabxplor.output_kable is honoured, and says once that it is superseded", {
+  testthat::expect_identical(TAB_OPTIONS$output_kable$seed, "no")
+  tabxplor:::tx_reset_messages()
+  withr::local_options(tabxplor.output_kable = TRUE)
+  testthat::expect_message(k <- tab(fx_gss(), race, marital, pct = "row"), "tabxplor.print")
+  testthat::expect_s3_class(k, "tabxplor_kable")
+  tabxplor:::tx_reset_messages()
+})
+
 testthat::test_that("tabxplor.kable_css (old name) still drives tab_kable's css, over the seeded tab_kable_css", {
   # the new canonical is seeded TRUE at load
   testthat::expect_true(isTRUE(getOption("tabxplor.tab_kable_css")))

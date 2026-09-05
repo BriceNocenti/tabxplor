@@ -17,6 +17,10 @@
 #     it (`pre` / `post`), read by both the width pass and the body loop -- they cannot disagree.
 #   - The class names are palette- and theme-INDEPENDENT (a slot, not a hex). tab_css(format = "md")
 #     maps them, which is what lets one stylesheet serve a whole document.
+#   - tab_md() RETURNS A `tabxplor_md`, the twin of tab_html()'s `tabxplor_kable`: a string that knows
+#     how to present itself in either medium (print() cats it, knit_print() hands it over raw). That
+#     is what lets options(tabxplor.print = "md") need no per-medium branch, and what makes a bare
+#     `|> tab_md()` in a knitted chunk emit markdown instead of a verbatim block.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-css.R (the classes).
 
 #' Render a table as Markdown
@@ -38,19 +42,23 @@
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
 #' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
 #'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
-#' @param css When `TRUE` (the default), prepend an inline `<style>` block so the exported markdown is
-#'   self-contained and renders coloured and compact on its own. Set `FALSE` inside an `.Rmd`/`.qmd`
-#'   document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
-#'   for the whole document) -- otherwise the `<style>` block is duplicated per table. A plain
-#'   uncoloured table renders byte-identical either way.
+#' @param css Prepend an inline `<style>` block so the exported markdown is self-contained and
+#'   renders coloured and compact on its own (default, from
+#'   \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` inside an `.Rmd`/`.qmd` document once
+#'   the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top for the
+#'   whole document) -- otherwise the `<style>` block is duplicated per table. A plain uncoloured
+#'   table renders byte-identical either way.
 #' @param clipboard Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
-#' @param print If `TRUE`, print via `cat()` and return invisibly; if `FALSE`, return the string.
+#' @param print By default (`NULL`), `cat()` the markdown and return it invisibly -- except while a
+#'   document is being knitted, where the object is returned instead, so the chunk emits raw markdown
+#'   rather than a verbatim block. `TRUE` or `FALSE` forces either.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`, `html_24_bit`): colour is a CSS class, and exports are always 24-bit.
 #'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #'
-#' @return A character string (visible or invisible depending on `print`).
+#' @return A \code{tabxplor_md}: the markdown as a character string, which prints as the text it is
+#'   and reaches a knitted document raw.
 #' @export
 #'
 #' @examples
@@ -75,15 +83,22 @@ tab_md <- function(tabs,
                    caption = NULL,
                    transpose = FALSE,
                    var_names = NULL,
-                   css = TRUE,
+                   css = NULL,
                    clipboard = FALSE,
                    file = NULL,
-                   print = TRUE,
+                   print = NULL,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated(),
                    ...) {
   tx_export_dots(rlang::list2(...), "tab_md", rlang::caller_env())
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
+  css   <- if (is.null(css))   isTRUE(tx_option("tab_kable_css")) else isTRUE(css)
+  # cat() is a console convenience; while knitting, the OBJECT is the answer -- knit_print() emits it
+  # raw, where a cat() would land in a verbatim block.
+  print <- if (is.null(print)) !tx_knitting() else isTRUE(print)
+  # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
+  # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
+  caption <- caption %||% tx_knitr_opt("tab.cap")
   if (lifecycle::is_present(title)) {
     lifecycle::deprecate_soft("2.0.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
@@ -156,11 +171,40 @@ tab_md <- function(tabs,
     if (isTRUE(tx_need_pkg("clipr", "Copying to the clipboard", severity = "inform")))
       clipr::write_clip(md_text)
   }
+  md_text <- new_tabxplor_md(md_text)
   if (print) {
-    cat(md_text, "\n")
+    print(md_text)
     return(invisible(md_text))
   }
   md_text
+}
+
+
+# === SECTION: the markdown object ==================================================================
+# The twin of `tabxplor_kable` (R/tab-render-html.R): a rendered string that knows how to present
+# itself in either medium. Its two methods are the whole of what `options(tabxplor.print = "md")`
+# needs -- see the router in R/tab_classes.R.
+
+#' @keywords internal
+#' @noRd
+new_tabxplor_md <- function(x) structure(x, class = c("tabxplor_md", "character"))
+
+#' Printing method for a markdown table
+#' @param x A \code{tabxplor_md}, as returned by \code{\link{tab_md}}.
+#' @param ... Unused.
+#' @return \code{x}, invisibly.
+#' @export
+#' @keywords internal
+print.tabxplor_md <- function(x, ...) {
+  cat(unclass(x), "\n")
+  invisible(x)
+}
+
+# No `meta =`: markdown carries no html dependency (there are no tooltips), and the `<style>` block
+# of `css = TRUE` is part of the text itself.
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_md <- function(x, ...) {
+  knitr::asis_output(paste0(as.character(x), "\n\n"))
 }
 
 

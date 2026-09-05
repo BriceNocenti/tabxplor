@@ -527,7 +527,7 @@ tab(gss_simple, race, marital, pct = "row", subtext = c("Champ : ", "Source : GS
 
 Une poignée d'`options()` fixent les préférences par défaut, une fois pour toute la session R — à placer en haut d'un script, ou dans un fichier `.Rprofile`. Les plus courantes :
 
-- `options(tabxplor.print = "html")` — par défaut, afficher les tableaux non pas dans la console, mais en html dans le panneau Viewer de RStudio ou Positron (recommandé)
+- `options(tabxplor.print = "html")` — par défaut, afficher les tableaux non pas dans la console, mais en html dans le panneau Viewer de RStudio ou Positron (recommandé) ; `"md"` les affiche en Markdown, ce que demande un carnet knité directement en `.md`.
 - `options(tabxplor.cleannames = TRUE)` — retirer partout les préfixes de type `"1-"` des noms de modalités.
 - `options(tabxplor.parallel = 4)` — paralléliser par défaut les tableaux à plusieurs variables sur plusieurs cœurs de processeur (nécessite `mirai`)
 - `options(tabxplor.var_labels = TRUE)` — dans les exports, afficher l'étiquette d'une variable (données `haven`/`labelled`) au lieu de son nom brut.

@@ -346,7 +346,7 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Global R options*), these `options()` tune the exporters and the build. HTML / `tab_html()`:
 
-- `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does).
+- `tabxplor.tab_kable_css` — inline the stylesheet with each `tab_html()` *and* `tab_md()` table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does), or in a plain-Markdown notebook that wants no stylesheet at all.
 - `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`); set `FALSE` once per document to switch them off everywhere.
 - `tabxplor.tab_kable_num_font` — the number CSS font stack (everything else is `tab_css()`'s business).
 - `tabxplor.kable_popover` — click popovers instead of hover tooltips.

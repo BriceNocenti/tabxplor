@@ -316,6 +316,8 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 `tab_export(x, format =)` (`tab-export.R`) is the facade over four backends: HTML (the default), Markdown, Excel and plot, sharing one preparation step — `tab_export_prep()` (`tab-export-prep.R`) builds an ephemeral render model (roles, references, faces, header spans, variable-name blocks) that every backend consumes. A spread swaps the two header bands, since after a spread a **column** is identified by its sub-population and a **block** by its variable: the column header takes the `col_group`, the span takes the `col_var` and, above it, the level only where that variable gives several columns per group. **Several `row_vars` stack row_var-major** — two row_vars are two tables over the same population, the `tab_vars` the sub-populations inside each — and **row order IS column order**, since label nesting is read off physical column position; a tab_var column is then dropped only where the level column alone is a complete row index, which one row_var is and a stacked pair is not.
 
+**A bare table auto-prints in a medium, and `options(tabxplor.print)` names it** — `console`, `html` (`kable` being its pre-2.0.0 name) or `md`. A medium is a renderer plus an **object that knows how to present itself**: `tab_html()` returns a `tabxplor_kable` and `tab_md()` a `tabxplor_md`, each carrying its own `print()` (the Viewer, a `cat()`) and `knit_print()` (an `asis_output`), so the six `print` / `knit_print` methods hand the rendered object over and carry no per-medium branch — adding a medium is one arm of `tx_auto_render()` plus those two S3 methods. Each exporter is called **bare**, so `tabxplor.theme` and `tabxplor.tab_kable_css` govern an auto-print exactly as they govern an explicit call. Neither `xl` nor `forest` is a value: one writes a file, the other is a chart.
+
 Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, in html and in Excel. **One reference per column**, or two bars could not be compared — the ceiling `max =` states, and the column's own largest data cell where it states none; the prep resolves it once and both media read that one number, Excel pinning it as its `cfvo` bounds rather than auto-scaling over rows the bar excludes. It is drawn as two stacked pseudo-elements, a **groove** saying how far a full bar would reach and the **bar** over it, because an element has one background and a short bar needs the reference. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is a stylesheet custom property (the cell's own slot colour where it has one, the chrome's `accent` where it has none, over the chrome's alpha `track`), and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content — and an export never renames.** Wrapping a header is a *label* in the render model, not a rename of the tibble, so `names(tab)` stays raw from prep to backend and nothing keyed by a column name can go stale; a label column is identified by its **position**, `label_cols` / `label_runs` / `vname_plans` being parallel vectors a consumer walks by index. A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone. A **col_var span** gets exactly the width its own columns leave it: past that it wraps at those seams, past what wrapping can do it is shown from the prefix it shares with the block before it (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`, the full name returning whenever that prefix changes), and in the last resort it is held to `wrap_cols` like every other header — one name is not entitled to widen the table on its own. None of that happens while there is room for the whole name, which is what keeps the elision readable. ⚠ An elided name cannot say where the previous one was cut, so html hands the full one over in a `title=` and no other medium can. A *variable* name is written vertically only where the rotation actually saves width — a turned line costs about one character, so a name turns when it needs fewer turned lines than the width it would otherwise force, weighed against the names that cannot turn (a one-row block like `Constant`), which set the floor; turned, it wraps soft and unindented, an overrun there costing a little row height where a horizontal one would widen the table. How many turned characters a block of rows actually holds is *measured per medium* and the two differ — a 5-row block takes about 14 in html and 10 in Excel — so the plan is computed against the backend being exported, once, and the backend never re-derives it. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
@@ -508,9 +510,7 @@ Branches :
 
 Commits :
 - **The maintainer makes the commits.** Do not commit unless explicitly asked.
-- **Never add a `Co-Authored-By` trailer** (nor any "Generated with …" line) to a commit message.
-  This overrides the default. The maintainer authors and signs every commit and is solely
-  responsible for it; the assistant does not co-sign.
+- The maintainer authors and signs every commit and is solely responsible for it; the assistant does not co-sign.
 - The release procedure is `dev/release_checklist.md` — read it before touching a release branch.
 
 ---
@@ -1290,6 +1290,97 @@ Suite livrée verte : **4 927** (4 896 avant, 31 assertions neuves dans `test-ta
 sous les six combinaisons de mesure et de canal, l'absence d'aplat, une ligne significative qui reste
 sans couleur, et la parité logistique/linéaire qui est le défaut d'origine). Aucun instantané ni
 aucune fixture `_golden` ne bouge : aucune n'a de test non significatif.
+
+#### v2.0.1 — Phase 12 — un tableau nu s'imprime dans un MÉDIUM **DONE**
+
+Demandé par `formations_stat` : un carnet d'exploration est un `.qmd` knité en `.md` par
+`knitr::knit()` seul, sans jamais atteindre pandoc — mesuré, `quarto render --to markdown` réécrit la
+pipe table en grid table et `--to gfm` remplace `[42 %]{.p2}` par un `<span>` en écrasant
+l'alignement. Ce carnet veut qu'un `tab()` **nu** sorte en markdown, comme un `tab()` nu sort en html
+dans une séance : le même appel, sans tuyau d'export à retirer.
+
+**La clé n'était pas markdown, c'était l'objet.** Le chemin html est propre pour une raison qui n'a
+rien à voir avec html : `tab_html()` rend un objet CLASSÉ (`tabxplor_kable`) qui sait se présenter
+dans chacun des deux médiums — son `print()` ouvre le Viewer, son `knit_print()` rend un
+`asis_output`. `tab_md()` rendait une chaîne nue, qui ne sait rien faire : d'où le brouillon, qui
+écrivait `cat()` d'un côté et `knitr::asis_output()` de l'autre, **deux branches dans chacune des six
+méthodes**. Le markdown reçoit donc sa classe jumelle, `tabxplor_md` (`R/tab_md.R`), et chaque méthode
+devient deux lignes identiques : *si l'option détourne, rends l'objet et laisse-le se présenter*.
+Ajouter un médium est un bras de `tx_auto_render()` plus deux méthodes S3 — jamais une branche en six
+endroits.
+
+**Aucune grille déclarée n'est ajoutée, et c'est la même règle qui le dit** : « comment un médium se
+présente » est déjà énoncé une fois, dans la table des méthodes S3 de R. En déclarer une seconde le
+dirait deux fois. Ce qui est déclaré est ce que R ne dit pas : `TX_PRINT_MEDIA` (`R/tab_classes.R`),
+la valeur d'option qui nomme chaque médium — `"kable"` étant le nom d'avant 2.0.0 de `"html"`. Ni
+`xl` ni `forest` n'y figurent : l'un écrit un fichier, l'autre est un graphique.
+
+**Chaque exportateur est appelé NU**, donc `theme`, `css`, `lang`, `tooltips` viennent des options
+exactement comme dans un appel explicite. ⚠ C'est ce qui remplace le `css = FALSE` figé du brouillon :
+un chemin d'auto-impression qui figerait un argument divergerait d'un `|> tab_md()` et ne pourrait
+jamais emporter la feuille. Un carnet en markdown brut écrit `options(tabxplor.tab_kable_css =
+FALSE)`, la ligne même que chaque vignette écrit déjà pour html.
+
+**`tx_print_html()` disparaît, et son piège avec lui.** `tx_print_medium()` lit `tx_option("print")` et
+non `getOption()` brut : le repli sur le défaut déclaré devient **structurel**, donc le garde
+`isTRUE()` de la phase 9 n'a plus de raison d'être. Une valeur qui ne nomme aucun médium retombe sur
+la console en le disant une fois par session (`tx_inform_once`, clé sur la valeur).
+
+**Quatre défauts mesurés, fermés au passage.**
+
+1. ⚠ **`.onLoad()` écrasait `.Rprofile`.** `tx_opt()` portait `seed = "always"` par défaut :
+   `options(tabxplor.print = "html", tabxplor.theme = "dark")` avant `library(tabxplor)` donnait
+   `console` / `light` après — les deux options que la doc recommande le plus étaient inopérantes là
+   où on les pose naturellement. Le défaut devient `seed = "if_unset"`, et la valeur `"always"`
+   disparaît du vocabulaire : l'amorçage n'existe que pour qu'un `getOption()` brut trouve quelque
+   chose, et une valeur posée par l'utilisateur fait ce travail aussi bien. Restent trois états, tous
+   employés. Les deux `seed = "if_unset"` explicites (`var_labels`, `console_bold`) partent, devenus
+   redondants.
+2. **`tab_md()` ignorait `tabxplor.tab_kable_css`**, alors que la doc de l'option ET
+   `EXPORT_ARGS$css` (`producers = c("tab_html", "tab_md")`) la lui attribuaient : `css` passe de
+   `TRUE` en dur à `NULL` → l'option, la ligne exacte de `tab_html()`.
+3. **`tab.cap` était perdu en markdown** : le repli chunk → `caption` n'existait que chez
+   `tab_html()`. `tab_md()` le lit désormais, et le `cap <- caption %||% tx_knitr_opt("tab.cap")` que
+   `tab_export()` recopiait dans son bras html est supprimé — le fait est énoncé une fois, dans
+   l'exportateur.
+4. **`knit_print.tabxplor_tabs` était html INCONDITIONNEL** : une liste de tableaux était la seule
+   classe à ne pas suivre l'option, console comprise. Elle passe par le routeur comme les cinq autres.
+
+**Deux corrections de contrat.** `print.tabxplor_tab` rend `invisible(x)` — le tableau — et non plus
+le kable : `print()` rend son argument. Et `get_text = TRUE`, documenté « get the text instead of a
+printed output », était **ignoré** sous `"html"` (le Viewer s'ouvrait quand même) : il rend maintenant
+les lignes du médium en vigueur, quel qu'il soit.
+
+**« Suis-je en train d'être knité ? » n'a plus qu'une réponse** : `tx_knitting()` (`R/utils.R`), le
+drapeau `knitr.in.progress` que l'en-tête de la section décrivait déjà. Lu par le garde de
+`tx_knitr_opt()`, par le `print = NULL` de `tab_md()` et par `print.tabxplor_kable()` (qui demandait
+`!is.null(tx_knitr_opt("out.format", "knit"))`). C'est lui qui donne son sens au nouveau défaut de
+`print` : `cat()` en console, l'OBJET sous knitr — donc `tab(...) |> tab_md()` dans un `.qmd` sort
+enfin en markdown **brut** au lieu du bloc verbatim qui exigeait `results = 'asis'`.
+
+**`tabxplor.output_kable` est superseded** : elle fait *retourner* un kable par `tab()`, donc la
+valeur ne se pipe plus, ne se filtre plus, ne se recolore plus — quand `tabxplor.print = "html"` rend
+le même html à l'impression et laisse l'objet intact. `seed = "no"`, toujours honorée, un message par
+session.
+
+Vérifié de bout en bout : un `.Rmd` de trois chunks knité par `knitr::knit()` seul, sous
+`options(tabxplor.print = "md", tabxplor.tab_kable_css = FALSE)` — le `tab()` nu, le `|> tab_md()`
+explicite et la liste de tableaux sortent tous les trois en markdown brut (zéro bloc verbatim), et le
+`tab.cap` du chunk atterrit en ligne de légende pandoc.
+
+Suite livrée verte : **4 958** (4 927 avant). `_snaps/` **inchangé** et les 36 fixtures
+`_golden/*.rds` intactes : rien n'imprime sous une option `"md"`, `css` garde sa valeur (le défaut de
+l'option est `TRUE`), et la classe est transparente à `cat()`.
+
+⚠ **Relevé, non traité.** `ggfacto` RECOPIE le prédicat (`gda_print_html()`, `interpret.R:150`) et
+force `tabxplor.print = "console"` dans sa branche non-html : sous `"md"` une AGD sortirait en console
+au milieu d'un carnet markdown — mais le correctif de `knit_print.tabxplor_tabs` pourrait lui
+permettre de n'avoir plus de répartiteur du tout. `EXPORT_ARGS$option` est de la métadonnée morte (lue
+nulle part, et ses valeurs — `"css"`, `"tooltips"` — ne sont pas des clés de `TAB_OPTIONS`).
+`getOption("tabxplor.view_html")` n'a aucune ligne dans `TAB_OPTIONS`. Les cinq options `*kable*`
+gardent un nom d'avant 2.0.0 ; les renommer par `alias` est une phase à elle seule. Et
+`set_color_palette()` pose `tabxplor.color_style_theme` sans condition dans `.onLoad()` : même
+écrasement de `.Rprofile` que le point 1, hors du mécanisme `seed`.
 
 #### Phase xx — jamovi 2.0.0 release
 

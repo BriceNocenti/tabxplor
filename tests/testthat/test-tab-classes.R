@@ -713,14 +713,91 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   testthat::expect_false(grepl("--tx-bar:", h3, fixed = TRUE))
 })
 
-# *`getOption()` of an option nobody set is NULL, and `NULL %in% x` is `logical(0)`, which stops an
-# `if`. .onLoad() seeds it -- but a package reaching tabxplor only through `tabxplor::` never loads
-# its namespace, so a user of THAT package could not print a table at all.*
+# === the auto-print medium ======================================================================
+# options(tabxplor.print) NAMES A MEDIUM; a medium is a renderer plus an object that presents itself.
+# What is pinned here is that ONE resolver answers for all six print / knit_print methods.
+
+# *An option nobody set is NULL, and the pre-2.0.1 predicate compared it with `%in%`, which is
+# `logical(0)` and stops an `if`. Reading through tx_option() makes the declared default structural:
+# a package reaching tabxplor only through `tabxplor::` never loads its namespace, and its user
+# could not print a table at all.*
 testthat::test_that("printing works with no tabxplor.print option set", {
   t <- tab(fx_gss(), race, marital, pct = "row")
   withr::local_options(tabxplor.print = NULL)
   testthat::expect_null(getOption("tabxplor.print"))
+  testthat::expect_identical(tx_print_medium(), "console")
   testthat::expect_no_error(print(t, get_text = TRUE))
+})
+
+testthat::test_that("tx_print_medium() names one medium per option value", {
+  for (v in c("console", "html", "md")) {
+    withr::local_options(tabxplor.print = v)
+    testthat::expect_identical(tx_print_medium(), v)
+  }
+  # "kable" is the pre-2.0.0 name of "html", kept working
+  withr::local_options(tabxplor.print = "kable")
+  testthat::expect_identical(tx_print_medium(), "html")
+  # a value that names no medium is the console, and says so once
+  tabxplor:::tx_reset_messages()
+  withr::local_options(tabxplor.print = "markdown")
+  testthat::expect_message(testthat::expect_identical(tx_print_medium(), "console"), "no medium")
+})
+
+testthat::test_that("a bare table auto-prints in the medium the option names", {
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  withr::local_options(tabxplor.tab_kable_css = FALSE)
+
+  withr::with_options(list(tabxplor.print = "md"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_true(any(grepl("^\\|:-", txt)))          # a pipe-table delimiter row
+    testthat::expect_true(any(grepl("]{.p", txt, fixed = TRUE)))  # the colour spans
+    # print() returns the TABLE, not the render: `print()` gives back its argument
+    r <- testthat::expect_invisible(print(t))
+    testthat::expect_s3_class(r, "tabxplor_tab")
+  })
+  # get_text is medium-independent: it was ignored under "html" before 2.0.1
+  withr::with_options(list(tabxplor.print = "html"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_true(any(grepl("<table", txt, fixed = TRUE)))
+  })
+  withr::with_options(list(tabxplor.print = "console"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_false(any(grepl("<table", txt, fixed = TRUE)))
+    testthat::expect_false(any(grepl("^\\|:-", txt)))
+  })
+})
+
+# *knit_print.tabxplor_tabs was html UNCONDITIONALLY: a LIST of tables was the one class that did
+# not follow the option -- console included.*
+testthat::test_that("knit_print() follows the option on all three classes", {
+  testthat::skip_if_not_installed("knitr")
+  withr::local_options(tabxplor.tab_kable_css = FALSE)
+  objs <- list(
+    tab     = tab(fx_gss(), race, marital, pct = "row"),
+    grouped = tab(fx_gss(), race, marital, year, pct = "row"),
+    tabs    = tab(fx_gss(), c(race, marital), partyid, pct = "row", output_list = TRUE)
+  )
+  testthat::expect_s3_class(objs$grouped, "tabxplor_grouped_tab")
+  testthat::expect_s3_class(objs$tabs,    "tabxplor_tabs")
+
+  for (nm in names(objs)) {
+    withr::with_options(list(tabxplor.print = "html"), {
+      out <- knitr::knit_print(objs[[nm]])
+      testthat::expect_s3_class(out, "knit_asis")
+      testthat::expect_true(grepl("<table", out, fixed = TRUE))
+    })
+    withr::with_options(list(tabxplor.print = "md"), {
+      out <- knitr::knit_print(objs[[nm]])
+      testthat::expect_s3_class(out, "knit_asis")
+      testthat::expect_true(grepl("|:-", out, fixed = TRUE))
+      testthat::expect_false(grepl("<table", out, fixed = TRUE))
+    })
+    withr::with_options(list(tabxplor.print = "console"), {
+      out <- utils::capture.output(kp <- knitr::knit_print(objs[[nm]]))
+      testthat::expect_false(inherits(kp, "knit_asis"))    # the console falls through to knitr
+      testthat::expect_true(any(grepl("A tabxplor tab", out, fixed = TRUE)))
+    })
+  }
 })
 
 

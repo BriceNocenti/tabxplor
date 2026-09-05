@@ -708,7 +708,7 @@ print.tabxplor_kable <- function(x, ...) {
   mode <- kable_print_mode(theme, interactive(),
                            # `kableExtra_view_html` is honoured as the former spelling of the opt-out
                            getOption("tabxplor.view_html", getOption("kableExtra_view_html", TRUE)),
-                           !is.null(tx_knitr_opt("out.format", "knit")),
+                           tx_knitting(),
                            !is.null(deps))
   if (identical(mode, "degrade"))
     tx_need_pkg(c("rmarkdown", "htmltools"), "A themed Viewer page with styled tooltips",

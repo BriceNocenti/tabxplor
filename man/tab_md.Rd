@@ -17,10 +17,10 @@ tab_md(
   caption = NULL,
   transpose = FALSE,
   var_names = NULL,
-  css = TRUE,
+  css = NULL,
   clipboard = FALSE,
   file = NULL,
-  print = TRUE,
+  print = NULL,
   title = lifecycle::deprecated(),
   col_var_names = lifecycle::deprecated(),
   ...
@@ -72,17 +72,20 @@ the col-percentages-with-several-row-variables use case.}
 \code{row_vars} uses to name each block (written once per block); the column-variable names
 are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{css}{When \code{TRUE} (the default), prepend an inline \verb{<style>} block so the exported markdown is
-self-contained and renders coloured and compact on its own. Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd}
-document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
-for the whole document) -- otherwise the \verb{<style>} block is duplicated per table. A plain
-uncoloured table renders byte-identical either way.}
+\item{css}{Prepend an inline \verb{<style>} block so the exported markdown is self-contained and
+renders coloured and compact on its own (default, from
+\code{getOption("tabxplor.tab_kable_css")}). Set \code{FALSE} inside an \code{.Rmd}/\code{.qmd} document once
+the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top for the
+whole document) -- otherwise the \verb{<style>} block is duplicated per table. A plain uncoloured
+table renders byte-identical either way.}
 
 \item{clipboard}{Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).}
 
 \item{file}{Path to write the markdown to a file. \code{NULL} (default) skips.}
 
-\item{print}{If \code{TRUE}, print via \code{cat()} and return invisibly; if \code{FALSE}, return the string.}
+\item{print}{By default (\code{NULL}), \code{cat()} the markdown and return it invisibly -- except while a
+document is being knitted, where the object is returned instead, so the chunk emits raw markdown
+rather than a verbatim block. \code{TRUE} or \code{FALSE} forces either.}
 
 \item{title}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Renamed to \code{caption}.}
 
@@ -94,7 +97,8 @@ uncoloured table renders byte-identical either way.}
 Anything else is an error naming the argument you meant, as it already was in \code{\link[=tab]{tab()}}.}
 }
 \value{
-A character string (visible or invisible depending on \code{print}).
+A \code{tabxplor_md}: the markdown as a character string, which prints as the text it is
+and reaches a knitted document raw.
 }
 \description{
 The Markdown exporter behind \code{\link{tab_export}}: \code{tab_export(x, format = "md")} calls this.

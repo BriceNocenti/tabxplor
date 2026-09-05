@@ -7,6 +7,9 @@
 #   - The dplyr_row_slice/dplyr_col_modify/dplyr_reconstruct trio is the core mechanism.
 #     Each calls lv1_group_vars() to decide: downgrade to tabxplor_tab or keep grouped.
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
+#   - options(tabxplor.print) names a MEDIUM, and every print / knit_print method reads it through
+#     the ONE router below (TX_PRINT_MEDIA / tx_auto_render). A medium renders an object that knows
+#     how to present itself, so no method carries a per-medium branch.
 #   - A table may carry SUBORDINATE tables (meta$footer_tabs, set_footer_tabs()). They are not a
 #     fifth renderer: tx_with_footer_tabs() hands the exporters the LIST the table means, so the
 #     `list_method = TRUE` path already in place renders them under it in every medium. In the
@@ -748,13 +751,49 @@ new_test_tibble <- local({
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
-# THE one predicate for "does options(tabxplor.print) ask for an html render?". "html" is the taught
-# value; "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
-# ⚠ isTRUE(), not a bare `%in%`: on an option that was never set the comparison is `logical(0)` and
-# the calling `if` stops. .onLoad() seeds it, but a package reaching tabxplor only through `tabxplor::`
-# never loads its namespace -- so `library(ggfacto)` alone left the first print() of a tab() erroring.
-tx_print_html <- function() {
-  isTRUE(getOption("tabxplor.print") %in% c("html", "kable"))
+# DESIGN: options(tabxplor.print) NAMES A MEDIUM, and a medium is a renderer plus an object that
+#   knows how to present itself -- tab_html() returns a `tabxplor_kable`, tab_md() a `tabxplor_md`,
+#   each with its own print() (the Viewer, a cat()) and knit_print() (asis_output). That is why the
+#   six methods below carry no per-medium branch: they hand the rendered object over and it does the
+#   rest. Adding a medium is one arm here plus those two S3 methods -- never a branch in six places.
+# The option value that names each: "kable" is the pre-2.0.0 name of "html". `xl` and `forest` are
+# absent on purpose -- one writes a file, the other is a Suggests-only chart; neither is what a bare
+# table means.
+TX_PRINT_MEDIA <- c(console = "console", html = "html", kable = "html", md = "md")
+
+# Read through tx_option(), so an unset option IS the declared default: seeding it is then a
+# convenience, not a requirement (a package reaching tabxplor only through `tabxplor::` never loads
+# its namespace, and once left the first print() of a tab() erroring).
+#' @keywords internal
+#' @noRd
+tx_print_medium <- function() {
+  v <- tx_option("print")
+  if (!rlang::is_string(v)) return("console")
+  if (v %in% names(TX_PRINT_MEDIA)) return(unname(TX_PRINT_MEDIA[[v]]))
+  tx_inform_once(paste0("print_medium_", v),
+                 c("{.code options(tabxplor.print)} is {.val {v}}, which names no medium.",
+                   "i" = "One of {.val {unique(names(TX_PRINT_MEDIA))}}. Printing to the console."),
+                 .envir = environment())
+  "console"
+}
+
+# THE one place an auto-print is diverted away from the console: the RENDERED OBJECT, or NULL when
+# the console is what was asked for. Each exporter is called BARE, so `theme`, `css`, `lang` and the
+# rest come from their own options exactly as they do in an explicit call.
+#' @keywords internal
+#' @noRd
+tx_auto_render <- function(x) {
+  switch(tx_print_medium(),
+         html = tab_html(x),
+         md   = tab_md(x, print = FALSE),
+         NULL)
+}
+
+# The text a diverted print would have emitted, for `get_text = TRUE`.
+#' @keywords internal
+#' @noRd
+tx_render_lines <- function(x) {
+  strsplit(paste(as.character(x), collapse = "\n"), "\n", fixed = TRUE)[[1L]]
 }
 
 #' Printing method for class tabxplor_tab
@@ -767,7 +806,8 @@ tx_print_html <- function() {
 #' @param max_footer_lines Maximum number of footer lines.
 #' @param min_row_var Minimum number of characters for the row variable. Default to 30.
 #' @param get_text Set to `TRUE` to get the text as a character vector
-#' instead of a printed output.
+#' instead of a printed output -- the lines of whatever medium
+#' \code{getOption("tabxplor.print")} names.
 #' @export
 #' @return A printed table.
 #' @method print tabxplor_tab
@@ -775,9 +815,10 @@ tx_print_html <- function() {
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
   .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
-  if (tx_print_html()) {
-    x <- tab_html(x)
-    print(x)
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) {
+    if (get_text) return(tx_render_lines(rendered))
+    print(rendered)
     return(invisible(x))
   }
 
@@ -887,8 +928,9 @@ as_tabxplor_tabs <- function(x) {
 #' @export
 #' @keywords internal
 print.tabxplor_tabs <- function(x, ...) {
-  if (tx_print_html()) {
-    print(tab_html(x))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) {
+    print(rendered)
     return(invisible(x))
   }
   for (i in seq_along(x)) {
@@ -904,29 +946,36 @@ print.tabxplor_tabs <- function(x, ...) {
 #' @export
 c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
 
+# Without these, knitr's default auto-print escapes print()'s markup, so options(tabxplor.print =)
+# could not render a bare `tab(...)` chunk as a real table. `NextMethod()` is the console: knitr's
+# own default, which prints the object and captures the grid.
+# ⚠ The list class was html UNCONDITIONALLY until 2.0.1 -- it alone ignored the option.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tabs <- function(x, ...) {
-  knitr::knit_print(tab_html(x), ...)
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
+  NextMethod()
 }
 
-# Without this, knitr's default auto-print escapes print()'s html, so options(tabxplor.print = "html")
-# could not render a bare `tab(...)` chunk as a real table. Honours the option.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tab <- function(x, ...) {
-  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
   NextMethod()
 }
 
 # The grouped class vector does not contain "tabxplor_tab" (separate S3 world) -> own registration.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_grouped_tab <- function(x, ...) {
-  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
   NextMethod()
 }
 
-# The three above all hand a `tabxplor_kable` back to knit_print(), so this is where every knitted
-# table lands. knitr's own knit_print.knitr_kable would emit the markup and nothing else; the `meta`
-# is what carries jQuery, bootstrap and the tooltip binding into the DOCUMENT (tx_html_deps()).
+# The three above hand a `tabxplor_kable` (or a `tabxplor_md`, R/tab_md.R) back to knit_print(), so
+# this is where every knitted html table lands. knitr's own knit_print.knitr_kable would emit the
+# markup and nothing else; the `meta` is what carries jQuery, bootstrap and the tooltip binding into
+# the DOCUMENT (tx_html_deps()).
 # ⚠ NULL meta is fine: knitr accepts it, and the cells' title= attributes are a plain browser
 # tooltip on their own.
 #' @exportS3Method knitr::knit_print

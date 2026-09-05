@@ -328,7 +328,7 @@ Au-delà des réglages les plus habituels ([Introduction à tabxplor](tabxplor-f
 
 HTML / `tab_html()` :
 
-- `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau (`TRUE`) ; la mettre à `FALSE` dans un document à plusieurs tableaux, et appeler `tab_css()` une seule fois à la place (comme cette page).
+- `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque tableau `tab_html()` *et* `tab_md()` (`TRUE`) ; la mettre à `FALSE` dans un document à plusieurs tableaux, et appeler `tab_css()` une seule fois à la place (comme cette page) — ou dans un carnet en Markdown brut, qui n'en veut aucune.
 - `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases (`TRUE`) ; la mettre à `FALSE` une fois par document pour les couper partout.
 - `tabxplor.tab_kable_num_font` — la pile de polices CSS des nombres (tout le reste relève de `tab_css()`).
 - `tabxplor.kable_popover` — des info-bulles au clic plutôt qu'au survol.

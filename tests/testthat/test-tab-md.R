@@ -26,6 +26,68 @@ testthat::test_that("tab_md returns a character string with print=FALSE", {
 })
 
 
+# === SECTION: the markdown object =================================================================
+# `tabxplor_md` is the twin of tab_html()'s `tabxplor_kable`: a rendered string that knows how to
+# present itself in either medium. It is what makes options(tabxplor.print = "md") branch-free.
+
+testthat::test_that("tab_md() returns a tabxplor_md that stays an ordinary character", {
+  testthat::expect_s3_class(md, "tabxplor_md")
+  testthat::expect_true(is.character(md))
+  testthat::expect_type(md, "character")
+  # every ordinary use of the string is untouched
+  testthat::expect_gt(nchar(md), 0)
+  testthat::expect_length(strsplit(md, "\n")[[1]], length(strsplit(unclass(md), "\n")[[1]]))
+  testthat::expect_type(tab_pipe(tabs), "character")
+})
+
+testthat::test_that("print = NULL cats at the console and hands the object over while knitting", {
+  # outside a render: cat(), invisibly
+  out <- utils::capture.output(res <- tab_md(tabs, css = FALSE))
+  testthat::expect_gt(length(out), 3L)
+  testthat::expect_s3_class(res, "tabxplor_md")
+  # while knitting: nothing cat, the OBJECT -- a cat() would land in a verbatim block
+  withr::local_options(knitr.in.progress = TRUE)
+  out2 <- utils::capture.output(res2 <- tab_md(tabs, css = FALSE))
+  testthat::expect_length(out2, 0L)
+  testthat::expect_s3_class(res2, "tabxplor_md")
+  testthat::expect_true(isTRUE(all.equal(unclass(res), unclass(res2))))
+})
+
+testthat::test_that("knit_print.tabxplor_md hands the markdown over raw", {
+  testthat::skip_if_not_installed("knitr")
+  out <- knitr::knit_print(tab_md(tabs, print = FALSE, css = FALSE))
+  testthat::expect_s3_class(out, "knit_asis")
+  testthat::expect_true(grepl("|:-", out, fixed = TRUE))
+})
+
+# *The option's own doc, and EXPORT_ARGS$css, both name tab_md() -- but its `css` was a hard TRUE.*
+testthat::test_that("css takes its default from tabxplor.tab_kable_css, as tab_html() does", {
+  testthat::expect_true(grepl("<style>", tab_md(tabs, print = FALSE), fixed = TRUE))
+  withr::with_options(list(tabxplor.tab_kable_css = FALSE),
+    testthat::expect_false(grepl("<style>", tab_md(tabs, print = FALSE), fixed = TRUE)))
+  # ...and the alias is read first, exactly as tx_option() promises
+  withr::with_options(list(tabxplor.kable_css = FALSE),
+    testthat::expect_false(grepl("<style>", tab_md(tabs, print = FALSE), fixed = TRUE)))
+  # an explicit argument still wins over both
+  withr::with_options(list(tabxplor.tab_kable_css = FALSE),
+    testthat::expect_true(grepl("<style>", tab_md(tabs, print = FALSE, css = TRUE), fixed = TRUE)))
+})
+
+testthat::test_that("a chunk's tab.cap is the caption when the call gives none", {
+  testthat::skip_if_not_installed("knitr")
+  withr::local_options(knitr.in.progress = TRUE)
+  oc <- knitr::opts_current$get()
+  withr::defer(knitr::opts_current$restore(oc))
+  knitr::opts_current$set(tab.cap = "From the chunk")
+  testthat::expect_true(grepl(": From the chunk",
+                              tab_md(tabs, print = FALSE, css = FALSE), fixed = TRUE))
+  # an explicit caption wins
+  testthat::expect_true(grepl(": Mine",
+                              tab_md(tabs, print = FALSE, css = FALSE, caption = "Mine"),
+                              fixed = TRUE))
+})
+
+
 testthat::test_that("tab_md output contains pipe-delimited markdown table", {
   lines <- strsplit(md, "\n")[[1]]
 

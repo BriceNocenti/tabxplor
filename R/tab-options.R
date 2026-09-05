@@ -55,13 +55,17 @@ tx_option <- function(key) tx_getOption(tx_option_names(key), tx_option_default(
 #   section  which block of ?tabxplor-options it appears in (TAB_OPTION_SECTIONS declares the order).
 #   arg      the per-call argument that overrides it, or NA. Renders the "Per-call `x =`." sentence.
 #   alias    accepted synonym names (a renamed option's old spelling), read FIRST by tx_getOption().
-#   seed     "always" | "if_unset" (an .Rprofile choice survives load) | "elsewhere" (another
-#            function seeds it) | "no" (read only if the user sets it -- a retired option).
+#   seed     "if_unset" (the default: .onLoad() seeds it, and a value set before -- an .Rprofile, a
+#            setup chunk -- SURVIVES the load) | "elsewhere" (another function seeds it) | "no" (read
+#            only if the user sets it -- a retired option).
+#            ⚠ Seeding is a convenience, never a requirement: tx_option() falls back to `default`, so
+#            nothing depends on the option being present. Which is why no row ever overwrites: the
+#            two options the docs recommend most, `print` and `theme`, were unusable from .Rprofile.
 #   doc      the prose. NOT the default and NOT the per-call argument: both are generated.
 #' @keywords internal
 #' @noRd
 tx_opt <- function(default, section, doc, arg = NA_character_, alias = character(0),
-                   seed = "always")
+                   seed = "if_unset")
   list(default = default, section = section, doc = doc, arg = arg, alias = alias, seed = seed)
 
 #' @keywords internal
@@ -83,10 +87,16 @@ TAB_OPTIONS <- list(
   # --- display and printing ----------------------------------------------------------------------
   print = tx_opt(
     "console", "display",
-    c("how a table auto-prints. `\"html\"` renders the [tab_html()]",
+    c("the medium a table auto-prints in. `\"html\"` renders the [tab_html()]",
       "table (in the Viewer pane in RStudio/Positron, and as a real html table in rmarkdown/Quarto",
-      "documents) --- recommended when you work in an IDE with a Viewer. `\"kable\"` is an accepted",
-      "synonym of `\"html\"` (the pre-2.0.0 name).")),
+      "documents) --- recommended when you work in an IDE with a Viewer; `\"kable\"` is an accepted",
+      "synonym of it (the pre-2.0.0 name). `\"md\"` renders the [tab_md()] table, so a bare `tab()`",
+      "comes out as markdown --- on standard output in a script, and raw (not as a verbatim block)",
+      "in a knitted document, which is what an exploration notebook knitted straight to `.md`",
+      "wants. Both media call their exporter bare, so `tabxplor.theme` and `tabxplor.tab_kable_css`",
+      "govern them exactly as they govern an explicit call: `options(tabxplor.tab_kable_css =",
+      "FALSE)` is what stops each table carrying its own stylesheet. There is no `\"xl\"` and no",
+      "`\"forest\"`: one writes a file, the other is a chart --- ask for those by name.")),
 
   # `signif_levels` / `signif_labels` were a second and third name for one LADDER, with nothing
   #   tying their lengths together. Read only if a user set them (seed = "no"), and then they win.
@@ -133,7 +143,7 @@ TAB_OPTIONS <- list(
                 "`\"none\"`.")),
 
   var_labels = tx_opt(
-    FALSE, "display", seed = "if_unset",
+    FALSE, "display",
     doc = c("in *exports* (markdown / html / Excel / plot), show a variable's *label* (the",
             "`haven`/`labelled` `label` attribute, if it has one) instead of its name. Display only",
             "-- the table structure keeps canonical names, so name-based `select()` and references",
@@ -167,7 +177,7 @@ TAB_OPTIONS <- list(
             "(`tabxplor.theme` / `tabxplor.export_theme`).")),
 
   console_bold = tx_opt(
-    function() console_bold_default(), "colours", seed = "if_unset",
+    function() console_bold_default(), "colours",
     doc = c("whether to embolden the reference / total (and coloured) cells in the *console*, `TRUE`",
             "or `FALSE`. Auto-detected at load: `TRUE` in Positron and VS Code (which render ANSI",
             "bold at a fixed glyph width), `FALSE` in RStudio and unknown consoles (there bold is",
@@ -312,10 +322,11 @@ TAB_OPTIONS <- list(
       "column-aligned (set a proportional stack to revert).")),
 
   output_kable = tx_opt(
-    FALSE, "html",
-    c("make [tab()] render its result with [tab_html()] before returning it --- a convenience for",
-      "`.Rmd`/`.qmd` documents. Since 2.0.0 it only *renders*: it no longer changes the shape of the",
-      "built object (that is `output_list`).")),
+    FALSE, "html", seed = "no",
+    c("`r lifecycle::badge(\"superseded\")` makes [tab()] return an html table instead of a table:",
+      "the value can no longer be piped, filtered or re-coloured. Use",
+      "`options(tabxplor.print = \"html\")`, which renders the same html at print time and leaves the",
+      "object a table. Still honoured, with one message per session.")),
 
   # --- Excel -------------------------------------------------------------------------------------
   xl_font_text = tx_opt(
@@ -382,8 +393,7 @@ TAB_OPTIONS <- list(
 
 stopifnot(
   all(vapply(TAB_OPTIONS, function(r) r$section %in% names(TAB_OPTION_SECTIONS), logical(1))),
-  all(vapply(TAB_OPTIONS, function(r) r$seed %in% c("always", "if_unset", "elsewhere", "no"),
-             logical(1)))
+  all(vapply(TAB_OPTIONS, function(r) r$seed %in% c("if_unset", "elsewhere", "no"), logical(1)))
 )
 
 # tx_stars_ladder() -- glyph -> p-value cut-off, read at RENDER time from the stored per-cell
@@ -412,9 +422,9 @@ tx_seed_options <- function() {
     r  <- TAB_OPTIONS[[key]]
     if (r$seed %in% c("elsewhere", "no")) next
     nm <- tx_option_name(key)
-    # "if_unset": a user's .Rprofile choice must survive the load (an auto-detected default is a
-    # guess about their front-end, and they know better).
-    if (identical(r$seed, "if_unset") && !is.null(getOption(nm))) next
+    # A value set BEFORE the load -- an .Rprofile, a setup chunk sourced early -- always wins: the
+    # seed is only there so a raw getOption() finds something, and a user's value does that too.
+    if (!is.null(getOption(nm))) next
     options(stats::setNames(list(tx_option_default(key)), nm))
   }
   invisible()

@@ -377,7 +377,16 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   # purrr::map() returns a bare one -- the re-class below is what puts the class back.
   result <- set_caption(result, caption)
 
-  if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_html(result))
+  # SUPERSEDED by options(tabxplor.print = "html"), which renders the same html when the table is
+  # PRINTED and leaves the returned value a table one can pipe. Still honoured, said once.
+  if (isTRUE(getOption("tabxplor.output_kable"))) {
+    tx_inform_once(
+      "opt_output_kable",
+      c("{.code options(tabxplor.output_kable = TRUE)} makes {.fn tab} return an html table.",
+        "i" = paste('Use {.code options(tabxplor.print = "html")}: the same html,',
+                    "and the value stays a table.")))
+    return(tab_html(result))
+  }
 
   as_tabxplor_tabs(result)
 }

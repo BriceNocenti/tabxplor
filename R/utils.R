@@ -717,9 +717,16 @@ where <- function (fn)
 # knitr is Suggests: the three chunk options tabxplor reads are only ever set DURING a render, and a
 # render is exactly when knitr is loaded. `knitr.in.progress` is knitr's own flag for that, so the
 # gate answers "am I being knitted?" and the requireNamespace() below can never be the slow path.
+
+# THE one answer to "am I being knitted?" -- read by tab_md()'s `print` default (a cat() would land
+# in a verbatim block), by print.tabxplor_kable() (a knitted table must not open the Viewer), and by
+# the chunk-option reader below.
+#' @keywords internal
+tx_knitting <- function() isTRUE(getOption("knitr.in.progress"))
+
 #' @keywords internal
 tx_knitr_opt <- function(name, which = c("current", "knit")) {
-  if (!isTRUE(getOption("knitr.in.progress"))) return(NULL)
+  if (!tx_knitting()) return(NULL)
   if (!requireNamespace("knitr", quietly = TRUE)) return(NULL)
   switch(match.arg(which),
          current = knitr::opts_current$get(name),
