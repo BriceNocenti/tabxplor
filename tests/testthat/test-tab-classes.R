@@ -681,11 +681,20 @@ testthat::test_that("set_bars() draws a length inline and leaves every colour to
   testthat::expect_length(wm, 3L)
   testthat::expect_true(max(wm) < 100 && max(wm) > 40)   # a share of 100 %, not of the largest
 
-  # a bar of length zero is not a bar: no class, no style -- its border would draw a tick on nothing
+  # a bar of length zero KEEPS its groove and loses its bar: the column would look as if it had lost
+  # a row, and the bar's border alone would draw a tick on nothing.
   t0 <- t; t0$Married <- set_num(t0$Married, c(0, get_num(t0$Married)[-1]))
   h0 <- as.character(tab_html(t0))
   testthat::expect_identical(
     lengths(regmatches(h0, gregexpr("--tx-bar:", h0, fixed = TRUE))), 2L)
+  td0 <- unlist(regmatches(h0, gregexpr('<td class="[^"]*"', h0)))    # the CELLS, not the stylesheet
+  testthat::expect_length(grep("tx-bar", td0), 3L)                    # three grooves
+  testthat::expect_length(grep("tx-bar-on", td0), 2L)                 # two bars
+  # the groove is the chrome's `track` and takes NO colour measure: one alpha shadow, both themes
+  css <- tab_css(style_tag = FALSE, theme = "auto")
+  testthat::expect_true(grepl("td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}", css,
+                              fixed = TRUE))
+  testthat::expect_true(grepl("background:rgba(255,255,255,.07)", css, fixed = TRUE))
 
   # ⚠ A NAME WITH A SPACE IS A DIFFERENT NAME BY THE TIME THE HTML BACKEND LOOKS IT UP:
   # tab_wrap_text() rewrites every space to U+202F and renames the column, so a `bars` list keyed

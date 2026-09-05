@@ -246,29 +246,46 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
         "transparent", "transparent", cp$bg)
-    # THE DATA BAR (set_bars()): a bar chart inside the table, drawn as a ::before ELEMENT -- a
-    # gradient cannot be rounded, and a bar needs a border to read as a bar rather than as a wash.
-    # Only its LENGTH is inline, in the `--tx-bar` custom property the html engine writes per cell.
-    # ⚠ `isolation:isolate` + `z-index:-1` is what puts it ABOVE the cell's own ground and UNDER its
-    #   digits; the row hover, painted outside that stacking context, still reads through.
+    # THE DATA BAR (set_bars()): a bar chart inside the table, TWO stacked pseudo-elements -- the
+    # GROOVE (::before, `.tx-bar`: square, the cell's whole width, saying how far a full bar reaches)
+    # and the BAR itself (::after, `.tx-bar-on`: rounded, bordered, as long as its value). A groove is
+    # what makes a short bar readable, and a bar cannot be its own: an element has one background.
+    # Only the LENGTH is inline, in the `--tx-bar` custom property the html engine writes per cell.
+    # ⚠ Paint order is TREE order at one z-index, so ::after covers ::before without a second layer;
+    #   `isolation:isolate` + `z-index:-1` puts the pair ABOVE the cell's own ground and UNDER its
+    #   digits, and the row hover, painted outside that stacking context, still reads through both.
+    # ⚠ `box-sizing:border-box`: the border is INSIDE the length, or a full bar would overhang its
+    #   groove by twice the border and a very short one would be all border.
     # THE INK is `--tx-bar-ink`: the cell's own slot colour where it HAS one, so a bar agrees with the
     # shade beside it (and a deviation still reads its direction), the chrome's `accent` where it has
-    # none -- which is the ordinary case, a bar column being a count or a share nobody grades.
+    # none -- which is the ordinary case, a bar column being a count or a share nobody grades. The
+    # groove takes no measure at all: it is the chrome's `track`, an ALPHA shadow of whatever ground
+    # the page has, so one declaration serves a white page and a dark one.
     # ⚠ NOT the `.o3` fill hex: the DARK fills are light panels, not tints (see COLOR_RAMPS), and a
     #   digit sitting half on the bar's edge could then have no readable ink -- `on_fill` decides for a
-    #   whole cell, never for half of one. The mix says the same thing and holds in both themes:
-    #   #0267c7 at 30 % on white is #B3D1EE against .o3's #B2D0F8, and the border at full strength IS
-    #   .p3, while in dark the same mix darkens instead of turning into a panel.
+    #   whole cell, never for half of one. A mix says the same thing and holds in both themes: the
+    #   border at full strength IS `.p3`, and the fill lightens a white page where it darkens a dark
+    #   one, the groove under it lifting the ground by the little the alpha says.
     add(".tabxplor-tab td.tx-bar", "position", "relative", "relative", "relative")
     add(".tabxplor-tab td.tx-bar", "isolation", "isolate", "isolate", "isolate")
     add(".tabxplor-tab td.tx-bar", "--tx-bar-ink", "currentColor", "currentColor", "currentColor")
     add(paste0(".tabxplor-tab td.tx-bar", notxt), "--tx-bar-ink", cl$accent, cd$accent, cp$accent)
-    bar <- function(prop, v) add(".tabxplor-tab td.tx-bar::before", prop, v, v, v)
-    bar("content", '""'); bar("position", "absolute"); bar("z-index", "-1")
-    bar("inset", "2px auto 2px 0"); bar("width", "var(--tx-bar,0%)"); bar("border-radius", "3px")
-    bar("border", "1px solid var(--tx-bar-ink)")
+    # ⚠ one value per THEME, always: add() appends to three parallel vectors, so a NULL would drop a
+    #   row from one of them and shift every rule below it. A theme-blind declaration says itself 3x.
+    same <- function(sel, prop, v) add(sel, prop, v, v, v)
+    both <- ".tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after"
+    same(both, "content", '""');   same(both, "position", "absolute")
+    same(both, "z-index", "-1");   same(both, "box-sizing", "border-box")
+    same(both, "top", "2px"); same(both, "bottom", "2px"); same(both, "left", "0")
+    # the groove: the whole cell, square-cornered, no border -- it is a ground, not a shape.
+    same(".tabxplor-tab td.tx-bar::before", "right", "0")
+    add(".tabxplor-tab td.tx-bar::before", "background", cl$track, cd$track, cp$track)
+    # the bar: its own length, rounded, and a border of twice the groove's weight to carry the edge.
+    same(".tabxplor-tab td.tx-bar-on::after", "width", "var(--tx-bar,0%)")
+    same(".tabxplor-tab td.tx-bar-on::after", "border-radius", "3px")
+    same(".tabxplor-tab td.tx-bar-on::after", "border", "2px solid var(--tx-bar-ink)")
     mix <- function(pct) paste0("color-mix(in oklch,var(--tx-bar-ink) ", pct, "%,transparent)")
-    add(".tabxplor-tab td.tx-bar::before", "background", mix(30), mix(30), mix(18))
+    add(".tabxplor-tab td.tx-bar-on::after", "background", mix(14), mix(14), mix(10))
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND (`border-right:1px solid`
     # would reset border-right-color to the CELL's palette hex). Longhands only; locked by

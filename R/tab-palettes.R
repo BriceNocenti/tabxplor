@@ -203,6 +203,11 @@ palette_8bit <- list(
 #           the shade beside it). The over-ramp's rung 3, read from the ramps rather than written
 #           here, so set_color_palette() moves it too; the page's own ink on paper, where a bar is
 #           drawn in the one colour there is.
+#   track : the GROUND that accent is drawn on -- the data bar's groove, which says how far a full
+#           bar would reach and is what makes a short one readable. ⚠ ALPHA, and that is the whole
+#           point: a groove is a shadow on whatever ground the page has, so one declaration darkens a
+#           white page and lightens a dark one, and it survives a row hover reading through. Html
+#           only: an Excel dataBar has a groove of its own.
 #   mark  : a publication palette's effect-size MARKS, which sit where the stars sit but are not an
 #           aside: they REPLACE the colour, so they carry the deviation itself and must read as
 #           strongly as the number. Pure black under every print palette (a superscript glyph at
@@ -226,15 +231,17 @@ tx_chrome_hex <- function(theme = "light") {
   # rung is pure black can use the ordinary grey; one whose first rung is already grey cannot).
   if (!is.null(pal)) return(list(text = "#000000", grey = pal$grey, grey2 = pal$grey2,
                                  mark = "#000000", on_fill = NA_character_, accent = "#000000",
+                                 track = "rgba(0,0,0,.05)",
                                  bg = "#ffffff", border = "#000000", hover = "transparent"))
   switch(
     tx_palette_theme(theme),
     dark = list(text = "#f1efe0", grey = "#919085", grey2 = "#CDCBBC",
                 mark = "#f1efe0", on_fill = "#21252b", accent = tx_accent_hex("dark"),
+                track = "rgba(255,255,255,.07)",
                 # former base dark theme texts color: text = "#f0efe5", grey = "#919087", grey2 = "#CECDC3" ; even before: # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe",
                 bg = "#21252b", border = "#CDCBBC", hover = "rgba(255,242,204,.10)"),
     list(text = "#000000", grey = "#949494", grey2 = "#444444", mark = "#444444",
-         on_fill = NA_character_, accent = tx_accent_hex("light"),
+         on_fill = NA_character_, accent = tx_accent_hex("light"), track = "rgba(0,0,0,.07)",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   )
 }

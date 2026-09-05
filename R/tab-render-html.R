@@ -403,13 +403,18 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     #   rule survives it: what is inline is a LENGTH, never a colour -- the ink is a stylesheet
     #   custom property, so `theme = "auto"` and every publication palette still decide how the bar
     #   looks. A class per width would need one rule per percent.
-    # A bar of length zero is not a bar: with no class, its 2 px of border draws nothing at all.
+    # TWO classes, because a groove and a bar are two facts: `tx-bar` says the cell is ON the bar's
+    # scale and draws the groove (its whole width, saying how far a full bar reaches), `tx-bar-on`
+    # that it has a length to draw. A value of zero keeps its groove -- the column would otherwise
+    # look as if it had lost a row -- and gets no bar, whose border alone would draw a tick on nothing.
     sty <- ""
     bar <- rd$bars[[name]]
     if (!is.null(bar)) {
-      hit <- !is.na(bar) & bar > 0
+      hit <- !is.na(bar)
+      pos <- hit & bar > 0
       cls[hit] <- trimws(paste(cls[hit], "tx-bar"))
-      sty <- ifelse(hit, paste0(' style="--tx-bar:', round(bar * 100, 1), '%"'), "")
+      cls[pos] <- trimws(paste(cls[pos], "tx-bar-on"))
+      sty <- ifelse(pos, paste0(' style="--tx-bar:', round(bar * 100, 1), '%"'), "")
     }
     paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', sty, tip, '>', cell_html, '</td>')
   })
