@@ -106,3 +106,36 @@ testthat::test_that("`ref` is the ONE baseline noun, and only where a baseline i
     testthat::expect_error(set_legend_words(d, difference = stats::setNames(list("x"), f)),
                            "cannot be re-stated")
 })
+
+
+testthat::test_that("a legend names a column as the HEADER does, suffix stripped", {
+  # A producer suffixes "_<col_var>" to keep tibble names unique across the levels of a span
+  # (ggfacto's "coord_Axe 1"), and tab_col_var_header() strips it so the header reads "coord" under
+  # an "Axe 1" span. Where a col_var spawns SEVERAL legend lines the prefix moves from the span to
+  # the columns, and it must name the same thing -- a footer pointing at "coord_Axe 1" names a
+  # column the table never shows.
+  mk <- function(nm, cv, scale, ...) fmt(n = rep(100L, 3L), scale = scale, row_kind = "data",
+                                         col_var = cv, color = "difference", ...)
+  d <- tibble::tibble(
+    v            = new_lvl(forcats::as_factor(c("a", "b", "c")), role = "level"),
+    "coord_Axe 1" = mk(scale = "mean_diff",  cv = "Axe 1", mean = c(.9, -.5, .2),
+                       diff = c(.9, -.5, .2), var = 1),
+    "cos2_Axe 1"  = mk(scale = "level_pct",  cv = "Axe 1", pct_type = "row",
+                       pct = c(.8, .3, .1), diff = c(.3, -.2, -.4)))
+  t <- new_tab(d, meta = list(render_extras = list(n = "no")))
+
+  foot <- tab_footer_text(t, style = "terse", lang = "en")
+  testthat::expect_length(foot, 2L)                       # one line per scale
+  testthat::expect_true(startsWith(foot[[1]], "coord:"))
+  testthat::expect_true(startsWith(foot[[2]], "cos2:"))
+  testthat::expect_false(any(grepl("_Axe", foot, fixed = TRUE)))
+
+  # the same name reaches the `<cols>` placeholder, which is the piece a hand-written line uses
+  # (inline, so the line is APPENDED to the template rather than claiming the layout)
+  hand <- tab_footer_text(set_subtext(t, "at <cols:difference>"), lang = "en")
+  testthat::expect_identical(hand[[length(hand)]], "at coord")
+
+  # a name that does NOT end in its col_var is untouched (a regression's "Model_OR", a level label)
+  testthat::expect_identical(tx_strip_col_var_suffix("Model_OR", "married"), "Model_OR")
+  testthat::expect_identical(tx_strip_col_var_suffix("_Axe 1", "Axe 1"), "_Axe 1")
+})

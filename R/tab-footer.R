@@ -157,7 +157,7 @@ fi_method <- function(x, ctx, args = character(0)) {
 
 fi_cols <- function(x, ctx, args = character(0)) {
   spec <- fi_spec(x, ctx, args, mods = c("over", "under")); if (is.null(spec)) return(list())
-  nm <- if (length(setdiff(args, c("over", "under")))) spec$col_name else spec$col_var
+  nm <- if (length(setdiff(args, c("over", "under")))) spec$col_label else spec$col_var
   list(.lg_tok(legend_name_list(nm), esc = TRUE))
 }
 

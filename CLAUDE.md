@@ -912,6 +912,30 @@ notes après `</table>`, Excel rend un tableau subordonné comme une FEUILLE —
 jamais les ré-ordonner, seulement les supprimer. Il n'y a toujours aucun moyen, par tableau,
 de n'imprimer **rien** : `subtext = FALSE` des exportateurs reste le coup unique.
 
+#### v2.0.1 — Phase 7c — une légende nomme ses colonnes comme l'en-tête **DONE**
+
+**Là où une légende nomme les COLONNES, elle disait le nom brut du tibble.** Suite verte : **4 797**
+(4 790 avant). Un `col_var` portant plusieurs lignes de légende fait passer le préfixe du bandeau
+aux colonnes (`name_by_col`, `legend_group_by_body()`'s caller) — et il imprimait `coord_Axe 1,
+coord_Axe 2` alors que l'en-tête montre `coord` sous un bandeau `Axe 1`, `tab_col_var_header()`
+retirant le suffixe `_<col_var>` qu'un producteur ajoute pour garder ses noms uniques. La légende
+nommait donc une colonne que le tableau ne montre pas — l'inverse de sa propre règle.
+
+`tx_strip_col_var_suffix()` (`R/tab-export-prep.R`, à côté de `tx_strip_outcome_suffix()`) applique
+le retrait de l'en-tête ; `legend_specs()` porte le résultat en `col_label`, que la ligne de légende
+et `<cols>` lisent tous deux. ⚠ **Par `tx_unwrap_text()`**, pour la raison que `tab_col_var_header()`
+énonce déjà : le NOM a été réécrit par `tab_wrap_text()` quand l'attribut `col_var`, lui, est resté
+brut. Un nom qui ne finit pas par son `col_var` — le `Model_OR` d'une régression, un libellé de
+modalité — est intact, et la suite entière le confirme.
+
+Signalé par `ggfacto`, dont la convention `<statistic>_<col_var>` rendait le cas visible dès que la
+légende engendrée revenait sous ses tableaux d'AGD (sa phase 1h).
+
+⚠ **Relevé au passage, et non traité** : les six topics du cadre de pied — `tabxplor-footer`,
+`set_subtext`, `set_legend_words`, `tab_footer_text`, `tab_note`, `set_footer_tabs` — ne sont dans
+aucune section `reference:` de `_pkgdown.yml`. Ils n'apparaîtront donc pas à l'index du site, et
+`pkgdown` avertira qu'ils ne sont pas référencés.
+
 #### v2.0.1 — Phase 8 — noms de col_vars plus compacts dans les exports
 
 Les noms de variables en html rendent les tableaux `levels="first"` exportés (html, Excel, md) moins compacts, c’est un problème pour lequel je voudrais une solution générale user-friendly et bien pensée, pour utiliser l’espace horizontal quand il y en a, mais avoir un auto wrap intelligent quand l’espace est compté (et notamment quand chaque colonne à sa propre col_var avec `levels="first"`).
@@ -919,6 +943,7 @@ Les noms de variables en html rendent les tableaux `levels="first"` exportés (h
 - Dans le cas spécifique où on a une succession de colonnes avec des col_var différentes (for example from `levels="first"`), je voudrais également une détection automatique des préfixes communs : par exemple, si la première variable de colonne est "CONCERT_CLASSIQUE" et qu’elle n’a qu’une seule colonne, et que la seconde est "CONCERT_ROCK", détecter le préfix commun `"CONCERT_"`, garder le nom de col_var complet de la première variable, et afficher un nom de col_var abrégé `"_ROCK"` pour la seconde variable, idem pour la suivante si elle a le même préfixe, et ainsi de suite jusqu’à ce qu’une colonne n’ait pas le même préfixe. (The leading `"_"` is a readable way to say to the user "it continues with the same prefix as the former name) Il faut prendre en compte les e*dges cases* où il pourrait y avoir des prefixes *nested* (MUS_CONCERT_CLASSIQUE, MUS_CONCERT_ROCK, MUS_CONCERT_JAZZ, MUS_FREQ, MUS_SUPPORT_VYNILE, MUS_SUPPORT_CD), en redonnant le nom complet à chaque fois que le préfixe commun change/s’allonge/se raccourcit. Also think about other possible edge cases. It must not change the col_var attribute itself, only the col_vars names header row built at export time.
 
 Other related improvements, from `~github/ggfacto/` and `~github/formations_stat/` dev:
+- ⚠ **La typographie française du pied emploie une espace ORDINAIRE** devant `:` et `;` (« Contribution à la variance de l'axe : une modalité … moyenne ; une modalité »), alors que `dev/french_glossary.md` prescrit une espace fine. Mesuré sur le livre M2 rendu ; préexistant, cosmétique, et visible sous chaque tableau français.
 - A label column whose name contains a space silently loses its rowspan ("Axis label" fails, "Axis_label" works), and an empty name errors inside tab_label_runs() with replacement has length zero. It fails silently — the label just repeats down every row. The lookup should key on column identity, not on a name that gets split ? This is why the column is named Axe and not " " as the kableExtra table had it ?
 - A rotated name should be allowed to wrap to several vertical lines ? tab_vname_plan() gives it exactly one, so rotation is unreachable for any heading longer than ~1.75 × block height. The horizontal path already wraps; letting the vertical one do the same would make Axe 1: 9.9% of variance (mod. 57%) turn in a 5-row block.
 

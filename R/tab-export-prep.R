@@ -797,6 +797,19 @@ roles_col_var_edges <- function(col_var_map, other_cols = NULL, real_col_vars = 
 tx_strip_outcome_suffix <- function(x)
   sub("([[:space:]\u202f\u00a0]|<br>)*\\[[^]]*\\]$", "", x)
 
+# The name a col_var LEVEL column is SHOWN under: a producer suffixes "_<col_var>" to keep tibble
+# names unique across the axes/levels of a span (ggfacto's "coord_Axe 1"), and tab_col_var_header()
+# strips it so the header reads "coord" under an "Axe 1" span. The legend must name the same thing:
+# a footer pointing at "coord_Axe 1" names a column the table never shows.
+# WARNING: through tx_unwrap_text(), for the reason tab_col_var_header() states -- the NAME has
+#   already been rewritten by tab_wrap_text() while the col_var attribute stayed raw.
+tx_strip_col_var_suffix <- function(x, col_var) {
+  raw  <- tx_unwrap_text(x)
+  suff <- paste0("_", col_var)
+  keep <- endsWith(raw, suff) & nchar(raw) > nchar(suff)
+  ifelse(keep, substr(raw, 1L, nchar(raw) - nchar(suff)), x)
+}
+
 # Undoes tab_wrap_text()'s rewriting of a NAME (see file header), for comparison against a stored
 # attribute the wrap never touched.
 tx_unwrap_text <- function(x) {

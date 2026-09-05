@@ -1120,7 +1120,8 @@ legend_specs <- function(x, theme = "light") {
     # a legend line names the column BLOCK, not the bare variable -- after a spread two blocks share one
     # col_var and differ only by sub-population, so a bare name would say "marital" twice.
     list(col_var = fmt_col_block(cv, get_col_group(col))$label,
-         col_name = cn, plan_txt = plan_txt, plan_bg = plan_bg,
+         col_name = cn, col_label = tx_strip_col_var_suffix(cn, cv),
+         plan_txt = plan_txt, plan_bg = plan_bg,
          partial_test = partial_test, no_obs = no_obs,
          measure_text = m_txt, measure_bg = m_bg,
          is_mean = is_mean, is_std = is_std, is_pct = is_pct, is_coef = is_coef,
@@ -1198,7 +1199,7 @@ legend_streams <- function(x, style, lang, theme = "light") {
       mixed       <- length(unique(purrr::map_chr(g, "role"))) > 1
       show_this   <- show_global || mixed
       name_by_col <- mixed || any(cv_lines[cvs] > 1)
-      spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_name")) else cvs
+      spec$col_names <- if (name_by_col) unique(purrr::map_chr(g, "col_label")) else cvs
       # a multi-outcome regression column carries a trailing " [dep]" bracket in its NAME for console
       # clash-avoidance; the col_var span already names the outcome, so the legend strips it. Gated to
       # reg groups so a level label ending in "[...]" is untouched.
