@@ -558,7 +558,16 @@ tab_pct <- function(tabs, pct = "row",
     comp <- tab_validate_comp(tabs, comp = ifelse(is.null(comp), "null", comp))
   }
 
-  type <- fmt_kind_label(tabs)
+  # ⚠ THE DECLARED FACTS (`pct_type` / `var_kind`), never fmt_kind_label(): that one RENDERS a label
+  #   ("row%"), so a comparison against "row" here matched nothing, `ref` silently did nothing on
+  #   every percentage table, and on a mixed one `diff_formula()`'s switch fell through to NULL. Its
+  #   own docstring says as much; tab_ci() below reads the same two facts.
+  base  <- get_pct_type(tabs)
+  vkind <- fmt_var_kind(tabs)
+  # NAMED, and set back explicitly: `%in%` drops names, so ifelse() would return an unnamed vector
+  # and `type[[cur_column()]]` below would go out of bounds.
+  type  <- stats::setNames(
+    ifelse(base %in% c("row", "col"), base, ifelse(vkind == "mean", "mean", "")), names(base))
   if (ref[1] != "no" & any(type %in% c("row", "col", "mean")) ) {
 
     if (ref[1] == "tot"  ) reference <- detect_totcols(tabs)

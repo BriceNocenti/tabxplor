@@ -533,7 +533,7 @@ XL_BOLD_RATIO <- 1.12
 xl_text_width <- function(x) {
   x <- x[!is.na(x) & nzchar(x)]
   if (!length(x)) return(0L)
-  max(nchar(unlist(strsplit(x, "[\n\r]"), use.names = FALSE)), 0L)
+  max(tx_line_width(x), 0L)
 }
 
 # the width vector for one table, one entry per sheet column: fmt columns -- the widest rendered
@@ -546,6 +546,11 @@ XL_HEAD_LINES <- 2L
 # smaller size (8pt) keeps a long tag inside the figures above it, and its angle brackets -- the
 # console's own notation -- are excluded from the count.
 XL_UNIT_SIZE <- 8
+
+# The col_var SPAN row's own size. Like the unit row it is a label ABOUT the columns, not a column
+# header, so it is set small and plain -- and it wraps, since a merged cell is the one place Excel
+# will not find the room by itself.
+XL_SPAN_SIZE <- 8
 # `bold`: one logical per DATA row per column -- the cells Excel will draw bold (xl_build_styles's
 # own set: the reference rows and columns, the variable-name column, a measure's own face). NULL =
 # nothing bold, which is what a caller that has not computed the styles yet gets.
@@ -742,19 +747,17 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 
   # label runs lifted to ABSOLUTE sheet rows: `label_merges` skips length-1 runs (Excel rejects a
   # 1-cell "merge"); `vname_runs` are the name column's, the only ones that also rotate.
-  label_merges <- purrr::imap(roles$label_runs, function(run, cl) {
+  label_merges <- purrr::map2(roles$label_runs, unname(roles$label_cols), function(run, j) {
     at <- which(run$show & run$span > 1L)
-    tibble::tibble(col = match(cl, names(tab)),
-                   row1 = at + data_row0, row2 = at + run$span[at] - 1L + data_row0)
+    tibble::tibble(col = j, row1 = at + data_row0, row2 = at + run$span[at] - 1L + data_row0)
   })
   label_merges <- if (length(label_merges)) dplyr::bind_rows(label_merges)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
   # which names turn is the prep's shared decision (tab_vname_plan), read here and by the html engine
-  # so the two media agree.
-  vname_runs   <- purrr::imap(roles$vname_plans %||% list(), function(p, cl) {
-    j   <- match(cl, names(tab))
-    run <- roles$label_runs[[cl]]
-    at  <- if (is.null(run) || is.na(j)) integer(0) else which(run$show & run$span > 1L & p$vert)
+  # so the two media agree. `vname_plans` is parallel to `label_cols`, NULL where a column has none.
+  vname_runs   <- purrr::pmap(list(roles$vname_plans %||% list(), roles$label_runs,
+                                   unname(roles$label_cols)), function(p, run, j) {
+    at <- if (is.null(p) || is.null(run)) integer(0) else which(run$show & run$span > 1L & p$vert)
     tibble::tibble(col = rep(j, length(at)), row1 = at + data_row0,
                    row2 = at + run$span[at] - 1L + data_row0)
   })
@@ -794,10 +797,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       txt <- format(cc, special_formatting = TRUE, na = "", stars = FALSE, pad = fig_space)
       tibble::tibble(col = as.integer(ci), row = hit + data_row0, text = txt[hit])
     }))
-  for (cl in names(roles$label_cols)) {
-    if (!cl %in% names(xl_data)) next
-    xl_data[[cl]] <- as.character(xl_data[[cl]])
-    xl_data[[cl]][!roles$label_runs[[cl]]$show] <- NA_character_
+  for (k in seq_along(roles$label_cols)) {
+    j <- roles$label_cols[[k]]
+    if (is.na(j) || j > length(xl_data)) next
+    xl_data[[j]] <- as.character(xl_data[[j]])
+    xl_data[[j]][!roles$label_runs[[k]]$show] <- NA_character_
   }
 
   # THE DATA BAR (set_bars()), Excel's half: one dataBar per barred column, over its DATA rows only,
@@ -1308,12 +1312,12 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
   xl_apply_styles(wb, s, plan$styles, reg)
 
-  # style the col_var spanning-name row (bold + centred); wrap_text when any span carries a
-  # sub-population line, so the two lines show.
+  # style the col_var spanning-name row: centred, small and PLAIN (a variable name labels the columns,
+  # it is not one of their headers), and always wrapped -- Excel never auto-fits a merged cell, so
+  # without this a name longer than its block is simply cut off.
   if (!is.na(plan$span_row)) {
-    span_wrap <- if (any(nzchar(plan$header_runs$groups))) "1" else ""
-    xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
-                    0L, 0L, 0L, 0L, "center", "", span_wrap, "")
+    xf <- reg$xf_id(o$font_text, XL_SPAN_SIZE, FALSE, NA_character_, NA_character_,
+                    0L, 0L, 0L, 0L, "center", "", "1", "")
     xlb_set_cell_style(wb, s, paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)), xf)
   }
 
@@ -1359,9 +1363,12 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     at   <- cumsum(c(1L, utils::head(hr$spans, -1L)))
     span_w <- vapply(seq_along(at), function(k)
       sum(w[at[[k]]:min(length(w), at[[k]] + hr$spans[[k]] - 1L)]), double(1))
+    # in the span row's OWN font: the widths are in base-font characters, and a smaller face fits
+    # proportionally more of them per column.
+    span_w <- span_w * as.double(o$text_size) / XL_SPAN_SIZE
     ln <- max(xl_row_lines(hr$labels, pmax(1, span_w)) +
                 as.integer(nzchar(hr$groups)))
-    if (ln > 1L) xlb_row_heights(wb, s, plan$span_row, ln * (as.double(o$text_size_headers) * 1.35))
+    if (ln > 1L) xlb_row_heights(wb, s, plan$span_row, ln * (XL_SPAN_SIZE * 1.35))
   }
 
   invisible(wb)

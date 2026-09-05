@@ -306,12 +306,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   do_color <- isTRUE(rd$roles$has_color)
   styled   <- do_color || isTRUE(css)
   blank_lbl <- if (styled) "\u00a0" else ""
-  for (cl in names(label_cols)) {
-    idx <- which(names(cell_data) == cl)
-    if (length(idx) != 1) next
-    show <- label_runs[[cl]]$show
+  for (k in seq_along(label_cols)) {
+    idx <- label_cols[[k]]
+    if (is.na(idx) || idx > length(cell_data)) next
+    show <- label_runs[[k]]$show
     cell_data[[idx]][!show] <- blank_lbl
-    if (cl %in% names(var_name_col)) {
+    if (idx %in% unname(var_name_col)) {
       nz <- show & nzchar(cell_data[[idx]]) & !is.na(cell_data[[idx]]) & cell_data[[idx]] != blank_lbl
       cell_data[[idx]][nz] <- paste0("*", cell_data[[idx]][nz], "*")
     }
@@ -341,10 +341,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # sentinel drives `col_names` at Step 7. WARNING: this is NOT the prep's header blanking and must not
   # be folded into it -- the prep keeps a real variable name (`marital`) in cvh$clean for the backends
   # that show it, while md renders every label column's name as a body row instead.
-  for (cl in names(label_cols)) {
-    idx <- which(names(cell_data) == cl)
-    if (length(idx) == 1) names(cell_data)[idx] <- ""
-  }
+  for (idx in unname(label_cols))
+    if (!is.na(idx) && idx <= length(cell_data)) names(cell_data)[idx] <- ""
 
   # --- Step 6b: per-cell pandoc span attributes (colour) ---
   # a table is "coloured" iff some fmt column carries a colour measure; attr_mat holds the per-cell

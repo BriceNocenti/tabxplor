@@ -152,7 +152,8 @@ fi_ref <- function(x, ctx, args = character(0)) {
 fi_method <- function(x, ctx, args = character(0)) {
   ph <- legend_method_phrases(x, lang = ctx$lang)
   if (!length(ph)) return(list())
-  list(.lg_tok(paste(ph, collapse = "; ")))
+  # the joiner branches on the language, like every other one: French spaces its high punctuation.
+  list(.lg_tok(paste(ph, collapse = if (identical(ctx$lang, "fr")) " ; " else "; ")))
 }
 
 fi_cols <- function(x, ctx, args = character(0)) {

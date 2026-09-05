@@ -537,3 +537,31 @@ test_that("a display that never asks for odds is unchanged by the token", {
   expect_equal(unique(unlist(lapply(purrr::keep(t, is_fmt), get_display))), "pct")
   expect_equal(format(t$Married), format(set_display(set_display(t$Married, "odds"), "pct")))
 })
+
+
+# === Phase 10: what may borrow the column's own base in the unit tag ==============================
+
+testthat::test_that("only a token measured in the column's base takes its name in the unit tag", {
+  # `<row%-ctr>` claimed a base the number does not rest on: a contribution is a SHARE of the
+  # sub-table's chi-squared, summing to 1 over the whole of it whatever `pct` says.
+  t   <- tab(fx_gss(), race, marital, pct = "row", test = TRUE)
+  col <- purrr::keep(t, is_fmt)[[1]]
+  lab <- function(d) tabxplor:::fmt_display_label(set_display(col, d), "tag")
+
+  # base-free quantities name themselves
+  testthat::expect_identical(lab("ctr")   , "ctr")
+  testthat::expect_identical(lab("resid") , "resid")
+  testthat::expect_identical(lab("pvalue"), "p")
+  testthat::expect_false(tabxplor:::DISPLAY_TOKENS$ctr$prefix)
+  testthat::expect_false(tabxplor:::DISPLAY_TOKENS$resid$prefix)
+
+  # ... while everything measured in row-percentage points still says so
+  testthat::expect_identical(lab("ci")   , "row%-ci")
+  testthat::expect_identical(lab("moe")  , "row%-moe")
+  testthat::expect_identical(lab("diff") , "row%-diff")
+  testthat::expect_identical(lab("ratio"), "row%-ratio")
+  testthat::expect_identical(lab("odds") , "row%-odds")
+  # and a level names itself, prefix or no prefix
+  testthat::expect_identical(lab("pct")  , "row%")
+  testthat::expect_identical(lab("n")    , "n")
+})

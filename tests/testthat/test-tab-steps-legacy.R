@@ -108,3 +108,22 @@ testthat::test_that("the warning says the ARITHMETIC is shared, not going away",
   testthat::expect_s3_class(
     tryCatch(tab_pct(base, "row"), warning = function(w) w), "lifecycle_warning_deprecated")
 })
+
+
+# === Phase 10: `ref` on the deprecated step path actually applies =================================
+
+testthat::test_that("tab_pct(ref =) writes the difference it promises", {
+  # The gate read fmt_kind_label(), which RENDERS "row%" and so never matched "row": `ref` was a
+  # silent no-op on every percentage table, and on a mixed one the switch fell through to NULL.
+  d <- fx_gss()
+  t <- suppressWarnings(
+    tab_plain(d, race, marital) |> tab_tot() |> tab_pct("row", ref = "tot", color = TRUE))
+  col <- purrr::keep(t, is_fmt)[[1]]
+  testthat::expect_true(any(!is.na(get_diff(col))))
+  testthat::expect_identical(get_ref_type(col), "tot")
+  testthat::expect_identical(get_color(col), "difference")
+  # a column percentage takes its reference on the other axis, and still gets one
+  t2 <- suppressWarnings(
+    tab_plain(d, race, marital) |> tab_tot() |> tab_pct("col", ref = "tot"))
+  testthat::expect_true(any(!is.na(get_diff(purrr::keep(t2, is_fmt)[[1]]))))
+})

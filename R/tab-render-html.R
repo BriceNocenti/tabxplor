@@ -417,13 +417,13 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # (c2) LABEL columns are re-emitted as ONE `rowspan` cell per block, so the row/tab variable is
   # named once; a continuation row contributes "", which is what (d)'s paste0 needs. html_escape_br(),
   # not the raw path (c): a label carries no markup of ours except tab_wrap_text()'s own "<br>".
-  for (cl in names(roles$label_cols)) {
-    j    <- match(cl, nm)
-    run  <- roles$label_runs[[cl]]
+  for (k in seq_along(roles$label_cols)) {
+    j    <- roles$label_cols[[k]]
+    run  <- roles$label_runs[[k]]
     if (is.null(run) || is.na(j)) next
-    named <- cl %in% names(roles$var_name_col)   # a variable name is bold in its own right
+    named <- j %in% unname(roles$var_name_col)   # a variable name is bold in its own right
     # rotation is decided by the prep (tab_vname_plan), never re-derived -- Excel reads the same vector.
-    vert  <- named & (roles$vname_plans[[cl]]$vert %||% (run$span > 1L))
+    vert  <- named & (roles$vname_plans[[k]]$vert %||% (run$span > 1L))
     # the bottom rule is decided HERE: a rowspanned cell is anchored in its block's FIRST row, so
     # `tr.tx-bb2>*` never reaches it, unlike a one-row block's own closing row.
     # ⚠ AT THE TABLE'S OWN WEIGHT: the closing row draws `tr.tx-bb2` (a block boundary) across every
@@ -484,12 +484,17 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # the col_var spanning-name header row: each variable name centred (colspan) over its level columns.
   # A span belonging to a SUB-POPULATION gets its own line above the variable name, composed here from
   # two stored facts rather than welded into the name.
-  cvh_runs <- tab_header_runs(cvh$label, cvh$group)
+  cvh_runs <- tab_header_runs(cvh$label, cvh$group, cvh$full)
   span_thead <- if (any(nzchar(cvh_runs$labels))) {
     span_txt <- ifelse(nzchar(cvh_runs$labels), html_escape_br(cvh_runs$labels), "")
     span_txt <- ifelse(nzchar(cvh_runs$groups) & nzchar(span_txt),
                        paste0(html_escape_br(cvh_runs$groups), "<br>", span_txt), span_txt)
-    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '">', span_txt,
+    # a span the cascade SHORTENED says its full name out of band: an elided "_ROCK" does not carry
+    # where the previous name was cut, and html is the one medium that can hand it over on hover.
+    tip <- ifelse(nzchar(cvh_runs$labels) &
+                    tx_unwrap_text(cvh_runs$labels) != cvh_runs$full,
+                  paste0(' title="', tx_html_escape(cvh_runs$full), '"'), "")
+    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '"', tip, '>', span_txt,
                          '</th>')
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""

@@ -203,7 +203,10 @@ testthat::test_that("tab_label_runs marks one run per block, and agrees with new
 
 
 testthat::test_that("tab_label_runs: NA is a continuation, and the columns nest", {
-  lr <- tabxplor:::tab_label_runs
+  # ⚠ it takes POSITIONS, from tab_label_order(): a label column is identified by where it is, never
+  # by a name (`tab[[""]]` is NULL even when a column bears that name, and a name is not unique).
+  lo <- tabxplor:::tab_label_order
+  lr <- function(d, nms) tabxplor:::tab_label_runs(d, lo(d, nms))
   # NA (a materialised p-value row belongs to the block above it) never starts a run
   d1 <- data.frame(g = c("a", "a", NA, "b", NA))
   testthat::expect_equal(which(lr(d1, "g")$g$show), c(1L, 4L))
@@ -213,6 +216,11 @@ testthat::test_that("tab_label_runs: NA is a continuation, and the columns nest"
   d2 <- data.frame(out = c("x", "y", "y"), in_ = c("k", "k", "k"))
   testthat::expect_equal(which(lr(d2, c("out", "in_"))$in_$show), c(1L, 2L))
   testthat::expect_equal(lr(d2, c("out", "in_"))$in_$span[c(1L, 2L)], c(1L, 2L))
+  # the order is the TABLE's, whatever order the caller asked in (the scan nests outer -> inner)
+  testthat::expect_identical(names(lo(d2, c("in_", "out"))), c("out", "in_"))
+  # a name a tidyselect would choke on is just another column here
+  d3 <- stats::setNames(d1, "a name")
+  testthat::expect_equal(which(lr(d3, "a name")[[1]]$show), c(1L, 4L))
   # degenerate inputs
   testthat::expect_length(lr(d1, character(0)), 0L)
   testthat::expect_length(lr(d1[0, , drop = FALSE], "g"), 0L)

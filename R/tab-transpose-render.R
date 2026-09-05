@@ -196,10 +196,10 @@ tx_transpose_render <- function(rd, backend) {
   totblock_bottom <- tb_edges$bottom
   align <- stats::setNames(dplyr::if_else(fmt_mask, "r", "l"), all_names)
 
-  label_names <- if (is.null(var_name_col_name)) character(0) else var_name_col_name
-  label_cols  <- stats::setNames(match(label_names, all_names), label_names)
+  label_cols  <- tab_label_order(new_tab,
+                                 if (is.null(var_name_col_name)) character(0) else var_name_col_name)
   var_name_col <- label_cols
-  label_runs  <- tab_label_runs(new_tab, label_names)
+  label_runs  <- tab_label_runs(new_tab, label_cols)
 
   # ann, keyed by new data-column name -----------------------------------------------------------
   ann_new <- stats::setNames(lapply(seq_len(n_orow), function(c) {
@@ -256,8 +256,8 @@ tx_transpose_render <- function(rd, backend) {
   # ⚠ ANYTHING KEYED BY A COLUMN NAME DIES HERE, silently, because a transposed column IS a row level:
   # `bars` would keep the pre-transpose names and match nothing. A data bar carries ONE reference per
   # column, and a flipped column is a row level -- so it goes, rather than mis-drawing.
-  # (Same rule as follow_wrap()'s in tab_export_prep(): a stale key is not an error, it quietly does
-  # nothing -- so every such member is re-keyed or dropped at the seam that invalidates it.)
+  # (A stale key is not an error, it quietly does nothing -- so such a member is dropped at the seam
+  # that invalidates it. This is the one seam left that can: an export no longer renames.)
   rd2$bars      <- NULL
   rd2$tooltips  <- if (!is.null(tips_data)) stats::setNames(tips_data, dnames) else NULL
   rd2$vars      <- list(degrade = FALSE, row_var = row_var_col_name, tab_vars = character(0),

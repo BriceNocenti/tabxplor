@@ -96,7 +96,22 @@ reference:
   - tab_html
   - tab_md
   - tab_xl
+  - tab_pipe
   - tab_css
+
+- title: What is written under a table
+  desc: >
+    The footer is one region and its text is a template the table carries: everything tabxplor
+    generates is a `<placeholder>`, everything you write is a line, and the order of the lines is the
+    order of the footer.
+  contents:
+  - tabxplor-footer
+  - set_subtext
+  - set_legend_words
+  - tab_footer_text
+  - tab_note
+  - set_footer_tabs
+  - set_bars
 
 - title: Charts
   desc: (Both need **ggplot2**.)

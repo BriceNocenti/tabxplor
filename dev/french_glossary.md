@@ -34,8 +34,9 @@ French words on purpose — crude/adjusted, and the reference.
   Settled in Phase 23f-i; applied to both *Reading a regression* twins.
 - **Notation and international abbreviations stay as-is**: `OR`, `IRR`, `β`, `AME`, `MER`, `AIC`, `BIC`,
   `Chi2`, `phi`, `eta2`, `R2`, `%`, `N`. A French statistics reader uses these directly.
-- **French typography** (handled in code by `legend_num()` + the `lang == "fr"` branches): thin space
-  before `; : ! ?`, decimal **comma** (`×1,5`). Keep this in every translation.
+- **French typography** (handled in code by `legend_num()` + the `lang == "fr"` branches): a space
+  before `; : ! ?`, decimal **comma** (`×1,5`). Keep this in every translation. The space is an
+  ORDINARY one, deliberately --- see the note closing *The footer legend's measure names* below.
 - **No edge whitespace inside `gettext()`** — `xgettext` strips it, so `"Model: "` would never match at
   runtime. Punctuation/spacing lives in the `gettextf()` template or is added outside the call.
   ⚠ **The same rule covers jamovi's `_()` and `jmvcore::.()`**, for a different reason: jamovi looks a

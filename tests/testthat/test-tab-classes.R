@@ -731,3 +731,18 @@ testthat::test_that("a variance names itself, and the prefix rule is asked rathe
            diff = c(.01, .02, .03), display = "diff")
   testthat::expect_identical(tabxplor:::fmt_display_label(d), "row%-diff")
 })
+
+
+# === Phase 10: tab_wrap_text() is unchanged, and the exporters no longer use half of it ===========
+
+testthat::test_that("tab_wrap_text() wraps NAMES and VALUES, tx_wrap_labels() only the values", {
+  t <- tab(fx_gss(), marital, race, pct = "row")
+  w <- tab_wrap_text(t, wrap_rows = 5L, wrap_cols = 4L, brk = "<br>")
+  testthat::expect_true(any(grepl("<br>", names(w), fixed = TRUE)))
+  testthat::expect_true(any(grepl("<br>", levels(w[[1]]), fixed = TRUE)))
+  # the exporters run only the second half, which is what keeps every per-column fact keyed by a
+  # name from going stale mid-export.
+  v <- tabxplor:::tx_wrap_labels(t, wrap_rows = 5L, brk = "<br>")
+  testthat::expect_identical(names(v), names(t))
+  testthat::expect_identical(levels(v[[1]]), levels(w[[1]]))
+})

@@ -396,9 +396,12 @@ DISPLAY_TOKENS <- list(
                               'its inverse ("1/2.60") unless `options(tabxplor.ratio_print = "raw")`',
                               'asks for the plain number. Void where the percentage is 1 and the odds',
                               'infinite')),
+  # `prefix = FALSE`: a contribution is a SHARE of the sub-table's chi-squared, summing to 1 over the
+  # whole of it and identical under `pct = "row"`, `"col"` or plain counts -- so "row%-ctr" claimed a
+  # base the number does not rest on, and a percentage axis it does not sum along.
   ctr     = .dtok("ctr"  , user = TRUE, value_cell = TRUE,
                   source = 'test = TRUE  (the contributions come from the chi-squared)',
-                  label = "ctr",
+                  label = "ctr", prefix = FALSE,
                   doc = "the cell's contribution to the chi-squared"),
   # `prefix = FALSE` like its own square root below: a variance is a quantity in the variable's units,
   # not a deviation from an axis, so "mean-var" -- the variance OF the mean -- named the wrong thing.
@@ -421,9 +424,11 @@ DISPLAY_TOKENS <- list(
                   label = "cv", unit = "pct", self_named = TRUE, prefix = FALSE,
                   doc = paste('the coefficient of variation --- the standard deviation as a',
                               'percentage of the mean')),
+  # `prefix = FALSE` for `ctr`'s reason, one step further: an adjusted standardized residual is a
+  # z-score, a pure number in no unit at all.
   resid   = .dtok(          user = TRUE, settable = FALSE, value_cell = TRUE, min_digits = 1L,
                   source = 'test = TRUE  (the residual comes from the chi-squared)',
-                  label = "resid",
+                  label = "resid", prefix = FALSE,
                   doc = paste('the adjusted standardized residual -- whether the cell departs from',
                               'independence. Derived from the p-value and the sign of `ctr`, so it',
                               'is read-only')),
@@ -451,17 +456,19 @@ DISPLAY_TOKENS <- list(
                               'What `color = "adjustment"` grades --- readable in print and Excel,',
                               'not only in an html tooltip')),
   # --- the ones the PIPELINE writes; never user-typed --------------------------------------------
+  # `prefix = FALSE` on all three: a p-value is a probability and a fit statistic is an N, an R2 or an
+  # AIC -- neither rests on the column's percentage base, so neither may borrow its name.
   pvalue  = .dtok("pvalue", footer = TRUE,           # footer, yet deliberately coloured
-                  label = "p",
+                  label = "p", prefix = FALSE,
                   doc = "a test's p-value"),
   gof     = .dtok("diff"  , footer = TRUE, colour = FALSE,
-                  label = "fit",
+                  label = "fit", prefix = FALSE,
                   doc = 'a model-fit statistic (N, R2, AIC, BIC, dispersion)'),
   # the same cell, MARKED: a model check past the convention its REG_CHECKS row declares. A separate
   # token rather than a per-cell flag, because "what a cell shows" is exactly what `display` is for,
   # and it is the one thing the colour engine already dispatches on.
   gof_warn = .dtok("diff" , footer = TRUE,
-                  label = "fit",
+                  label = "fit", prefix = FALSE,
                   doc = 'a model-fit statistic past the threshold its check is read against'),
   # The base count as the reader needs it: ONE number when every column block of the table rests on
   # the same population, `min-max` when they differ (several col_vars losing different NAs, several

@@ -1921,45 +1921,42 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
   tabs <- tabs |>
     dplyr::rename_with(
       # a column name is a NAME, not prose: tx_wrap_name() knows the seams a compound one is built
-      # from (`_`, `.`, camelCase), which stri_wrap() -- whitespace only -- could never find. Values
-      # below stay on the prose wrapper; only the variable-NAME column is re-wrapped, by the exporter
-      # prep, which alone knows the width its block leaves it.
+      # from (`_`, `.`, camelCase), which stri_wrap() -- whitespace only -- could never find.
       ~ tx_wrap_name(., wrap_cols, exdent = 0L, brk = brk)
-    ) |>
-    dplyr::mutate(
-      dplyr::across(
-        where(is.factor),
-        ~ forcats::fct_relabel(
-          ., ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
-                                           whitespace_only = whitespace_only), fixed = TRUE)
-        )
-      ),
-      dplyr::across(
-        where(is.character),
-        ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
-                                      whitespace_only = whitespace_only), fixed = TRUE)
-      )
     )
+  if (unbreakable_spaces)
+    tabs <- dplyr::rename_with(tabs, ~ gsub(" ", unbrk, ., perl = TRUE))
+
+  tx_wrap_labels(tabs, wrap_rows = wrap_rows, exdent = exdent,
+                 whitespace_only = whitespace_only,
+                 unbreakable_spaces = unbreakable_spaces, brk = brk)
+}
+
+
+# The VALUES half of tab_wrap_text(): row labels wrapped as prose, column NAMES untouched. This is
+# what the exporter prep runs -- a rendered header is a LABEL in the render model, not a rename, so
+# nothing keyed by a column name can go stale (see R/tab-export-prep.R's header).
+tx_wrap_labels <- function(tabs, wrap_rows = 35L, exdent = 1, whitespace_only = TRUE,
+                           unbreakable_spaces = TRUE, brk = "\n") {
+  wrap1 <- function(x) gsub("\n", brk, tx_str_wrap(x, width = wrap_rows, exdent = exdent,
+                                                   whitespace_only = whitespace_only),
+                            fixed = TRUE)
+  tabs <- dplyr::mutate(
+    tabs,
+    dplyr::across(where(is.factor)   , ~ forcats::fct_relabel(., wrap1)),
+    dplyr::across(where(is.character), wrap1)
+  )
 
   if (unbreakable_spaces) {
-    tabs <- tabs |>
-      dplyr::rename_with(
-        ~ gsub(" ", unbrk, ., perl = TRUE)
-      ) |>
-      dplyr::mutate(
-        dplyr::across(
-          where(is.factor),
-          ~ forcats::fct_relabel(., ~ gsub(" ", unbrk, ., perl = TRUE) )
-        ),
-        dplyr::across(
-        where(is.character),
-        ~ gsub(" ", unbrk, ., perl = TRUE)
-      ),
-
-      )
+    unbrk1 <- function(x) gsub(" ", unbrk, x, perl = TRUE)
+    tabs <- dplyr::mutate(
+      tabs,
+      dplyr::across(where(is.factor)   , ~ forcats::fct_relabel(., unbrk1)),
+      dplyr::across(where(is.character), unbrk1)
+    )
   }
 
-  return(tabs)
+  tabs
 }
 
 

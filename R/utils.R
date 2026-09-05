@@ -127,10 +127,13 @@ tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) 
 #   before  `*` (the interaction operator: `age` / `*tvhours` says which side the operator belongs
 #           to) and a lowercase -> uppercase camelCase seam.
 # `-` and `/` are deliberately NOT opportunities: they are far more often a range ("25-34") or a date
-# than a compound-name seam, and breaking those reads as a typo.
+# than a compound-name seam, and breaking those reads as a typo. A `.` between digits is out for the
+# same reason -- there it is a decimal point.
 #' @keywords internal
 tx_name_atoms <- function(s) {
-  s <- gsub("([_. ])", "\\1\u0001", s, perl = TRUE)
+  s <- gsub("([_ ])", "\\1\u0001", s, perl = TRUE)
+  # a `.` BETWEEN DIGITS is a decimal point, not a seam -- "9.9%" broken there reads as two numbers
+  s <- gsub("(?<=\\.)(?![0-9])", "\u0001", s, perl = TRUE)
   s <- gsub("(?=[*])|(?<=[a-z0-9])(?=[A-Z])", "\u0001", s, perl = TRUE)
   a <- strsplit(s, "\u0001", fixed = TRUE)[[1L]]
   a[nzchar(a)]
@@ -174,6 +177,52 @@ tx_wrap_name <- function(string, width = 12L, exdent = 1L, hard = TRUE, brk = "\
            paste(paste0(strrep("\u00a0", ex), lines[-1L]), collapse = brk))
   }
   vapply(string, one, character(1), USE.NAMES = FALSE)
+}
+
+# How wide, and how tall, a WRAPPED string is -- at the breaks every medium writes. One definition,
+# read by the header budget below and by Excel's own width pass.
+#' @keywords internal
+tx_line_width <- function(x) {
+  x <- as.character(x); x[is.na(x)] <- ""
+  vapply(strsplit(x, "<br>|[\n\r]", perl = TRUE), function(p) max(0L, nchar(p)), integer(1))
+}
+
+#' @keywords internal
+tx_n_lines <- function(x) {
+  x <- as.character(x); x[is.na(x)] <- ""
+  lengths(strsplit(paste0(x, ""), "<br>|[\n\r]", perl = TRUE))
+}
+
+# A RUN OF NAMES THAT SHARE A PREFIX SAYS IT ONCE. Walking the names a reader meets in order, one
+# whose common prefix with the name before it is the prefix already in force is shown from that
+# prefix on -- "MUS_CONCERT_CLASSIQUE", then "_ROCK", "_JAZZ" -- and the FULL name returns whenever
+# that common prefix changes, whether it lengthens, shortens or disappears, so the reader always has
+# the current prefix in view. Segments are tx_name_atoms()', which carry their own separator, so a
+# cut never falls mid-word.
+# ⚠ The elided form is AMBIGUOUS on its own -- "_ROCK" does not say WHERE the previous name was cut --
+#   which is why the caller reaches for it only when the full name would not have fitted, and why the
+#   elision is refused unless the shared prefix ends at a separator (a camelCase cut leaves no mark).
+tx_elide_prefix <- function(labels) {
+  out <- labels
+  at  <- which(!is.na(labels) & nzchar(labels))
+  if (length(at) < 2L) return(out)
+  atoms <- lapply(labels[at], tx_name_atoms)
+  pfx   <- character(0)                                  # the prefix currently in force
+  for (i in seq_along(at)[-1L]) {
+    a <- atoms[[i - 1L]]; b <- atoms[[i]]
+    k <- 0L
+    while (k < min(length(a), length(b)) && identical(a[[k + 1L]], b[[k + 1L]])) k <- k + 1L
+    q <- if (k > 0L && k < length(b)) b[seq_len(k)] else character(0)
+    if (!length(q))              { pfx <- character(0); next }
+    if (!length(pfx))              pfx <- q
+    else if (!identical(pfx, q)) { pfx <- q; next }
+    ps <- paste0(pfx, collapse = "")
+    # a 1-2 character prefix saves nothing and reads as noise; a prefix not ending at a separator
+    # would leave the elision unmarked ("musConcertRock" -> "Rock").
+    if (nchar(ps) < 3L || !grepl("[_. ]$", ps)) next
+    out[at[[i]]] <- substring(labels[at[[i]]], nchar(ps))
+  }
+  out
 }
 
 # str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).

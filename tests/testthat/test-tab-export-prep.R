@@ -284,3 +284,118 @@ testthat::test_that("rd_caption() still reads exporter > stored > a regression's
   testthat::expect_identical(get_caption(r), "My model")
   testthat::expect_match(as.character(tab_html(r)), "My model", fixed = TRUE)
 })
+
+
+# === Phase 10: a column is identified by its POSITION, and a col_var name is compacted ============
+
+# ggfacto's shape: a label column headed by a readable name, over a col_var block.
+p10_tab <- function(label_name = "Axe", n_axes = 1L) {
+  n   <- 6L
+  out <- tibble::tibble(
+    x   = new_lvl(forcats::as_factor(rep(c("Axis one", "Axis two"), each = 3L)), role = "var"),
+    lev = new_lvl(forcats::as_factor(rep(c("a", "b", "c"), 2L)), role = "level")
+  )
+  names(out)[1] <- label_name
+  for (k in seq_len(n_axes))
+    out[[paste0("coord_Axe ", k)]] <- fmt(
+      n = rep(100L, n), scale = "level_pct", pct_type = "row",
+      pct = seq(0.1, 0.6, length.out = n), col_var = paste("Axe", k), color = "no")
+  new_tab(out)
+}
+
+testthat::test_that("a label column keeps its rowspan whatever its NAME contains", {
+  # The export used to RENAME columns while wrapping (spaces -> U+202F), so every per-column fact
+  # keyed by a name went stale -- silently. A name with a space lost its rowspan entirely.
+  for (nm in c("Axe", "Axis label", " ", "a very long axis label indeed")) {
+    h <- as.character(tab_html(p10_tab(nm)))
+    testthat::expect_true(grepl('rowspan="3"', h, fixed = TRUE), info = nm)
+  }
+})
+
+testthat::test_that("export leaves the tibble's column names alone", {
+  rd <- tabxplor:::tab_export_prep(
+    list(p10_tab("Axis label")), backend = "kable",
+    wrap = list(rows = 35L, cols = 3L, exdent = 2, whitespace_only = TRUE,
+                unbreakable_spaces = TRUE, brk = "<br>"))$tables[[1]]
+  testthat::expect_identical(names(rd$tab)[c(1L, 2L)], c("Axis label", "lev"))
+  testthat::expect_true("coord_Axe 1" %in% names(rd$tab))
+  # ... and the wrapping lives in the render model's header bands instead
+  testthat::expect_true(any(grepl("<br>", rd$col_var_header$clean, fixed = TRUE)))
+})
+
+testthat::test_that("a data bar survives a user-side tab_wrap_text()", {
+  d <- fx_gss()
+  t <- set_bars(tab(d, race, marital, pct = "row"), "Never married")
+  # `bars` is keyed by a column NAME, and the user's wrap rewrote it; the prep matches back through
+  # tx_unwrap_text(). (A width narrow enough to break mid-word is not recoverable, by anyone.)
+  w <- tab_wrap_text(t, wrap_cols = 10L)
+  testthat::expect_match(as.character(tab_html(w)), "--tx-bar:", fixed = TRUE)
+})
+
+testthat::test_that("tx_elide_prefix() says a shared prefix once, and restates it when it changes", {
+  el <- tabxplor:::tx_elide_prefix
+  testthat::expect_identical(
+    el(c("MUS_CONCERT_CLASSIQUE", "MUS_CONCERT_ROCK", "MUS_CONCERT_JAZZ",
+         "MUS_FREQ", "MUS_SUPPORT_VYNILE")),
+    c("MUS_CONCERT_CLASSIQUE", "_ROCK", "_JAZZ", "MUS_FREQ", "_SUPPORT_VYNILE"))
+  # the first name is never elided, and an unrelated neighbour resets the prefix
+  testthat::expect_identical(el(c("AAA_BBB", "CCC_DDD")), c("AAA_BBB", "CCC_DDD"))
+  # a prefix under 3 characters, or one not ending at a separator, buys nothing and is refused
+  testthat::expect_identical(el(c("a_one", "a_two")), c("a_one", "a_two"))
+  testthat::expect_identical(el(c("musConcertRock", "musConcertJazz")),
+                             c("musConcertRock", "musConcertJazz"))
+})
+
+testthat::test_that("a col_var name is compacted only when its own columns leave it no room", {
+  d <- fx_gss()
+  d$MUS_CONCERT_CLASSIQUE <- factor(ifelse(as.integer(d$marital) %% 2L == 0L, "Yes", "No"))
+  d$MUS_CONCERT_ROCK      <- factor(ifelse(as.integer(d$race)    %% 2L == 0L, "Yes", "No"))
+  d$MUS_FREQ              <- factor(ifelse(d$age %% 2L == 0L, "Yes", "No"))
+  vars <- c("MUS_CONCERT_CLASSIQUE", "MUS_CONCERT_ROCK", "MUS_FREQ")
+
+  narrow <- tab(d, race, tidyselect::all_of(vars), levels = "first", pct = "row")
+  h <- as.character(tab_html(narrow))
+  testthat::expect_match(h, ">_ROCK</th>", fixed = TRUE)
+  # the elided span says its full name out of band, since "_ROCK" cannot carry the cut point
+  testthat::expect_match(h, 'title="MUS_CONCERT_ROCK"', fixed = TRUE)
+  # the FIRST block is never elided -- the reader needs the prefix in view -- but nothing entitles it
+  # to widen the table either: with no room in its own block it is held to `wrap_cols`.
+  testthat::expect_match(h, ">MUS_CONCERT_<br>CLASSIQUE</th>", fixed = TRUE)
+  testthat::expect_false(grepl(">MUS_CONCERT_CLASSIQUE<", h, fixed = TRUE))
+
+  # ... and a col_var merging enough level columns says its name outright: neither wrapped nor elided,
+  # which is the other half of "never while there is room".
+  d$MUS_CONCERT_CLASSIQUE <- d$marital        # 6 levels -> a 6-column span
+  d$MUS_CONCERT_ROCK      <- d$race           # 3 levels
+  hm <- as.character(tab_html(tab(d, race, tidyselect::all_of(vars[1:2]), pct = "row")))
+  testthat::expect_match(hm, ">MUS_CONCERT_CLASSIQUE</th>", fixed = TRUE)
+  testthat::expect_match(hm, ">MUS_CONCERT_ROCK</th>", fixed = TRUE)
+
+  # give the columns width and the full names come back, wrapped at their seams and never elided
+  wide <- tab(d, race, tidyselect::all_of(vars), levels = "first", pct = "row",
+              display = "{pct} (n={n})")
+  hw <- as.character(tab_html(wide))
+  testthat::expect_false(grepl(">_ROCK<", hw, fixed = TRUE))
+  testthat::expect_match(hw, "MUS_<br>CONCERT_<br>ROCK", fixed = TRUE)
+
+  # markdown cannot hold a line break, so the elision is the one compaction it can use
+  testthat::expect_match(tab_md(narrow, color = FALSE), "_ROCK", fixed = TRUE)
+})
+
+testthat::test_that("a rotated variable name may take several turned lines", {
+  # tab_vname_plan() used to demand the whole name on ONE turned line, which put every heading
+  # longer than ~1.75 * span out of reach of a rotation it would clearly have won.
+  n <- 10L
+  t <- new_tab(tibble::tibble(
+    Axe = new_lvl(forcats::as_factor(rep(c("Axe 1: 9.9% of variance (mod. 57%)",
+                                           "Axe 2: 7.1% of variance (mod. 31%)"), each = 5L)),
+                  role = "var"),
+    lev = new_lvl(forcats::as_factor(rep(letters[1:5], 2L)), role = "level"),
+    coord_Axe = fmt(n = rep(100L, n), scale = "level_pct", pct_type = "row",
+                    pct = seq(0.05, 0.5, length.out = n), col_var = "Axe", color = "no")))
+  h <- as.character(tab_html(t))
+  testthat::expect_match(h, "tx-vname", fixed = TRUE)
+  # ... broken at its seams, with no mid-word cut and no horizontal "continues below" indent
+  testthat::expect_match(h, "variance<br>", fixed = TRUE)
+  testthat::expect_false(grepl("varian<br>", h, fixed = TRUE))
+})

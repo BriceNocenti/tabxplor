@@ -316,7 +316,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, in html and in Excel. **One reference per column**, or two bars could not be compared — the ceiling `max =` states, and the column's own largest data cell where it states none; the prep resolves it once and both media read that one number, Excel pinning it as its `cfvo` bounds rather than auto-scaling over rows the bar excludes. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is a stylesheet custom property (the cell's own slot colour where it has one, the chrome's `accent` where it has none), and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
-**How wide a thing is, and where it breaks, are measured from the rendered content.** A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone; a *variable* name is written vertically only where the rotation actually saves width — the names that cannot turn, a one-row block like `Constant`, set the floor every other name is weighed against, and a rotated one wraps to its block's own height. That decision is one prep fact both media read. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
+**How wide a thing is, and where it breaks, are measured from the rendered content — and an export never renames.** Wrapping a header is a *label* in the render model, not a rename of the tibble, so `names(tab)` stays raw from prep to backend and nothing keyed by a column name can go stale; a label column is identified by its **position**, `label_cols` / `label_runs` / `vname_plans` being parallel vectors a consumer walks by index. A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone. A **col_var span** gets exactly the width its own columns leave it: past that it wraps at those seams, past what wrapping can do it is shown from the prefix it shares with the block before it (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`, the full name returning whenever that prefix changes), and in the last resort it is held to `wrap_cols` like every other header — one name is not entitled to widen the table on its own. None of that happens while there is room for the whole name, which is what keeps the elision readable. ⚠ An elided name cannot say where the previous one was cut, so html hands the full one over in a `title=` and no other medium can. A *variable* name is written vertically only where the rotation actually saves width — a turned line costs about one character, so a name turns when it needs fewer turned lines than the width it would otherwise force, weighed against the names that cannot turn (a one-row block like `Constant`), which set the floor; turned, it wraps soft and unindented, an overrun there costing a little row height where a horizontal one would widen the table. How many turned characters a block of rows actually holds is *measured per medium* and the two differ — a 5-row block takes about 14 in html and 10 in Excel — so the plan is computed against the backend being exported, once, and the backend never re-derives it. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
 The **hover tooltip** (`tab-tooltip.R`) is that same rule read line by line: `TOOLTIP_LINES` declares one row per line — the token it renders, where its name comes from, which of the shared gates apply — and row order IS the reading order, so a line is named by its `DISPLAY_TOKENS$label`, exactly as the exports' unit row is, and one gate (non-empty · comparable · not the reference · not already shown · not already emitted) decides every one of them. It has **two rows**, declared the same way (`group`): the cell's own numbers, then the observed comparison — `obs` and the gap to it, a statement about another column — joined by a newline the stylesheet honours. It is **not translated**, deliberately: like the pillar type tags its words are the `fmt` field names, so the hover teaches the fields a user reads with `$`.
 
@@ -1007,32 +1007,146 @@ barre — une longueur posée sur un `::before` absolu, qui ne dimensionne donc 
 ⚠ **Relevé au passage, et non traité** : `set_bars` / `get_bars` ne sont dans aucune section
 `reference:` de `_pkgdown.yml`, comme les six topics du cadre de pied relevés en phase 7c.
 
-#### v2.0.1 — Phase 10 — noms de col_vars plus compacts dans les exports
+#### v2.0.1 — Phase 10 — noms de col_vars plus compacts dans les exports **DONE**
 
-Les noms de variables en html rendent les tableaux `levels="first"` exportés (html, Excel, md) moins compacts, c’est un problème pour lequel je voudrais une solution générale user-friendly et bien pensée, pour utiliser l’espace horizontal quand il y en a, mais avoir un auto wrap intelligent quand l’espace est compté (et notamment quand chaque colonne à sa propre col_var avec `levels="first"`).
-- Je voudrais une politique plus agressive, using the sum of the maximums length of all already wrapped columns names (from `wrap_cols =`) *grouped under the same col_var*. It should cut preferentially at " ", "_", etc. (assuming the general case is snake_case variables names), but cut inside a "word" anyway if a "word" is longer that the maximum length.
-- Dans le cas spécifique où on a une succession de colonnes avec des col_var différentes (for example from `levels="first"`), je voudrais également une détection automatique des préfixes communs : par exemple, si la première variable de colonne est "CONCERT_CLASSIQUE" et qu’elle n’a qu’une seule colonne, et que la seconde est "CONCERT_ROCK", détecter le préfix commun `"CONCERT_"`, garder le nom de col_var complet de la première variable, et afficher un nom de col_var abrégé `"_ROCK"` pour la seconde variable, idem pour la suivante si elle a le même préfixe, et ainsi de suite jusqu’à ce qu’une colonne n’ait pas le même préfixe. (The leading `"_"` is a readable way to say to the user "it continues with the same prefix as the former name) Il faut prendre en compte les e*dges cases* où il pourrait y avoir des prefixes *nested* (MUS_CONCERT_CLASSIQUE, MUS_CONCERT_ROCK, MUS_CONCERT_JAZZ, MUS_FREQ, MUS_SUPPORT_VYNILE, MUS_SUPPORT_CD), en redonnant le nom complet à chaque fois que le préfixe commun change/s’allonge/se raccourcit. Also think about other possible edge cases. It must not change the col_var attribute itself, only the col_vars names header row built at export time.
+Demandé par `ggfacto` et `formations_stat`. Mesuré : un tableau `levels = "first"` sur cinq col_vars
+d'un même préfixe écrivait cinq en-têtes de 21 caractères au-dessus de colonnes larges de 4, et **rien
+ne les enveloppait** ; en markdown la même ligne cassait l'alignement des pipes.
 
-Other related improvements, from `~github/ggfacto/` and `~github/formations_stat/` dev:
-- ⚠ **La typographie française du pied emploie une espace ORDINAIRE** devant `:` et `;` (« Contribution à la variance de l'axe : une modalité … moyenne ; une modalité »), alors que `dev/french_glossary.md` prescrit une espace fine. Mesuré sur le livre M2 rendu ; préexistant, cosmétique, et visible sous chaque tableau français.
-- A label column whose name contains a space silently loses its rowspan ("Axis label" fails, "Axis_label" works), and an empty name errors inside tab_label_runs() with replacement has length zero. It fails silently — the label just repeats down every row. The lookup should key on column identity, not on a name that gets split ? This is why the column is named Axe and not " " as the kableExtra table had it ?
-- A rotated name should be allowed to wrap to several vertical lines ? tab_vname_plan() gives it exactly one, so rotation is unreachable for any heading longer than ~1.75 × block height. The horizontal path already wraps; letting the vertical one do the same would make Axe 1: 9.9% of variance (mod. 57%) turn in a 5-row block.
+**La clé était ailleurs, et elle explique quatre défauts d'un coup : l'export RENOMMAIT les colonnes.**
+`tab_wrap_text()` réécrivait `names(tab)` (U+202F par espace, un `<br>` à chaque coupure), donc tout
+fait par colonne clé sur un nom devenait périmé — `follow_wrap()` rattrapait `bars` et `emp_tips`, et
+ce qu'il ne portait pas (`name_col`, `tab_vars`, les clés de `vname_plans`) cassait **en silence** :
+c'est le `rowspan` perdu par une colonne d'étiquettes nommée `"Axis label"`, et la rotation
+silencieusement abandonnée. Le même renommage obligeait à six `tx_unwrap_text()` défensifs et à une
+contrainte permanente (miroiter le jeu de coupures dans deux fonctions), faisait **perdre son
+enveloppement** à un en-tête de niveau dès que le suffixe `_<col_var>` était retiré (la ligne
+réécrivait la sous-chaîne *dé*-enveloppée), et laissait le nom de span sans propriétaire — donc jamais
+enveloppé.
 
-Dettes de la phase 6 à regler :
-- **L'étiquette d'une colonne de contributions.** `<row%-ctr>` laisse croire qu'une contribution somme
-  à 100 % par ligne, alors qu'elle somme à 1 **sur tout le sous-tableau** et qu'elle est identique que
-  la table soit en `pct = "row"`, en `"col"` ou en comptages. Le même défaut touche peut-être `cv`,
-  `resid`, `ci`, `moe`, `obs`, `gap` (vérifier). Trouver un cadre fiable pour le rendre flexible.
-- (Le tag d'unité suit le jeton AFFICHÉ, donc `<ctr>` exige `display = "ctr"`, qui imprime la valeur
-  signée. Un override par colonne — ou découpler le tag du jeton — permettrait `<ctr>` au-dessus d'une
-  colonne qui affiche des pourcentages. Trop *ad hoc*, ou fiable/lisible ?)
-- ⚠ **`tab-steps-legacy.R:561`** compare `fmt_kind_label(tabs)` à `"row"` / `"col"`, que la fonction ne
-  renvoie jamais (elle rend `"row%"`), donc tout le bloc `ref` du chemin déprécié est sauté et
-  `diff_formula()` retomberait sur `NA_real_`. Chemin déprécié et non testé — à corriger ou à retirer.
-- **Un identifiant de colonne stable** serait la vraie réponse au piège que `follow_wrap()` rustine :
-  tout ce que le modèle de rendu indexe par un nom de colonne (`bars`, `emp_tips`, `tooltips`) cesse de
-  correspondre après `tab_wrap_text()`, en silence. Même sujet que le `rowspan` perdu par un nom
-  espacé, en phase 8. ⚠ La phase 7 a tenu la leçon en clé **par mesure**, jamais par colonne.
+**L'export n'enveloppe plus que les VALEURS.** `tx_wrap_labels()` est la moitié « valeurs » de
+`tab_wrap_text()` (la fonction publique est inchangée, vérifié identique sur 18 combinaisons
+d'arguments) ; l'enveloppement d'un en-tête est désormais une **étiquette du modèle de rendu**,
+décidée une fois en queue de `tab_col_var_header()` — qui rendait déjà les quatre vecteurs
+positionnels que chaque backend lit. `names(tab)` reste brut de la prep aux backends,
+`follow_wrap()` disparaît, et `tx_unwrap_text()` cesse d'être une défense : il ne subsiste que là où un
+enveloppement **déjà fait** doit être défait — celui que l'**utilisateur** a appliqué avant d'exporter
+(la première ligne de l'en-tête, la clé de `bars`, le retrait de suffixe de la légende), ou celui de la
+prep elle-même quand une colonne de noms est ré-enveloppée à la largeur de son bloc.
+
+**Une colonne d'étiquettes s'identifie par sa POSITION.** `tab_label_order()` rend un vecteur d'entiers
+nommé, `tab_label_runs()` indexe par position, et `label_cols` / `label_runs` / `vname_plans` sont
+**parallèles** : un consommateur les parcourt par indice (html, Excel, md, le transpose), un nom est ce
+qu'il imprime et jamais ce qu'il cherche. ⚠ `tab[[""]]` vaut `NULL` pour un tibble *même* quand une
+colonne porte ce nom — c'est ce qui produisait `replacement has length zero`. Mesuré contre `HEAD` :
+`"Axis label"`, `" "` et `"  "` perdaient tous leur `rowspan` (silencieusement) ; les trois le gardent.
+`rd$ann`, `rd$bars`, `rd$empirical_tips` et `rd$bold_cols` restent clés par nom — c'est sans risque une
+fois les noms stables, et les convertir n'achèterait rien.
+
+**La cascade de compaction** (`tab_span_labels`). Le **budget** d'un span est ce que ses propres
+colonnes lui laissent : la somme, par colonne, de son en-tête de niveau ou de son tag d'unité — le plus
+large des deux — plus `TX_HEAD_GAP` par frontière. Un nombre, en caractères, que tous les médias lisent
+(`wrap_cols` est déjà une règle en caractères). Puis, par span, la première qui passe : le nom entier ;
+le nom enveloppé au budget tant qu'il tient en `TX_SPAN_LINES` lignes ; le nom élidé de son préfixe ; le
+plus court des deux **tenu à `wrap_cols`** (15 par défaut) — la largeur que respecte tout autre
+en-tête —, et le débordement seulement là où même elle est inatteignable à une couture. Les deux
+gardes de ce dernier barreau comptent : un nom déjà sous `wrap_cols` est laissé tel quel, et un nom
+dont le bloc est assez large n'y arrive jamais. Mesuré : `MUS_CONCERT_CLASSIQUE` passe de 21 colonnes
+de large à `MUS_CONCERT_ / CLASSIQUE`. ⚠ **Un nom de span n'est jamais coupé en plein
+mot** : `tx_wrap_name(hard = TRUE)` respecterait n'importe quelle largeur, mais un en-tête « CONCER /
+T_ROCK » est pire que le débordement *et* pire que l'élision qu'il aurait supplantée — d'où un candidat
+dont le plus large segment excède le budget qui ne « tient » pas du tout. C'est ce qui envoie un bloc
+étroit vers l'élision et laisse au premier bloc son nom entier, seulement enveloppé.
+
+**L'élision** (`tx_elide_prefix`, `R/utils.R`, à côté de `tx_name_atoms()` dont les atomes portent déjà
+leur séparateur). Le préfixe en vigueur est le préfixe commun avec le nom **précédent** ; le nom entier
+revient dès qu'il change — s'allonge, se raccourcit ou disparaît — donc le lecteur a toujours le
+préfixe courant sous les yeux. Vérifié sur la séquence imbriquée de la demande :
+`MUS_CONCERT_CLASSIQUE | _ROCK | _JAZZ | MUS_FREQ | _SUPPORT_VYNILE`. Refusée sous 3 caractères de
+préfixe, et refusée si le préfixe ne finit pas sur un séparateur (une coupure camelCase ne laisserait
+aucune marque : `musConcertRock` → `Rock`). ⚠ **Elle ne se déclenche jamais tant qu'il y a de la
+place** — colonnes larges (`display = "{pct} (n={n})"`), ou un col_var qui garde tous ses niveaux et
+fusionne donc assez de colonnes, les noms reviennent entiers et non enveloppés. C'est ce qui la rend lisible, et c'est le seul garde-fou possible contre son défaut
+propre : `_ROCK` ne dit pas **où** le nom précédent a été coupé. html tend le nom entier en `title=` ;
+aucun autre médium ne le peut. Markdown, qui ne peut porter aucun saut de ligne, n'a que l'élision — et
+c'est justement la seule compaction qu'une cellule de pipe table sait utiliser.
+
+**Une rotation doit ÉCONOMISER de la largeur — c'est toute la règle**, et la clause « une seule ligne
+tournée » n'en était que le cas particulier, qui mettait hors de portée tout titre plus long que
+~1,75 × la hauteur du bloc. Une ligne tournée coûte à la colonne environ un caractère : un nom tourne
+quand il lui faut moins de lignes tournées que la largeur qu'il imposerait autrement, et `chars`
+couvre désormais ce compte. ⚠ Tourné, un nom s'enveloppe **souple et sans retrait** (`tx_vname_wrap`) :
+un débordement vertical ne coûte qu'un peu de hauteur de ligne, là où un débordement horizontal
+élargirait le tableau, et un retrait « la suite est en dessous » ne ferait que décaler chaque ligne
+tournée. ⚠ **La capacité verticale est MESURÉE par médium, et les deux diffèrent** : un bloc de 5
+rangs tient ~14 caractères tournés en html, ~10 en Excel — le rapport de la hauteur d'un rang à
+l'avance d'un glyphe tourné n'est pas le même dans un navigateur et dans un classeur. `TX_VERT_CHARS_PER_ROW`
+est donc un vecteur nommé par backend (`kable` 3.0, `xl` 2.2) et le plan se calcule contre le backend
+exporté. `Axe 1: 9.9% of variance (mod. 57%)` tourne en **trois** lignes en html
+(`Axe 1: 9.9% / of variance / (mod. 57%)`, colonne large de 3 au lieu de 13) et en quatre en Excel
+(`HEAD` : ne tournait pas du tout ; le premier calibrage, à 1,75, en donnait six trop courtes).
+
+**Un `.` entre deux chiffres n'est pas une couture** (`tx_name_atoms`), pour la raison que la fonction
+donne déjà de `-` et `/` : c'est une virgule décimale, et « 9.9% » coupé là se lit comme deux nombres.
+Trouvé en calibrant ce qui précède.
+
+**Le bandeau des noms de col_var en Excel** est un libellé SUR les colonnes, pas un de leurs en-têtes :
+il passe en corps 8 (`XL_SPAN_SIZE`, comme la ligne d'unité), **sans gras**, et **toujours enveloppé** —
+Excel n'ajuste jamais la hauteur d'une cellule fusionnée, donc sans cela un nom plus long que son bloc
+était simplement coupé. La hauteur de ligne se mesure dans la fonte du bandeau, les largeurs étant en
+caractères de la fonte de base.
+
+**Le tag d'unité** : c'est une édition de grille, pas un mécanisme neuf — la phase 6 avait déjà posé la
+colonne `prefix` de `DISPLAY_TOKENS`. La règle énoncée : **`prefix = TRUE` seulement là où le jeton se
+mesure dans la base propre de la colonne.** `ctr` (une part du chi² du sous-tableau, identique en
+`"row"`, en `"col"` ou en comptages), `resid` (un score z), `pvalue` et `gof`/`gof_warn` (une
+probabilité, un N/R²/AIC) passent à `FALSE` ; `ci`, `moe`, `diff`, `ratio`, `or`, `odds`, `coef`, `obs`
+et `gap` gardent le leur, un intervalle sur un pourcentage de ligne étant bien en points de pourcentage
+de ligne. Le **découplage** tag/jeton demandé en variante est refusé : la ligne d'unité dit ce que le
+nombre en dessous CONTIENT, et ce que la couleur GRADUE est le travail de la légende, qui le dit déjà.
+
+**`tab-steps-legacy.R`** était pire que la note : `fmt_kind_label()` REND `"row%"`, donc `ref` ne
+faisait rien sur toute table de pourcentages (mesuré contre `HEAD` : `diff` jamais écrit, `color`
+jamais posée) et sur une table **mixte** le `switch` retombait sur `NULL` dans `set_diff()`. Corrigé
+comme `tab_ci()` huit lignes plus bas — les faits déclarés (`get_pct_type()` / `fmt_var_kind()`), que
+la docstring de `fmt_kind_label()` désigne elle-même. ⚠ `%in%` **perd les noms**, donc `ifelse()` rendait
+un vecteur anonyme et `type[[cur_column()]]` sortait des bornes : les noms sont reposés explicitement.
+C'est une correction de bug, mais **c'est un changement de sortie** sur un chemin déprécié exporté.
+
+**Deux relevés fermés.** `_pkgdown.yml` gagne une section « What is written under a table »
+(`tabxplor-footer`, `set_subtext`, `set_legend_words`, `tab_footer_text`, `tab_note`,
+`set_footer_tabs`, `set_bars`) et `tab_pipe` rejoint les exports — les huit topics étaient absents de
+l'index depuis les phases 7c et 9 (vérifié : tous résolvent, aucun doublon). `dev/french_glossary.md`
+se contredisait — ligne 37 « espace fine », ligne 174 « espace ordinaire, c'est ce que les assembleurs
+émettent et ce que les tests attendent » : la prescription est alignée sur la réalité, l'espace reste
+ORDINAIRE (décision du mainteneur), et `fi_method()` cesse d'être le seul joignant à ne pas brancher
+sur la langue.
+
+**Un défaut préexistant corrigé au passage** : `meta$bars` est clé par un nom de colonne, et un
+`tab_wrap_text()` **de l'utilisateur** avant l'export le rendait périmé (`follow_wrap()` ne suivait que
+l'enveloppement de l'export). La prep rapproche maintenant par `tx_unwrap_text()`. ⚠ Irrécupérable si
+l'utilisateur enveloppe assez étroit pour couper en plein mot : une coupure sans couture dessous
+redevient une espace, que nul ne distingue d'une espace d'origine — noté à côté de `tx_unwrap_text()`.
+
+Suite livrée verte : **4 857** (4 816 avant ; recalibrage vertical et bandeau Excel revérifiés en ciblé, 640 assertions sur export-prep / xl / html / md / classes / utils / golden) ; suite `dev/tests/` verte (**5 901**) après mise à jour
+de la seule assertion périmée (`tab_label_runs` y était appelée avec des NOMS, en court-circuitant
+`tab_label_order()`). `_snaps/` **inchangé** et les 36 fixtures `_golden/*.rds` intactes de bout en bout — les six étapes de code sont passées sans déplacer une seule
+sortie, aucune fixture ne portant un nom de col_var assez large pour déclencher la cascade. Tests
+neufs dans `test-tab-export-prep.R` (position, élision, budget, cascade, rotation multi-lignes, bars
+après un wrap utilisateur), `test-tab-display.R` (le tag d'unité) et `test-tab-steps-legacy.R`
+(`ref` écrit enfin sa différence).
+
+**Ce que la phase n'a PAS fait, et pourquoi.** Pas de bandeau imbriqué (`MUS_CONCERT` au-dessus de
+`CLASSIQUE | ROCK | JAZZ`) : il serait sans ambiguïté, mais il ajoute une quatrième bande d'en-tête à
+quatre backends, dont markdown qui simule déjà ses lignes d'en-tête en lignes de corps, et transforme
+« l'en-tête est trois lignes » en structure de profondeur variable. Pas d'unification des largeurs
+Excel avec le budget : Excel mesure de l'**encre** (ratios de police, gras, division par le nombre de
+lignes), le budget compte des **caractères** — les forcer dans une seule fonction serait une fausse
+unification. Et `tab[[""]]` reste impossible : `dplyr::select()` refuse un nom vide bien avant
+`tab_label_runs()` ; c'est une contrainte de tibble, et l'erreur qu'elle rend est désormais claire et
+précoce là où celle de `tab_label_runs()` ne l'était pas.
+
+
 
 
 #### Phase xx — jamovi 2.0.0 release
