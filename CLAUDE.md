@@ -270,7 +270,7 @@ tab() / tab_many()                          [public; differ only in default outp
 
 ### The display grammar
 
-What a cell prints is a `{}` template over declared tokens (`DISPLAY_TOKENS`), resolved by one boundary `tab()`, `tab_reg()` and `set_display()` share, so a layout learnt on a crosstab means the same on a regression. `{est}` and `{base}` are **scale-relative** — the deviation a column estimates, and the level it sits on — which is what lets one named preset (`DISPLAY_PRESETS`) render an odds ratio, a mean difference and a percentage alike. A composite has a **primary** token, the first outside brackets: it carries the stars, it is what `get_num()` and Excel return, and it is the only part the colour paints — and its converse, a template with no token outside brackets, has no primary at all and renders whole as an aside. A token may also carry **its own precision** (`{base:1}`), which beats every declared default — digits are a display property, and the cell's one `digits` field cannot say that an estimate reads at three decimals and its aside at one. **A display is post-hoc** — every field a layout can print is populated at build, so choosing one triggers no computation and changes no number, and a token may be **derived** rather than stored (`resid`, `gap`, `sd`, `cv`, `odds`). A numeric column's default layout is `mean_cv` — the spread as a percentage of the level, comparable between columns measured in different units — chosen per column and falling back to the bare mean where a mean is not positive. The **base count** is the display-time fact both producers share: folded into the Total cell when the table rests on one population, given one `n` column per block at the right when it rests on several (a spread, a regression's groups) — and the per-block Total columns then go, holding nothing but a repeated 100 %.
+What a cell prints is a `{}` template over declared tokens (`DISPLAY_TOKENS`), resolved by one boundary `tab()`, `tab_reg()` and `set_display()` share, so a layout learnt on a crosstab means the same on a regression. `{est}` and `{base}` are **scale-relative** — the deviation a column estimates, and the level it sits on — which is what lets one named preset (`DISPLAY_PRESETS`) render an odds ratio, a mean difference and a percentage alike. A composite has a **primary** token, the first outside brackets: it carries the stars, it is what `get_num()` and Excel return, and it is the only part the colour paints — and its converse, a template with no token outside brackets, has no primary at all and renders whole as an aside. A token may also carry **its own precision** (`{base:1}`), which beats every declared default — digits are a display property, and the cell's one `digits` field cannot say that an estimate reads at three decimals and its aside at one. **A layout arms what it prints** — a token declares what its number needs (`DISPLAY_TOKENS$arms`), and the boundary turns it on exactly as it already reads the comparison off the display, so `display = "base_ci"` needs no `ci =` beside it and `"ctr"` no `color = "contrib"`; an explicit `ci = "no"` stands. What no argument can turn on is structural — a weight, a numeric column variable, a percentage base — and is declared too (`DISPLAY_TOKENS$needs` → `DISPLAY_NEEDS`), which is what lets the jamovi panel offer only the choices a table could show. **Afterwards a display is post-hoc**: `set_display()` changes no number, names the argument that would have filled an empty field, and a token may be **derived** rather than stored (`resid`, `gap`, `sd`, `cv`, `odds`). A numeric column's default layout is `mean_cv` — the spread as a percentage of the level, comparable between columns measured in different units — chosen per column and falling back to the bare mean where a mean is not positive. The **base count** is the display-time fact both producers share: folded into the Total cell when the table rests on one population, given one `n` column per block at the right when it rests on several (a spread, a regression's groups) — and the per-block Total columns then go, holding nothing but a repeated 100 %.
 
 ### The colour system
 
@@ -326,7 +326,7 @@ The **hover tooltip** (`tab-tooltip.R`) is that same rule read line by line: `TO
 
 ### jamovi
 
-Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) driving `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so an interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through, not a translation table — and where the panel asks a *simpler* question than the argument takes (a tick-box for `empirical`, two of `theme`'s seven values), R resolves the rest. An argument applied at RENDER (`theme`, `wrap_*`) is read straight off the options and deliberately kept out of `.opts()`, which is the crosstab cache key's complement. The regression store holds **distilled fit records** (kilobytes) keyed on the model alone — the model's own and each observed (crude) univariable one, one record shape told apart by its key — so every estimand change is a hit and nothing heavy crosses jamovi's `$state`. The generated `*.h.R` option headers are never hand-edited. **`dev/jamovi_module.md`** is the guide to the app itself — its runtime, its file formats, and the width chain that decides how much of a table a user actually sees.
+Two point-and-click analyses mirror the two producers: `jmvtab` (Crosstables) and `jmvtabreg` (Regressions). Each is a thin `R6` backend (`*.b.R`) over an engine-free build core (`jmvtab_build()` / `jmvtab_reg_build()`) driving `tab()` / `tab_reg()` through a content-addressed **live-UI cache** (`*-cache.R`), so an interactive tweak re-paints instead of recomputing. Each option is named after the argument it drives, so the backend is a pass-through, not a translation table — and where the panel asks a *simpler* question than the argument takes (a tick-box for `empirical`, two of `theme`'s seven values), R resolves the rest. An argument applied at RENDER (`theme`, `wrap_*`) is read straight off the options and deliberately kept out of `.opts()`, which is the crosstab cache key's complement. The regression store holds **distilled fit records** (kilobytes) keyed on the model alone — the model's own and each observed (crude) univariable one, one record shape told apart by its key — so every estimand change is a hit and nothing heavy crosses jamovi's `$state`. A table is built under jamovi's **results language**, which the backend reads through supported API alone — one sentinel msgid whose translation is the language code (`jmv_results_lang()`), since jamovi keeps the language itself private — so the panel and the table can never speak two languages. The generated `*.h.R` option headers are never hand-edited. **`dev/jamovi_module.md`** is the guide to the app itself — its runtime, its file formats, and the width chain that decides how much of a table a user actually sees.
 
 ### Cross-cutting invariants
 
@@ -1476,12 +1476,117 @@ traduites, 0 fuzzy vivant. Côté jamovi : la parenthèse fermante manquait au l
 — d'où « all (toutes les garder) » sous `pct`. Les deux titres sont distincts dans `jmvtab.a.yaml`
 (`all (whole table)` / `all <i>(keep every level)</i>`), donc traduisibles chacun.
 
-### v2.0.1 — Phase 15 — bugs and changes from jamovi team feedback
+### v2.0.1 — Phase 15 — les retours de l'équipe jamovi : deux bugs, les corrections, une liste qui dit quelque chose **DONE**
 
-Some bugs were found by the jamovi team feeback, that are real bugs and need to be corrected now : see `dev/jamovi_library_vs_sideloading.md` . The new jamovi UX with Table elements as default is not for v. 2.0.1, don’t implement it now. But if you find changes that we’ll need to implement in the future, but that would more easily be made now, tell me honestly and we’ll implement them too.
+Les deux rapports automatiques de l'équipe jamovi (`dev/jamovi/2026-09-16*.md`, triés dans
+`dev/jamovi_library_vs_sideloading.md` §4) : les deux vrais bugs du paquet et les petites corrections
+confirmées — soit les points 1 et 5 de l'automne 2026 (§6). Plus la question du mainteneur : le menu
+`display =` de jmvtab offre dix-neuf choix dont la plupart ne font rien. **Trois des cinq sujets
+étaient plus larges que le rapport ne le disait**, et c'est ce qui a décidé de chaque conception.
 
-Dans jmvtab, dans le menu déroulant de `display =`, est-ce qu’il serait facile de ne garder dans les choix possible que les éléments qui ont un sens pour le tableau affiché (le vctrs field concerné n’est pas NA dans au moins une colonne ?), et de le faire **de manière fiable et *user-friendly*** ? Pour l’instant, la plupart des options ne font rien quand on les choisit mais restent affichées, ce qui rend le dropdown difficile à lire.
+**Un nom de variable est une DONNÉE, une formule est du CODE.** Le rapport visait quatre lignes de
+`R/survey-design.R` ; il n'existait aucun quoteur partagé — `reg_fit_formula()` posait ses backticks à
+la main, les autres pas du tout. `tx_backtick()` (`R/utils.R`) est cette règle unique, et elle couvre
+ce que le rapport ne voyait pas : le modèle nul LR des multinomiales et des ordinales
+(`stats::reformulate("1", response = names(mf)[1])`, dans un `tryCatch` — donc **les statistiques LR
+disparaissaient en silence** sur un `outcome` non syntaxique), et la pondération de `tab_reg()`, cassée
+avec ou sans `design_effect` puisque `svy_design_formula()` est sur le chemin de tout poids nommé.
+Mesuré : `Marital status` × `Household weight` sous `design_effect = TRUE` rend maintenant exactement
+la p-value de la table syntaxique (2,67e-30 au lieu de `NA`), l'ANOVA F de même, et
+`tab_reg(wt = "Household weight")` ajuste au lieu de s'arrêter sur `unexpected symbol`.
 
+**L'échappement n'était pas à la frontière jamovi mais dans le PIED html.** `legend_render_line()`
+n'échappait que ses jetons `esc` et jamais `>` : la ligne de poids (un nom de variable), les lignes
+`Model:` et les noms de modalités de référence passaient bruts, autant que le `subtext` d'un
+utilisateur. Tout jeton de texte y passe désormais par `tx_html_escape()` — ce qui, au passage, rend
+la garde des `<placeholder>` inutile : **ils sont résolus AVANT le rendu**, donc il n'y a rien à
+protéger. ⚠ Renversement de contrat assumé : un `<b>` écrit dans une note est **montré**, plus jamais
+exécuté (l'en-tête de `R/tab-footer.R` le disait à l'envers) ; l'étiquette en gras d'une note, elle,
+vient du découpage et survit. `esc` ne garde que son sens markdown.
+
+**Un affichage ARME ce qu'il imprime.** L'affirmation de ce fichier — « every field a layout can print
+is populated at build » — était fausse : `ci` n'est rempli que si des étoiles ou une politique de
+significativité le demandent, `ctr` que sous `color = "contrib"`. Mais `display` décidait DÉJÀ la
+mesure de comparaison au même endroit ; il manquait une ligne à la grille, pas une couche. Deux
+colonnes neuves sur `DISPLAY_TOKENS` : `arms` (ce que demander ce jeton CALCULE — `"ci"`, `"ctr"`) et
+`needs` (ce qu'aucun argument ne peut allumer), lu dans une grille `DISPLAY_NEEDS` d'une ligne par
+fait structurel. Donc `display = "base_ci"` n'a plus besoin de `ci =` à côté, `"ctr"` plus besoin de
+`color = "contrib"` ; un `ci = "no"` explicite reste la réponse de l'utilisateur. La règle est écrite
+une fois et lue aux **deux** portes — `tab_resolve_settings()` et `resolve_leaf_ci()` — parce que
+jamovi pré-résout `ci` par la seconde : sans cela le panneau n'aurait rien armé.
+
+⚠ **Un défaut trouvé en chemin : calculer les contributions et les PEINDRE étaient un seul drapeau.**
+`leaf_chi2()` posait `color <- if (do_ctr) "all"`, donc `display = "ctr"` sur une table coloriée en
+différence repeignait la colonne d'effectifs en `contrib` (mesuré). Ce sont deux questions :
+`ctr_color` est celle de la couleur, `test` celle du calcul, et elles coïncident là où
+`color = "contrib"` demandait les deux.
+
+**La liste du menu dit ce que CE tableau peut montrer.** `DISPLAY_NEEDS$panel` nomme le prédicat que
+le panneau sait évaluer sur ses propres options (poids, col_var facteur ou numérique — le type est
+déjà en cache côté JS —, base de pourcentage, `ref`) ; `dev/generate_jamovi_js.R` émet
+`TABX_DISPLAY_NEEDS` et `updateDisplayChoices()` filtre le `ComboBox` par
+`setPropertyValue("options", …)`. La disponibilité d'une disposition composite est celle de son jeton
+**primaire** — un aparté tombe déjà tout seul, donc `base_diff` reste offert sans `ref`. ⚠ Trois
+gardes : un fait inconnu vaut DISPONIBLE (une colonne dont le type se charge encore), la valeur
+courante reste toujours dans la liste, et toute erreur laisse la liste entière. ⚠ **Le mécanisme est
+lu dans le client 28.2** (`registerOptionProperty("options")` → `updateOptionsList()`), **pas encore
+vérifié dans une appli qui tourne** : s'il ne marchait pas, le filtre est inerte et tout le reste
+tient. Le cache jamovi apprend les faits armés (`jmv_tab3_tuple`) : deux dispositions qui arment la
+même chose partagent leur porteur, une qui change ce qui est calculé reconstruit.
+
+**Les étoiles disent `.05 / .01 / .001`** (décision du mainteneur), l'échelle de la discipline au lieu
+de `.10 / .05 / .01`. Le barreau qui compte est le premier : à `conf_level = 0.95` il coïncide
+désormais avec le seuil où se décide le grisé, **donc une case grisée ne peut plus porter d'étoile**.
+La légende le dit d'elle-même (elle dérive du barreau) ; les quatre vignettes qui énonçaient l'ancienne
+échelle sont réécrites, les deux françaises comprises. Aucune fixture `_golden` ne bouge — une échelle
+d'étoiles est une lecture de RENDU —, deux lignes d'instantané seulement.
+
+**La langue des résultats se lit, par l'API publique seule.** jamovi garde `.lang` privé mais l'expose
+en TRADUISANT : `translate()` résout contre le `inst/i18n/<code>.json` du module. D'où **un msgid
+sentinelle dont la traduction EST le code** (`.("en [language code]")`, la forme `text [context]` du
+compilateur, extraite des fichiers R comme tout `.()`), et `jmv_with_lang()` qui enveloppe chaque
+`.run()` dans `options(tabxplor.lang =)` + la portée gettext. Les quatre étiquettes `Total` /
+`Ensemble` / `Others` restent donc sur `gettext()` et suivent la langue avec tout ce que la
+construction écrit — là où le rapport (A4) proposait de les passer à `.()`, ce qui aurait mis une
+ligne Total française dans une légende anglaise. ⚠ Une langue sans catalogue répond `"en"`, exactement
+le repli des messages du panneau : les deux moitiés d'un résultat ne peuvent pas diverger. Tout ce qui
+ne ressemble pas à un code de langue est ramené à `"en"`, sans quoi un msgid non traduit partirait
+dans `LANGUAGE`.
+
+**Les petites corrections.** `conf_level` prend les bornes des Régressions (0,5 … 0,9999999999) ;
+`clearWith` sur les deux `html_table` = toutes les options sauf le bloc d'export, épinglé par un lint
+de `dev/tests/` pour qu'une option neuve ne puisse pas y manquer (⚠ `n` doit être **cité** : YAML 1.1
+lit un `n` nu comme `false`, le piège que la déclaration de l'option signalait déjà) ; la passe
+d'orthographe, msgids et `inst/i18n/fr.json` tenus en phase (un msgid fusionné dans un autre) ; le
+`Notice` de pondération, gardé deux fois (`minApp: 2.4.0` précède `jmvcore::Notice`) ; et
+`jamovi/00refs.yaml` — ⚠ **les `refs:` vont sur l'ÉLÉMENT DE RÉSULTAT**, jamais sur l'analyse :
+`analysisschema.yaml` est `additionalProperties: false` et n'a pas de `refs`, donc la version
+« analyse » aurait cassé la compilation. Les quatre yaml sont validés contre les schémas du
+compilateur lui-même. La prose des `.a.yaml` dit « color » partout, comme l'argument qu'elle nomme.
+**`<em>` remplace `<i>`** pour l'italique sémantique : le walker de Copy de jamovi et son export LaTeX
+gardent l'un et laissent tomber l'autre, donc une table `print_emphasis` copiée perdait la moitié de
+sa typographie.
+
+**Ce que la phase n'a PAS fait, et pourquoi.** `decSymbol` n'est pas une correction : tabxplor n'a
+aucune option de séparateur décimal, donc l'honorer est une fonctionnalité de `format()` — et les
+tableaux natifs de 2027 reçoivent le séparateur de jamovi gratuitement. La liste du menu n'est pas
+raccourcie autrement (pas de vocabulaire scale-relative sur le croisement) : `{est}` y est le niveau,
+pas l'écart, donc renommer les choix aurait menti.
+
+⚠ **Étape mainteneur** : `jmvtools::install(home = "flatpak")` régénère les `*.h.R` (les `clearWith`,
+les `refs`) et recompile `inst/i18n/fr.json` depuis `fr.po` — d'ici là les deux fichiers sont tenus à
+la main et le module tourne. À vérifier dans l'appli : le filtre du menu, le `Notice`, une table en
+français sur un système anglais, et `Marital status` + poids avec l'effet de plan.
+
+Suites vertes : la livrée **5 030** assertions (4 990 avant), celle de `dev/tests/` **5 949**.
+`_snaps/golden.md` accepté (deux lignes, la clé des étoiles) ; les 36 fixtures `_golden/*.rds`
+inchangées. Tests neufs : les noms non syntaxiques (survey + `tab_reg`), l'échappement du pied,
+l'armement et les `needs` d'un affichage, la langue des résultats, et trois lints dans `dev/tests/`
+(les clés du filtre JS, `clearWith`, les citations). ⚠ **Sept assertions de `dev/tests/` étaient
+périmées AVANT cette phase** et sont remises à jour au passage : trois de la phase 14 (« Rate ratio »
+retiré avec IRR ; « Ratio » que le français écrit pareil ; les feuilles md qui portent désormais les
+palettes de publication en couches portées), une de la 15a (un data frame ordinaire s'exporte en
+silence) et une de la 12 (`print()` rend son argument, pas le kable).
 
 
 #### v2.0.1 — Phase 15a — un data frame ordinaire s'exporte en silence ; `fct_recode_helper()` réhabilité **DONE**
@@ -1511,8 +1616,23 @@ See more details at `dev/jamovi_library_vs_sideloading.md`.
 
 ### v2.0.1 — Phase 17 — v2.0.1 release
 
-New CRAN release. We’ll do R CMD CHECK, github actions, rhub, reverse dependency check with ggfacto (CRAN 0.3.2 and current dev version in this WSL2 machine), and everything else needed for the new release.
+Help me do the new CRAN release, so I don’t have to check everything myself.
 
+On the pkgdown site and documentation, we need to change the way the way jamovi it presented : the installation procedure is not jamovi library yet, but sideloading (look at `~/github/formations_stat/cours/L3/L3S1_01.qmd` for the part where I explain the module installation procedure to my student if needed) ; the documentation should point to the github releases, starting with the pkgdown index page itself (by platforms ? Is it possible to have direct download links for the last versions here, without forcing the user to check on github realeses manually ? ).
+
+On `dev/` branch, we’ll do R CMD CHECK, then github actions, rhub, then reverse dependency check with ggfacto (CRAN 0.3.2 and current dev version in this WSL2 machine), and everything else needed for the new release.
+
+What else is needed here ? What can you do yourself ? When do I need to do it myself ?
+
+NEWS.md : very concise, just the very few important things to know. Nobody have used 2.0.0 for regressions and for something else than basic tables with no significance, etc. (only my students in one beginner’s course), so it can be very quick, and if it’s too much a detail it’s not interesting.
+
+Then, release branch, pull resquest, new github actions, check that jamovi modules etc.
+
+For my message to CRAN, reuse the 2.0.0 one and modify it, and change the rhub and github actions links once you have them.
+
+Check possible CRAN after-release messages from v 2.0.0 on exotic platforms, etc.
+
+At the end, when everything is ready, I’ll submit to CRAN myself.
 
 
 

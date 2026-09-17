@@ -21,6 +21,11 @@
 #     shows, so a word could only be stored and ignored.
 #   - The gettext SCOPE is opened ONCE per footer (tab_footer_streams()); with_legend_lang() is
 #     re-entrant, so the nested calls here are free and every builder answers in the same language.
+#   - ⚠ IN HTML EVERY PLAIN TOKEN IS ESCAPED, `esc` or not (legend_render_line()): a footer line
+#     carries a person's note, a variable name, a level name -- data, all of it -- and a results pane
+#     that runs inline scripts (jamovi 28.x) would otherwise run a shared file's author's JavaScript.
+#     Markup written in a note is therefore SHOWN, never run. `esc` keeps only its md meaning, where
+#     it escapes the pandoc-active `*` and `$` of a token that is data.
 # See: dev/legend_and_side_tables.md; CLAUDE.md section "The colour system".
 
 # Pipeline (one spec -> two assemblers -> per-medium renderer):
@@ -70,7 +75,7 @@ legend_gap_baseline_word <- function(plan, spec = NULL) {
 
 # a legend token: plain text (c = NA) or a coloured break-word (c = palette slot 1:8). The CSS class is
 # derived at render (tx_slot_class), not stored, so a break-word and the cells it describes name the
-# same class. `esc` = escape markdown-active `*` in the md medium.
+# same class. `esc` = the text is DATA, whose `*` / `$` md must escape (html escapes every token).
 # DESIGN: a BREAK-WORD's face is the palette's and nothing else, so a legend never puts more emphasis
 # on itself than the cells it describes carry. `bold` is the one exception and is not a face at all:
 # it marks the VARIABLE NAMES a line opens with, which are a label saying whom the sentence is about,
@@ -78,6 +83,13 @@ legend_gap_baseline_word <- function(plan, spec = NULL) {
 .lg_tok  <- function(t, esc = FALSE, bold = FALSE)
   list(t = t, c = NA_integer_, ch = NA_character_, esc = isTRUE(esc), b = isTRUE(bold))
 .lg_ctok <- function(t, slot, ch) list(t = t, c = as.integer(slot), ch = ch, esc = FALSE)
+
+# html text of a footer token: entities for `& < >`, and `*` / `$` so pandoc reads no markup in it.
+html_escape_footer <- function(txt) {
+  txt <- tx_html_escape(txt)
+  txt <- gsub("*", "&#42;", txt, fixed = TRUE)
+  gsub("$", "&#36;", txt, fixed = TRUE)
+}
 
 #' @keywords internal
 legend_resolve_lang <- function(lang = NULL) {
@@ -912,23 +924,20 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
   parts <- vapply(tokens, function(tk) {
     bold <- is_bold_tok(tk); ital <- is_ital_tok(tk); und <- is_under_tok(tk)
     if (!is_colored_tok(tk)) {
-      # plain token: a variable name (bold) or footer text (stars, weight line...). `esc` escapes the
-      # pandoc metacharacters so a legend is not re-read as markup (user subtext left raw): `*` runs
-      # would pair as emphasis, and `$` runs as INLINE MATH -- which a money level name ("1-Lt
-      # $10000", "$25000 or more") triggers as soon as two of them appear in one line.
-      # DESIGN: the html medium needs it too -- a knitted page's raw-html goes THROUGH pandoc. The
-      # html arm entity-encodes instead, `&` FIRST or it double-escapes the entities it just wrote.
+      # plain token: a variable name (bold) or footer text (stars, weight line...). In md, `esc`
+      # escapes the pandoc metacharacters of DATA (user subtext left raw): `*` runs would pair as
+      # emphasis, and `$` runs as INLINE MATH -- which a money level name ("1-Lt $10000", "$25000 or
+      # more") triggers as soon as two of them appear in one line.
+      # WARNING: html escapes EVERY plain token, `esc` or not. A footer line carries a person's note, a
+      # variable name, a level name -- and a results pane that runs inline scripts (jamovi 28.x)
+      # would run a shared file's author's JavaScript. `*`/`$` are encoded too: a knitted page's
+      # raw html goes THROUGH pandoc.
       txt <- tk$t
       if (identical(medium, "md")   && isTRUE(tk$esc)) {
         txt <- gsub("*", "\\*", txt, fixed = TRUE)
         txt <- gsub("$", "\\$", txt, fixed = TRUE)
       }
-      if (identical(medium, "html") && isTRUE(tk$esc)) {
-        txt <- gsub("&", "&amp;", txt, fixed = TRUE)
-        txt <- gsub("<", "&lt;" , txt, fixed = TRUE)
-        txt <- gsub("*", "&#42;", txt, fixed = TRUE)
-        txt <- gsub("$", "&#36;", txt, fixed = TRUE)
-      }
+      if (identical(medium, "html")) txt <- html_escape_footer(txt)
       if (!bold) return(txt)
       if (identical(medium, "console")) return(cli::style_bold(txt))
       if (identical(medium, "html"))    return(paste0("<b>", txt, "</b>"))
@@ -966,7 +975,8 @@ legend_render_line <- function(tokens, medium, theme, colored, classes = FALSE) 
                                     ";")
       # a palette whose meaning is TYPOGRAPHY writes the break-word as markup too, so a sanitizer that
       # strips class/style (GitHub, Word paste) keeps the tags. No-op under the colour palettes.
-      lab <- if (semantic) html_face_wrap(tk$t, bold, ital, und) else tk$t
+      lab <- html_escape_footer(tk$t)
+      if (semantic) lab <- html_face_wrap(lab, bold, ital, und)
       if (isTRUE(classes)) {
         cls <- tx_slot_class(tk$ch, tk$c)
         if (identical(tk$ch, "text"))

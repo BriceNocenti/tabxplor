@@ -445,3 +445,49 @@ test_that("a staged comparison re-serves from the process mirror when the state 
   expect_null(tabxplor:::jmvtab_reg_render_fetch(NULL))
   expect_null(tabxplor:::jmvtab_reg_render_fetch(list(sig = "never-computed")))
 })
+
+
+# The `display` dropdown filter: the JS evaluates the keys R declares, and every choice the panel
+# offers is one the R boundary knows. A drifted key would silently hide nothing (an undefined fact
+# reads `undefined` in JS), which is exactly the class of failure this file exists for.
+test_that("the display filter's facts are the declared DISPLAY_NEEDS panel keys", {
+  js <- readLines(src_path("jamovi", "js", "jmvtab.js"), warn = FALSE)
+  facts <- js[seq(grep("^var displayFacts = function", js), grep("^var updateDisplayChoices", js))]
+  facts <- paste(facts, collapse = "\n")
+  panel <- unique(stats::na.omit(vapply(tabxplor:::DISPLAY_NEEDS,
+                                        function(r) r$panel %||% NA_character_, character(1))))
+  for (k in panel) expect_match(facts, paste0(k, ":"), fixed = TRUE)
+
+  # ... and every value the option offers is a display the R boundary resolves
+  opts <- yaml_opts("jmvtab.a.yaml")$display$options
+  vals <- vapply(opts, function(o) o$name, character(1))
+  for (v in vals) expect_no_error(tabxplor:::display_needs(v))
+  # the generated map covers every choice that needs anything at all
+  emitted <- grep("^var TABX_DISPLAY_NEEDS", js, value = TRUE)
+  for (v in vals[lengths(lapply(vals, tabxplor:::display_needs)) > 0L])
+    expect_match(emitted, paste0('"', v, '": ['), fixed = TRUE)
+})
+
+
+# The table's `clearWith` is every option EXCEPT the export block, so an edit to a file name cannot
+# blank a table it does not change -- and a NEW option cannot be forgotten there.
+test_that("html_table clears with every option that could change it", {
+  export_only <- c("export_format", "exportExcel", "export_dir", "export_filename",
+                   "resetPath", "xl_replace", "xl_check")
+  for (nm in c("jmvtab", "jmvtabreg")) {
+    opts <- setdiff(names(yaml_opts(paste0(nm, ".a.yaml"))), c("data", export_only))
+    items <- yaml::read_yaml(src_path("jamovi", paste0(nm, ".r.yaml")))$items
+    tbl   <- Filter(function(i) identical(i$name, "html_table"), items)[[1]]
+    expect_setequal(unlist(tbl$clearWith), opts)
+  }
+})
+
+
+# Every `refs:` an element names is an entry of 00refs.yaml, and nothing there is unused.
+test_that("the citations resolve, both ways", {
+  refs <- names(yaml::read_yaml(src_path("jamovi", "00refs.yaml")))
+  named <- unlist(lapply(c("jmvtab", "jmvtabreg"), function(nm)
+    unlist(lapply(yaml::read_yaml(src_path("jamovi", paste0(nm, ".r.yaml")))$items,
+                  function(i) i$refs))))
+  expect_setequal(named, refs)
+})

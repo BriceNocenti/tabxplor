@@ -250,7 +250,7 @@ gss_simple |>
 
 `display = "base_ci"` permet d’afficher le chiffre de base, pourcentage ou moyenne, à côté de son intervalle de confiance. `display = "ci"` affiche l’intervalle de confiance seul.
 
-`stars = TRUE` ajoute des étoiles de significativité. Elles racontent la même histoire que les intervalles de confiance de l’écart avec la référence, mais pour d'autres seuils de confiance (99 %, 95 %, 90 %) :
+`stars = TRUE` ajoute des étoiles de significativité. Elles racontent la même histoire que les intervalles de confiance de l’écart avec la référence, mais pour d'autres seuils de confiance (95 %, 99 %, 99,9 %) :
 
 ```{r, echo = TRUE}
 gss_simple |>

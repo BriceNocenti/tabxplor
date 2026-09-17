@@ -151,8 +151,9 @@ TAB_ARGS <- list(
             "  \\code{\"diff\"}), or a \\strong{\\{\\} template} of your own",
             "  (\\code{\"\\{pct\\} (n=\\{n\\})\"}). The whole vocabulary is in \\link{tabxplor-display};",
             "  \\code{\\link{set_display}} changes it on a table already built.",
-            "  A layout showing an interval prints the one the table computed, so pair it with a",
-            "  \\code{ci = } value or a \\code{color} that needs one.")),
+            "  A layout that names a confidence interval or a contribution to the chi-squared",
+            "  COMPUTES it, so \\code{display = \"base_ci\"} needs no \\code{ci = } beside it; an",
+            "  explicit \\code{ci = \"no\"} still stands.")),
   totaltab = list(
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"), default = "line",
     values = c("line", "table", "no", ""), size = 1L,

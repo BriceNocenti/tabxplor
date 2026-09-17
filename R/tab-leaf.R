@@ -90,7 +90,7 @@ tab_plain <- function(data, row_var, col_var, tab_vars, wt, ...,
 
 
   comparison <- tab_leaf_comparison(color, display, pct, ref)
-  r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref)
+  r_ci  <- resolve_leaf_ci(ci, color, color_signif, stars, ref, display)
   stars <- r_ci$stars ; color_signif <- r_ci$color_signif
   or_ci <- identical(comparison, "odds_ratio") && identical(r_ci$ci, "ref")
   ci_leaf  <- if (or_ci) "no" else if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
@@ -259,7 +259,8 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
                        totaltab, totaltab_name, tot, total_names, subtext, digits, num, df,
                        stars, color_signif, .fine, .by_table, inference,
                        comparison = NA_character_, or_ci = FALSE, dichotomise = FALSE,
-                       ci = "no", ci_scale = "diff", test = "no", deff = NULL) {
+                       ci = "no", ci_scale = "diff", test = "no", ctr_color = TRUE,
+                       deff = NULL) {
   # `comparison` = the geometry this table compares on; `or_ci` = the LEAF owns the Woolf log-OR
   # interval rather than the cell / contrast one (they cannot co-occur); `ref2` picks the OR's 2x2.
   or_compare <- identical(comparison, "odds_ratio")
@@ -758,7 +759,7 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
   # 19. THE WHOLE-TABLE TEST -> leaf_test (chi2 / ANOVA F, on this leaf's own col_var).
   leaf_test <- NULL
   if (!identical(test, "no")) {
-    lt        <- leaf_chi2(tabs, test, comp, row_var, col_var, tab_vars, deff)
+    lt        <- leaf_chi2(tabs, test, comp, row_var, col_var, tab_vars, deff, ctr_color)
     tabs      <- lt$tabs
     leaf_test <- lt$test
   }
@@ -778,10 +779,13 @@ plain_core <- function(data, row_var, col_var, tab_vars, wt, pct, color, na, ref
 #   decide the table's shape.
 #' @keywords internal
 #' @noRd
-leaf_chi2 <- function(tabs, test, comp, row_var, col_var, tab_vars, deff = NULL) {
+# DESIGN: computing the contributions and PAINTING them are two questions -- `display = "ctr"` prints
+# them on a table coloured on its differences, so `ctr_color` is the colour's answer and `test` the
+# computation's. They agree wherever `color = "contrib"` asked for both.
+leaf_chi2 <- function(tabs, test, comp, row_var, col_var, tab_vars, deff = NULL, ctr_color = TRUE) {
   do_ctr  <- identical(test, "ctr")
   calc    <- if (do_ctr) c("ctr", "p") else "p"
-  color   <- if (do_ctr) "all" else "no"
+  color   <- if (do_ctr && isTRUE(ctr_color)) "all" else "no"
   cv      <- rlang::as_name(col_var)
   lev_all <- names(tabs)[purrr::map_lgl(tabs, is_fmt)]
   if (length(lev_all) == 0L || identical(cv, "no_col_var"))
@@ -1446,7 +1450,7 @@ tab_num <- function(data, row_var, col_vars, tab_vars, wt, ...,
 
   # DESIGN: the gated forcing (a `color_signif` policy needs its interval) is applied HERE too, the
   # same rule as in tab_resolve_settings(), so the two paths cannot drift.
-  r_ci  <- resolve_leaf_ci(ci, color, color_spec$signif, stars, ref)
+  r_ci  <- resolve_leaf_ci(ci, color, color_spec$signif, stars, ref, display)
   stars <- r_ci$stars ; color_spec$signif <- r_ci$color_signif
   ci    <- if (identical(r_ci$ci, "ref")) "diff" else r_ci$ci
   ci_scale <- if (identical(measure_key(color_spec$text), "ratio") ||

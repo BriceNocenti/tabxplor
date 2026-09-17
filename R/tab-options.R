@@ -103,7 +103,7 @@ TAB_OPTIONS <- list(
   stars = tx_opt(
     FALSE, "display", arg = "stars",
     doc = c("whether cells show significance stars, and at which cut-offs. `FALSE` (no stars),",
-            "`TRUE` (the default ladder `c(\"*\" = 0.10, \"**\" = 0.05, \"***\" = 0.01)`), or a named",
+            "`TRUE` (the default ladder `c(\"*\" = 0.05, \"**\" = 0.01, \"***\" = 0.001)`), or a named",
             "numeric giving your own -- names are the glyphs, values the p-value cut-offs, e.g.",
             "`options(tabxplor.stars = c(\"*\" = 0.05, \"**\" = 0.01))`. Off for [tab()], on for",
             "[tab_reg()]. The LADDER is a",
@@ -416,9 +416,12 @@ tx_stars_ladder <- function() {
   sort(stats::setNames(lev[seq_len(n)], lab[seq_len(n)]), decreasing = TRUE)
 }
 
+# DESIGN: the ladder of the discipline's own tables (APA's `.05 / .01 / .001`), and the one rung that
+# matters is the FIRST: at the default `conf_level = 0.95` it now coincides with the significance the
+# colours are gated on, so a greyed cell can no longer carry a star.
 #' @keywords internal
 #' @noRd
-TX_STARS_DEFAULT <- c("*" = 0.10, "**" = 0.05, "***" = 0.01)
+TX_STARS_DEFAULT <- c("*" = 0.05, "**" = 0.01, "***" = 0.001)
 
 # --- the loader ----------------------------------------------------------------------------------
 #' @keywords internal

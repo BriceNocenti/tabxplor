@@ -249,8 +249,9 @@ keeps each cell's plain value. Three ways to ask: a \strong{named layout}
 \code{"diff"}), or a \strong{\{\} template} of your own
 (\code{"\{pct\} (n=\{n\})"}). The whole vocabulary is in \link{tabxplor-display};
 \code{\link{set_display}} changes it on a table already built.
-A layout showing an interval prints the one the table computed, so pair it with a
-\code{ci = } value or a \code{color} that needs one.}
+A layout that names a confidence interval or a contribution to the chi-squared
+COMPUTES it, so \code{display = "base_ci"} needs no \code{ci = } beside it; an
+explicit \code{ci = "no"} still stands.}
 
 \item{color_breaks}{A per-table override of the colour thresholds, in the form
 \code{\link{set_color_breaks}} accepts; unset scales keep the global ones.}

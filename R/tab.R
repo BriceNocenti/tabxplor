@@ -647,7 +647,7 @@ ctx_update <- function(ctx, updates) {
 #' @noRd
 CTX_SETTINGS_LOCALS <- c(
   # settings$rows, minus its key (na_num is added by tab_prepare_pop)
-  "color", "comparison", "or_ci", "chi2", "ref", "ref2", "comp", "ci", "ci_scale",
+  "color", "comparison", "or_ci", "chi2", "want_ctr", "ref", "ref2", "comp", "ci", "ci_scale",
   "totaltab", "totrow", "na_num",
   # settings$cols (lv1 added by tab_prepare_pop)
   "lvs", "lv1", "digits", "col_vars_num", "col_vars_text",
@@ -1161,6 +1161,7 @@ tab_setup <- function(ctx) {
   .settings     <- tab_resolve_settings(color = color, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
                                          display_measure = display_comparison(display),
+                                         display_arms = display_arms(display),
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
                                          color_ratio_ci = color_ratio_ci, stars = stars,
@@ -1179,6 +1180,7 @@ tab_setup <- function(ctx) {
   color_signif  <- .settings$color_signif
   stars         <- .settings$stars
   totrow        <- .settings$totrow
+  want_ctr      <- .settings$want_ctr     # the display prints {ctr}: compute it whatever colours
   cache_keys    <- .settings$cache_keys
 
   # THE SETTINGS SPINE: a star schema built ONCE here, three typed tibbles at their natural grain --
@@ -1189,7 +1191,7 @@ tab_setup <- function(ctx) {
   settings <- list(
     rows = tibble::tibble(
       row_var = rv_chr, color = color, comparison = comparison, or_ci = or_ci, chi2 = chi2,
-      ref = ref, ref2 = ref2,
+      want_ctr = want_ctr, ref = ref, ref2 = ref2,
       comp = comp, ci = ci, ci_scale = ci_scale, totaltab = totaltab, totrow = totrow
     ),
     cols = tibble::tibble(
@@ -1518,7 +1520,10 @@ tab_transform <- function(ctx) {
   tabs_text <- NULL
   tests     <- chi2   # logical placeholder; assemble's is.logical() fallback handles a numeric-only tab
   if (sum(col_vars_text) != 0) {
-    want_ctr  <- identical(measure_builds(color), "contrib")
+    # the COLOUR builds contributions (and then paints them), or the DISPLAY prints them (and the
+    # colour stays whatever it is): two reasons to compute, one of which must not touch `color`.
+    color_ctr <- identical(measure_builds(color), "contrib")
+    want_ctr  <- color_ctr || isTRUE(want_ctr[1])
     test_leaf <- if (!isTRUE(chi2)) "no"
                  else if (!is.null(cached_test) && !want_ctr) "no"
                  else if (want_ctr) "ctr" else "p"
@@ -1527,7 +1532,7 @@ tab_transform <- function(ctx) {
            pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text],
            lv1[col_vars_text]),
       function(.col_var, .digits, .na, .pct, .ref, .ref2, .lv1) {
-        color_leaf <- if (want_ctr) "no" else color
+        color_leaf <- if (color_ctr) "no" else color
         r_pl <- plain_resolve(.pct, .ref, .ref2, .na, totaltab_name, total_names,
                               c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms,
                               comparison = comparison)
@@ -1538,7 +1543,8 @@ tab_transform <- function(ctx) {
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
           comparison = comparison, or_ci = or_ci, dichotomise = isTRUE(.lv1),
-          ci = ci, ci_scale = ci_scale[1], test = test_leaf, deff = robust_tests,
+          ci = ci, ci_scale = ci_scale[1], test = test_leaf, ctr_color = color_ctr,
+          deff = robust_tests,
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
           .by_table = .by_table, inference = inference
         )

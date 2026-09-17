@@ -204,6 +204,12 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
+  tx_fk("DISPLAY_TOKENS$needs",    function() tx_fk_all(DISPLAY_TOKENS, "needs"),
+        function() names(DISPLAY_NEEDS)),
+  tx_fk("DISPLAY_NEEDS$panel",     function() tx_fk_scalar(DISPLAY_NEEDS, "panel"),
+        function() names(DISPLAY_NEEDS)),
+  tx_fk("DISPLAY_TOKENS$arms",     function() tx_fk_scalar(DISPLAY_TOKENS, "arms"),
+        function() DISPLAY_ARMABLE),
   # every {token} a named layout is spelt with, so a preset can never name a token that went away
   tx_fk("DISPLAY_PRESETS",
         function() {

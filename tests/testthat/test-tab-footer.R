@@ -96,6 +96,18 @@ testthat::test_that("a subtext naming no placeholder is APPENDED, and unknown <.
   testthat::expect_true(keeps_footer(odd))
   testthat::expect_true(all(c("<b>bold</b>", "n < 30", "<30 ans>") %in% tab_footer_text(odd)))
 
+  # ...and html SHOWS that markup instead of running it -- a footer line is text, whoever wrote it
+  h <- as.character(tab_html(odd, css = FALSE))
+  testthat::expect_match(h, "&lt;b&gt;bold&lt;/b&gt;", fixed = TRUE)
+  testthat::expect_no_match(h, "<b>bold</b>", fixed = TRUE)
+  inj <- set_subtext(t, "<script>alert(1)</script>")
+  testthat::expect_no_match(as.character(tab_html(inj, css = FALSE)), "<script>", fixed = TRUE)
+
+  # a generated line carries DATA too: a variable name is escaped like anything else
+  dw <- dplyr::mutate(fx_gss()[1:500, ], "w<x>" = 1)
+  hw <- as.character(tab_html(tab(dw, marital, race, pct = "row", wt = `w<x>`), css = FALSE))
+  testthat::expect_match(hw, "Weighted by w&lt;x&gt;", fixed = TRUE)
+
   # ...and a backslash escapes a literal `<`
   esc <- set_subtext(t, "literal \\<legend>")
   testthat::expect_true("literal <legend>" %in% tab_footer_text(esc))

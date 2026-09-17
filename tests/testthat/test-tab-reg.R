@@ -229,6 +229,18 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
 })
 
 
+test_that("a multinomial outcome whose name is not syntactic keeps its likelihood-ratio test", {
+  skip_if_not_installed("nnet")
+  d  <- mnl_data()
+  d2 <- dplyr::rename(d, "party (3)" = party3)
+  lr <- function(t) { x <- get_test(t); x$pvalue[grepl("^lr", x$test)] }
+  p1 <- lr(tab_reg(d, "party3", "race", family = "multinomial", empirical = FALSE))
+  p2 <- lr(tab_reg(d2, "party (3)", "race", family = "multinomial", empirical = FALSE))
+  expect_length(p2, 1L)
+  expect_equal(p2, p1)
+})
+
+
 
 
 test_that("tab_reg() ordinal cumulative OR / CI / p match MASS::polr; single column, Constant NA", {

@@ -231,7 +231,11 @@ html_face_wrap <- function(html, bold, italic, underline) {
   }
   bold <- g(bold); italic <- g(italic); underline <- g(underline)
   if (any(underline)) html[underline] <- paste0("<u>", html[underline], "</u>")
-  if (any(italic))    html[italic]    <- paste0("<i>", html[italic],    "</i>")
+  # DESIGN: `<em>`, not `<i>`. A publication palette's italic MEANS something (it is the cell's
+  # reading, like the bold beside it), and it must survive leaving the page: jamovi's Copy walker and
+  # its LaTeX export both keep `<em>` and drop `<i>`, so a copied print_emphasis table used to lose
+  # exactly half of its typography.
+  if (any(italic))    html[italic]    <- paste0("<em>", html[italic],   "</em>")
   if (any(bold))      html[bold]      <- paste0("<b>", html[bold],      "</b>")
   html
 }

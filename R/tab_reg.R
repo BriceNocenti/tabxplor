@@ -1157,11 +1157,11 @@ reg_tidy_polr <- function(fit) {
 reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NULL,
                             response = NULL, cross = NULL, offset = NULL) {
   if (!is.null(formula)) return(formula)
-  rhs <- paste0("`", predictors, "`", collapse = " + ")
-  if (!is.null(cross))    rhs <- paste0("(", rhs, ") * `", cross, "`")
+  rhs <- paste(tx_backtick(predictors), collapse = " + ")
+  if (!is.null(cross))    rhs <- paste0("(", rhs, ") * ", tx_backtick(cross))
   if (length(add_terms))  rhs <- paste(c(rhs, add_terms), collapse = " + ")
   if (!is.null(offset))   rhs <- paste0(rhs, " + ", offset)
-  stats::as.formula(paste0(response %||% paste0("`", outcome, "`"), " ~ ", rhs))
+  stats::as.formula(paste0(response %||% tx_backtick(outcome), " ~ ", rhs))
 }
 
 # The glm FAMILY OBJECT each internal link key fits with. Read by reg_fit() (what really runs) and by
@@ -2602,7 +2602,7 @@ reg_null_loglik <- function(fit, family) {
   }
   null <- tryCatch({
     mf   <- stats::model.frame(fit)
-    fla  <- stats::reformulate("1", response = names(mf)[1])
+    fla  <- stats::reformulate("1", response = tx_backtick(names(mf)[1]))
     if (inherits(fit, "multinom")) nnet::multinom(fla, data = mf, trace = FALSE)
     else if (inherits(fit, "polr")) MASS::polr(fla, data = mf, Hess = TRUE)
     else NULL

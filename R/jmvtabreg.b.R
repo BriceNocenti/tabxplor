@@ -27,13 +27,16 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
   inherit = jmvtabregBase,
   private = list(
 
-    .run = function() {
+    # Every string this run writes -- the table's own labels and its footer -- is built under
+    # jamovi's RESULTS language, so the panel and the table can never say two languages.
+    .run = function() jmv_with_lang(self, function() {
 
       data <- self$data
 
       wr   <- jmv_backend_weights(data, self$options$wt)
       data <- wr$data
       wt   <- wr$wt
+      jmv_backend_weights_notice(self, wr)
 
       opts  <- private$.opts(wt)
 
@@ -88,7 +91,7 @@ jmvtabregClass <- if (requireNamespace('jmvcore', quietly = TRUE)) R6::R6Class(
           jmv_export_remember(jmvtab_reg_render_store(cur_sig, html), note))
       else if (nzchar(status))
         self$results$compare_state$setState(jmv_export_remember(cst, status))
-    },
+    }),
 
     .opts = function(wt) {
       list(

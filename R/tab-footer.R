@@ -12,7 +12,7 @@
 #     `<placeholder>` per generated line and one line per thing a person wrote, IN PRINTING ORDER.
 #     ⚠ A subtext naming no placeholder is APPENDED to the default instead -- the rule that keeps a
 #     bare note, a raw `attr(x, "subtext") <-` and jamovi's free-text box working -- and an unknown
-#     `<...>` passes through verbatim, claiming nothing.
+#     `<...>` is TEXT, claiming nothing: html escapes every footer token, so no markup is ever run.
 #   - AND IT NAMES WHAT *THIS* TABLE CAN SAY (the `default` column): a member built from `meta` is
 #     named only where its fact exists, one built from the COLUMNS always. So the two gates answer
 #     different questions -- `reads` decides what a stripped table still prints, `default` what the
@@ -239,9 +239,9 @@ FOOTER_BLOCKS <- tx_grid(tibble::tribble(
 # OWNS the layout: only what it names is printed, in the order it names it.
 # ⚠ Only a BLOCK placeholder alone on its line claims the layout. An INLINE one (`<breaks>`, `<conf>`)
 #   is substitution, so quoting the confidence level in a note cannot cost its writer the footer.
-# ⚠ An unknown `<...>` is not a placeholder: it passes through VERBATIM and claims nothing, so raw
-#   html in a subtext behaves as it always did and a typo prints itself instead of hiding a block.
-#   `\<` escapes a literal `<` that would otherwise read as one.
+# ⚠ An unknown `<...>` is not a placeholder: it prints as TEXT and claims nothing (html escapes it,
+#   see legend_render_line()), so a typo shows itself instead of hiding a block, and markup written
+#   in a note is shown, never run. `\<` escapes a literal `<` that would otherwise read as one.
 
 # a `<token>` or `<token:arg:arg>`, the token lowercase-alphanumeric. Deliberately narrow: "n < 30"
 # and "<30 ans>" do not match, so ordinary prose is never re-read as markup.

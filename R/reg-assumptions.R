@@ -628,7 +628,7 @@ reg_shape_term <- function(x, var, shape = "quadratic", w = NULL, digits = 8L) {
   # formula's own term label, which R produces by deparsing -- and deparse drops the spaces around `/`
   # that a hand-pasted string keeps. Without this the skeleton's `term` misses the fit's by two
   # characters and the curvature row renders EMPTY (measured).
-  s2l <- tryCatch(str2lang(paste0("I((`", var, "` / ", num(s), ")^2)")),
+  s2l <- tryCatch(str2lang(paste0("I((", tx_backtick(var), " / ", num(s), ")^2)")),
                   error = function(e) NULL)
   if (is.null(s2l)) return(NULL)
   paste(deparse(s2l, width.cutoff = 500L), collapse = "")

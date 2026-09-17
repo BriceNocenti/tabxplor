@@ -565,3 +565,61 @@ testthat::test_that("only a token measured in the column's base takes its name i
   testthat::expect_identical(lab("pct")  , "row%")
   testthat::expect_identical(lab("n")    , "n")
 })
+
+
+# ---- a layout ARMS what it prints, and NEEDS what no argument can turn on -------------------------
+
+testthat::test_that("a layout printing an interval or a contribution computes it", {
+  g <- fx_gss()
+
+  # `display = "base_ci"` needs no `ci =` beside it -- the interval is armed, as the comparison is
+  t <- tab(g, marital, race, pct = "row", display = "base_ci")
+  col <- purrr::keep(t, is_fmt)[[1]]
+  testthat::expect_false(all(is.na(get_ci_inf(col))))
+  testthat::expect_identical(get_ci_method(col), get_ci_method(
+    purrr::keep(tab(g, marital, race, pct = "row", ci = "cell"), is_fmt)[[1]]))
+
+  # an effect layout takes the interval it is TESTED on, a level its own (the mismatch rule)
+  testthat::expect_identical(tabxplor:::display_arms("base_ci")$ci, "cell")
+  testthat::expect_identical(tabxplor:::display_arms("est_ci")$ci,  "cell")
+  testthat::expect_identical(tabxplor:::display_arms("{diff} {ci}")$ci, "ref")
+  testthat::expect_identical(tabxplor:::display_arms("pct")$ci, NA_character_)
+
+  # ⚠ an explicit `ci = "no"` is the user's own answer and stands
+  testthat::expect_true(all(is.na(get_ci_inf(purrr::keep(
+    tab(g, marital, race, pct = "row", ci = "no", display = "base_ci"), is_fmt)[[1]]))))
+
+  # the contributions are computed for the DISPLAY without being PAINTED: the colour stays the
+  # table's own (they were one flag, and `display = "ctr"` coloured a difference table on contrib)
+  t2  <- tab(g, marital, race, pct = "row", color = "diff", display = "ctr")
+  col2 <- purrr::keep(t2, is_fmt)[[2]]
+  testthat::expect_false(all(is.na(get_ctr(col2))))
+  testthat::expect_identical(unique(get_color(col2)), "difference")
+  testthat::expect_true(tabxplor:::display_arms("ctr")$ctr)
+
+  # ⚠ ARMING IS THE BOUNDARY'S, never a post-hoc set_display()'s: that one changes no number, so the
+  # same layout on a finished table shows the empty field it names
+  testthat::expect_true(all(is.na(get_ctr(purrr::keep(
+    set_display(tab(g, marital, race, pct = "row"), "ctr"), is_fmt)[[2]]))))
+})
+
+
+testthat::test_that("what a display NEEDS is declared, and the jamovi panel can evaluate it", {
+  # every key a token names exists, and each one says what it says in the void note
+  keys <- unique(unlist(tabxplor:::DISPLAY_TOKEN_NEEDS, use.names = FALSE))
+  testthat::expect_true(all(keys %in% names(tabxplor:::DISPLAY_NEEDS)))
+  testthat::expect_true(all(vapply(tabxplor:::DISPLAY_NEEDS,
+                                   function(r) is.character(r$doc) && nzchar(r$doc), logical(1))))
+  # ... and only the STRUCTURAL ones reach the panel: what an argument arms is never hidden there
+  testthat::expect_identical(tabxplor:::display_needs("ci"), character(0))
+  testthat::expect_identical(tabxplor:::display_needs("wn"), "wt")
+  testthat::expect_identical(tabxplor:::display_needs("mean_cv"), "num")
+  testthat::expect_identical(tabxplor:::display_needs("or"), c("fct", "pct_rowcol"))
+  # a composite is available where its PRIMARY token is -- an aside simply drops
+  testthat::expect_identical(tabxplor:::display_needs("base_diff"), character(0))
+  testthat::expect_identical(tabxplor:::display_needs("or_base"), c("fct", "pct_rowcol"))
+
+  # the void note names what is missing, in the words of that same table
+  testthat::expect_message(tab(fx_gss(), race, marital, pct = "row", display = "mean"),
+                           "numeric col_var")
+})

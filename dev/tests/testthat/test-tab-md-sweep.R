@@ -218,7 +218,11 @@ testthat::test_that("tab_css(format = \"md\") emits the slot colour rules, chrom
   # Bootstrap-host fix (a Quarto site is Bootstrap too, and styled tab_md wraps tables in the
   # `::: {.tabxplor-tab}` div) -- so assert the ABSENCE OF CHROME, not of the class name.
   testthat::expect_false(grepl("\\.tabxplor-tab\\{", css))                # no table-level chrome block
-  testthat::expect_false(grepl("tx-", css, fixed = TRUE))                 # no role/geometry rules
+  # ⚠ NOT "no `tx-` at all": since the publication palettes became per-table classes, every sheet
+  # carries their scoped layers (`.tabxplor-tab.tx-print_marks .p1`). What md must not carry is
+  # the CHROME -- the box, the caption, the footer, the header roles.
+  for (chrome in c("tx-scrollbox", "tx-foot", "tx-span", "tx-unit", "tabxplor-caption"))
+    testthat::expect_false(grepl(chrome, css, fixed = TRUE), info = chrome)
   testthat::expect_false(grepl("border", css, fixed = TRUE))              # no border chrome
 })
 

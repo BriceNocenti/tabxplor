@@ -28,7 +28,7 @@ children:
             events:
               change: ./jmvtab::onChange_vars
       - type: TargetLayoutBox
-        label: <b>tab_vars = <i>(subtables variables)</i></b>
+        label: <b>tab_vars = <i>(sub-table variables)</i></b>
         children:
           - type: VariablesListBox
             name: tab_vars
@@ -195,7 +195,7 @@ children:
               - type: CheckBox
                 name: test
                 label: >-
-                  <b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for
+                  <b>test = <i>(Chi2 and Cramér's V for categorical; ANOVA F and eta2 for
                   numeric)</i></b>
           - type: LayoutBox
             margin: none
@@ -539,7 +539,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: wrap_rows = <i>(nb chars for line break)</i>
+            label: wrap_rows = <i>(characters before a line break)</i>
             children:
               - type: TextBox
                 name: wrap_rows
@@ -552,7 +552,7 @@ children:
         stretchFactor: 1
         children:
           - type: Label
-            label: wrap_cols = <i>(nb chars for line break)</i>
+            label: wrap_cols = <i>(characters before a line break)</i>
             children:
               - type: TextBox
                 name: wrap_cols

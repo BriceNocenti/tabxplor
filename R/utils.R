@@ -765,6 +765,13 @@ tx_html_escape <- function(text, attribute = FALSE) {
   text
 }
 
+# DESIGN: a formula is R CODE and a variable name is DATA -- "Age group" or "Income (EUR)" is a
+# parse error or, worse, a function call, unless quoted. Every formula built from names goes through
+# this one rule.
+#' @keywords internal
+#' @noRd
+tx_backtick <- function(x) paste0("`", gsub("`", "\\`", as.character(x), fixed = TRUE), "`")
+
 
 # Escaped characters ------------------------------------------------------------------------------
 #' @keywords internal

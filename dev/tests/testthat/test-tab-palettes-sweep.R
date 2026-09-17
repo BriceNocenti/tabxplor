@@ -67,7 +67,7 @@ testthat::test_that("the cell suffix supports the number rather than competing w
   testthat::expect_identical(as.character(substr(oc, pf, pf + pn - 1L)), c("60%", "30%"))
   # ... and in html, where it lands in the aside's own span and takes no face markup.
   x <- tab(fx_gss(), marital, race, pct = "row", color = "diff", ci = "cell")
-  x <- dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ set_display(set_pvalue(., 0.001), "pct")))
+  x <- dplyr::mutate(x, dplyr::across(dplyr::where(is_fmt), ~ set_display(set_pvalue(., 1e-6), "pct")))
   for (th in c("light", "print_minimalistic")) {
     h <- as.character(tab_html(x, theme = th))
     testthat::expect_match(h, '<span class="tx-sec"[^>]*>\\*\\*\\*</span>', label = th)
@@ -165,13 +165,13 @@ testthat::test_that("html cells wear the face as a class AND as markup", {
 
   # An under-represented cell at the ladder's first rungs is NOT bold (bold is the top rung, not the
   # direction) and it IS italic; an over-represented one is underlined.
-  testthat::expect_match(p, '<td class="[^"]*\\bm[0-9]\\b[^"]*"><i>')
+  testthat::expect_match(p, '<td class="[^"]*\\bm[0-9]\\b[^"]*"><em>')
   testthat::expect_no_match(p, '<td class="[^"]*\\bm[12] tx-b"')
   testthat::expect_match(p, '<td class="[^"]*\\bp[0-9]\\b[^"]*"><u>')
   # The markup is what survives GitHub (class+style stripped) and an HTML -> Word paste.
-  testthat::expect_true(grepl("<i>", p, fixed = TRUE) && grepl("<u>", p, fixed = TRUE))
+  testthat::expect_true(grepl("<em>", p, fixed = TRUE) && grepl("<u>", p, fixed = TRUE))
   # ... and the colour palettes emit none of it, which is why they stayed byte-identical.
-  testthat::expect_false(grepl("<i>", l, fixed = TRUE) || grepl("<b>", l, fixed = TRUE))
+  testthat::expect_false(grepl("<em>", l, fixed = TRUE) || grepl("<b>", l, fixed = TRUE))
 })
 
 
@@ -230,7 +230,7 @@ testthat::test_that("a transposed table keeps the print face", {
   h <- gsub("(?s)<style>.*?</style>", "",
             as.character(tab_html(zz_deep(), theme = "print_minimalistic", transpose = TRUE, tooltips = FALSE)),
             perl = TRUE)
-  testthat::expect_match(h, "<i>", fixed = TRUE)
+  testthat::expect_match(h, "<em>", fixed = TRUE)
 })
 
 

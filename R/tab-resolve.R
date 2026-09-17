@@ -31,7 +31,7 @@
 #   factor/numeric metadata, and the data-free cache-key material (values and variable NAMES).
 # @return color, chi2, ci, ci_scale, or_ci, comparison, color_signif, stars, totrow, cache_keys.
 tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
-                                 display_measure = NA_character_,
+                                 display_measure = NA_character_, display_arms = NULL,
                                  totrow = NULL, color_signif = "ignore",
                                  color_ratio_ci = FALSE, stars = FALSE,
                                  na = "keep", wt_name = character(),
@@ -41,6 +41,8 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
 
   ci_ratio_req <- ci == "ratio"
   ci <- resolve_ci_value(ci, warn = FALSE)
+  arms    <- display_arms %||% list(ci = NA_character_, ctr = FALSE)
+  arm_ctr <- isTRUE(arms$ctr)
 
   # DESIGN: hoisted out of the case_when below -- the `color_signif` forcing needs these too.
   pct_rowcol <- purrr::map_lgl(pct_vect, ~ all(.[col_vars_text] %in% c("row", "col")))
@@ -92,6 +94,10 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   was_auto <- ci == "auto"
   ci[was_auto] <- "no"
   ci[want_ref & was_auto] <- "ref"
+  # DESIGN: a layout that PRINTS an interval computes it, exactly as it already decides the
+  # comparison above -- so `display = "base_ci"` needs no `ci =` beside it. Only where `ci` was
+  # "auto": an explicit "no" is the user's own answer.
+  if (!is.na(arms$ci)) ci[was_auto & ci == "no"] <- arms$ci
   ci[ci == "ref" & !can_compare] <- "no"
 
   # WARNING: contrib paints the signed chi2 residual: `requires = c(chi2 = "always", totrow =
@@ -99,10 +105,10 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
   needs_totrow <- vapply(color, measure_forces, logical(1), "totrow", USE.NAMES = FALSE)
   needs_chi2   <- vapply(color, measure_forces, logical(1), "chi2",   USE.NAMES = FALSE)
   if (!is.null(totrow)) {
-    ctr_no_row <- needs_totrow & totrow == FALSE
+    ctr_no_row <- (needs_totrow | arm_ctr) & totrow == FALSE
     totrow[ctr_no_row] <- TRUE
   }
-  chi2[needs_chi2 & chi2 == FALSE] <- TRUE
+  chi2[(needs_chi2 | arm_ctr) & chi2 == FALSE] <- TRUE
 
   # A comparison colour compares to a reference row/column: `requires["ref"] == "always"`.
   if (any(vapply(color, measure_forces, logical(1), "ref", USE.NAMES = FALSE) &
@@ -126,7 +132,7 @@ tab_resolve_settings <- function(color, ci, chi2, ref, pct_vect, col_vars_text,
 
   list(color = color, chi2 = chi2, ci = ci, ci_scale = ci_scale, or_ci = or_ci,
        comparison = measure_of, color_signif = color_signif, stars = stars, totrow = totrow,
-       cache_keys = cache_keys)
+       want_ctr = arm_ctr, cache_keys = cache_keys)
 }
 
 # THE public `ci` vocabulary: WHERE the interval sits and only that -- "auto" (a reference interval
@@ -207,17 +213,46 @@ display_comparison <- function(display) {
 }
 
 
+# DESIGN: the same reading as display_comparison(), one step further -- what a layout PRINTS decides
+# what the build computes. Over EVERY field of the template, not just the primary one: "{base} {ci}"
+# prints the interval as an aside and still needs it computed. The interval's scale is the primary
+# token's own: a level takes each cell's own interval, an effect the one it is tested on, which is
+# exactly what display_refuse_mismatch() checks afterwards.
+# ⚠ Read at the boundary only. A post-hoc set_display() computes nothing (?tabxplor-display says so).
+#' @keywords internal
+#' @noRd
+display_arms <- function(display) {
+  none <- list(ci = NA_character_, ctr = FALSE)
+  d <- tryCatch(display_resolve(display), error = function(e) NULL)
+  if (is.null(d)) return(none)
+  seg  <- parse_display_template(d)
+  toks <- seg$fields[!is.na(seg$fields)]
+  if (!length(toks)) return(none)
+  arms <- unname(DISPLAY_TOKEN_ARMS[intersect(toks, names(DISPLAY_TOKEN_ARMS))])
+  prim <- seg$fields[seg$primary]
+  geom <- unname(DISPLAY_TOKEN_GEOMETRY[prim] %||% NA_character_)
+  list(ci  = if ("ci" %in% arms) if (is.na(geom) || identical(geom, "level")) "cell" else "ref"
+             else NA_character_,
+       ctr = "ctr" %in% arms)
+}
+
+
 # The same rules as the cascade above, for a leaf called DIRECTLY: only "auto" resolves here too.
 #' @keywords internal
 #' @noRd
-resolve_leaf_ci <- function(ci, color, color_signif = "ignore", stars = FALSE, ref = "tot") {
+resolve_leaf_ci <- function(ci, color, color_signif = "ignore", stars = FALSE, ref = "tot",
+                            display = NULL) {
   ci        <- resolve_ci_value(if (is.null(ci)) "auto" else ci, warn = FALSE)[1]
   d         <- ci_disable_signif(ci, color_signif, stars)
   color_signif <- d$color_signif ; stars <- d$stars
   signif_on <- !identical(color_signif[1], "ignore") && !is.na(color_signif[1])
   can_compare <- !(ref[1] %in% c("no", "")) && !is.na(ref[1])
   gated <- signif_on && measure_forces(color, "ci", TRUE)
-  if (identical(ci, "auto")) ci <- if ((gated || isTRUE(stars)) && can_compare) "ref" else "no"
+  # the display's own arming, exactly as the cascade applies it (display_arms): a layout printing an
+  # interval computes it. Last, so a gated colour or `stars` keeps its reference interval.
+  arm_ci <- display_arms(display)$ci
+  if (identical(ci, "auto")) ci <- if ((gated || isTRUE(stars)) && can_compare) "ref"
+                                   else if (!is.na(arm_ci)) arm_ci else "no"
   if (identical(ci, "ref") && !can_compare) ci <- "no"
   list(ci = ci, stars = isTRUE(stars),
        color_signif = if (signif_on) color_signif[1] else "ignore")

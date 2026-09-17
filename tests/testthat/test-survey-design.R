@@ -171,6 +171,26 @@ test_that("Q2 the test rung follows the input and `test` takes no other value", 
 })
 
 
+test_that("a variable or weight name that is not syntactic reaches every survey formula", {
+  b  <- svy_fixture(n = 1000)
+  b2 <- b
+  names(b2)[match(c("x", "num", "w"), names(b2))] <- c("Age group", "Income (EUR)", "Household weight")
+  withr::with_options(list(tabxplor.design_effect = TRUE), {
+    t1 <- get_test(tab(b, x, y, wt = w, pct = "row", test = TRUE))
+    t2 <- get_test(tab(b2, `Age group`, y, wt = `Household weight`, pct = "row", test = TRUE))
+    expect_false(is.na(t2$pvalue[1]))
+    expect_equal(t2$pvalue, t1$pvalue)
+    f1 <- get_test(tab(b, y, num, wt = w, test = TRUE))
+    f2 <- get_test(tab(b2, y, `Income (EUR)`, wt = `Household weight`, test = TRUE))
+    expect_false(is.na(f2$pvalue[1]))
+    expect_equal(f2$pvalue, f1$pvalue)
+  })
+  r1 <- tab_reg(b, y, predictors = c(x, z), wt = w)
+  r2 <- tab_reg(b2, y, predictors = c(`Age group`, z), wt = `Household weight`)
+  expect_equal(get_num(r2[[3]]), get_num(r1[[3]]))
+})
+
+
 
 
 # === SECTION: crude columns under a design ========================================================

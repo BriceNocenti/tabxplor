@@ -12,7 +12,7 @@ children:
     stretchFactor: 1
     children:
       - type: TargetLayoutBox
-        label: <b>outcome = <i>(dependent variable[s])</i></b>
+        label: <b>outcome = <i>(dependent variables)</i></b>
         children:
           - type: VariablesListBox
             name: outcome
@@ -158,7 +158,7 @@ children:
                 stretchFactor: 1
                 children:
                   - type: Label
-                    label: display = <i>(what numbers the cell show)</i>
+                    label: display = <i>(what each cell shows)</i>
                     children:
                       - type: ComboBox
                         name: display
@@ -186,7 +186,7 @@ children:
   # one, inside modelBuilderCtrl -- an interaction IS a predictor, so it is defined where a model
   # says which predictors it holds, and each card then ticks it like any other (jmvtabreg.js).
   - type: CollapseBox
-    label: <b>Models comparison and interactions</b>
+    label: <b>Model comparison and interactions</b>
     stretchFactor: 1
     collapsed: true
     children:
@@ -341,7 +341,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: wrap_rows = <i>(nb chars for line break)</i>
+                label: wrap_rows = <i>(characters before a line break)</i>
                 children:
                   - type: TextBox
                     name: wrap_rows
@@ -353,7 +353,7 @@ children:
             stretchFactor: 1
             children:
               - type: Label
-                label: wrap_cols = <i>(nb chars for line break)</i>
+                label: wrap_cols = <i>(characters before a line break)</i>
                 children:
                   - type: TextBox
                     name: wrap_cols
@@ -430,7 +430,7 @@ children:
             children:
               - type: CheckBox
                 name: xl_check
-                label: assumption checks plots
+                label: assumption-check plots
                 enable: (export_format:excel)
       - type: LayoutBox
         margin: none

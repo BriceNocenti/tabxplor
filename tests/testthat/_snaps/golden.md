@@ -729,7 +729,7 @@
       | Married       | |   9%     |   9%***  |  82%***  | |  100% (10 117)  |
       |**Total**      | | **9%**   |**15%**   |**76%**   | |**100%** (21 483)|
       
-      \*\*\*: significantly different from the reference category (in bold) at the 99% confidence level; \*\*: at the 95% level; \*: at the 90% level; no star: not significant.
+      \*\*\*: significantly different from the reference category (in bold) at the 99.9% confidence level; \*\*: at the 99% level; \*: at the 95% level; no star: not significant.
       :::
 
 # golden display (tab_md) unchanged: f_color_diff
@@ -3956,6 +3956,6 @@
       |**Total**      | |**100%**   |**100%**| **100%**   | | **100%**   |
       | n             | | 1 959     | 3 129  | 16 395     | | 21 483     |
       
-      \*\*\*: significantly different from the reference category (in bold) at the 99% confidence level; \*\*: at the 95% level; \*: at the 90% level; no star: not significant.
+      \*\*\*: significantly different from the reference category (in bold) at the 99.9% confidence level; \*\*: at the 99% level; \*: at the 95% level; no star: not significant.
       :::
 

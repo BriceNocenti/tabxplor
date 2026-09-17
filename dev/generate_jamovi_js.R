@@ -180,6 +180,15 @@ tab_block <- function() {
   # is already numeric-then-cuts, so there is nothing left here to re-group.
   idx_shapes <- c("auto", cuts)
   col_shapes <- tab_shapes
+  # What each `display =` choice NEEDS the table to have, so the dropdown offers only what this table
+  # could show (DISPLAY_NEEDS$panel). Emitted for every value the option can hold -- the primary
+  # token's keys, since an aside simply drops -- and read in jmvtab.js by updateDisplayChoices().
+  # ⚠ Only the STRUCTURAL half is here. What an argument can turn on (an interval, the chi-squared
+  # contributions) is armed by R at the boundary instead (DISPLAY_TOKENS$arms), so no choice that
+  # merely lacks `ci =` is ever hidden.
+  disp_vals  <- c(tabxplor:::DISPLAY_USER_FIELDS, names(tabxplor:::DISPLAY_PRESETS))
+  disp_needs <- lapply(stats::setNames(disp_vals, disp_vals), tabxplor:::display_needs)
+  disp_needs <- disp_needs[lengths(disp_needs) > 0L]
   c(
     BEGIN,
     "// Generated from R/fmt_class.R (MEASURES), R/tab-display.R (DISPLAY_TOKENS) and",
@@ -191,6 +200,7 @@ tab_block <- function() {
     paste0("var TABX_SHAPES_COL = ", js_arr(col_shapes), ";"),
     paste0("var TABX_SHAPES_CUT = ", js_arr(cuts), ";"),
     paste0("var TABX_SHAPE_LABEL = ", js_obj(shape_ui_labels(tab_shapes), js_tr), ";"),
+    paste0("var TABX_DISPLAY_NEEDS = ", js_obj(disp_needs, js_arr), ";"),
     END
   )
 }

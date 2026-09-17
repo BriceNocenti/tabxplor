@@ -347,6 +347,13 @@ A type-name → constructor map. Confirmed control types (what `.u.yaml` `type:`
 - `setValue(value, key?, opts?)` — set the bound option value.
 - `setEnabled(bool)` — sugar for `setPropertyValue("enable", bool)` (there is no
   `isDisabled`; enabled state is the `enable` property).
+- **A `ComboBox`'s CHOICES are a settable property too**: `options` is registered with
+  `registerOptionProperty("options")` and its change handler calls `updateOptionsList()`, so
+  `setPropertyValue("options", [...])` re-renders the list (read in jamovi 28.2's
+  `analysisui-*.js`). tabxplor filters the `display` dropdown that way — `updateDisplayChoices()`
+  in `jamovi/js/jmvtab.js`, from the generated `TABX_DISPLAY_NEEDS`. ⚠ Read from the shipped
+  client, **not yet confirmed in a running app**; the caller keeps the current value in the list
+  and falls back to the full one on any error, so an app that ignores it simply shows everything.
 - `$el` (jQuery-like element) / `el` (raw DOM node); `getOption()` (the bound Option).
 
 The per-option **wrapper** (value-facing façade) exposes: `getValue(keys)`, `setValue(value,

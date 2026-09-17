@@ -857,7 +857,7 @@ gss <- fx_gss()
 star_col <- function() {
   fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
       ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-      pvalue = c(0.0005, 0.5, 0.07), display = "pct")
+      pvalue = c(0.0005, 0.5, 0.03), display = "pct")   # ***, none, * on the .05/.01/.001 ladder
 }
 
 
@@ -1079,7 +1079,7 @@ testthat::test_that("tab_xl(): the star literal is padded with figure spaces", {
   testthat::skip_if_not_installed("openxlsx2")
   x <- fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
            ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-           pvalue = c(0.0005, 0.5, 0.07), display = "pct")
+           pvalue = c(0.0005, 0.5, 0.03), display = "pct")   # ***, none, * on the .05/.01/.001 ladder
   st <- get_stars(x)
   testthat::expect_identical(st, c("***", "", "*"))
   # the width every cell's star field is padded to = the column max ("" counts 0)
@@ -1769,7 +1769,7 @@ gss <- fx_gss()
 star_col <- function() {
   fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
       ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-      pvalue = c(0.0005, 0.5, 0.07), display = "pct")
+      pvalue = c(0.0005, 0.5, 0.03), display = "pct")   # ***, none, * on the .05/.01/.001 ladder
 }
 
 
@@ -2096,7 +2096,7 @@ gss <- fx_gss()
 star_col <- function() {
   fmt(n = rep(100L, 3), scale = "points", pct_type = "row", pct = c(0.4, 0.5, 0.6), diff = c(0.1, 0, -0.1),
       ci_inf = c(0.05, -0.10, -0.20), ci_sup = c(0.15, 0.10, -0.05),
-      pvalue = c(0.0005, 0.5, 0.07), display = "pct")
+      pvalue = c(0.0005, 0.5, 0.03), display = "pct")   # ***, none, * on the .05/.01/.001 ladder
 }
 
 

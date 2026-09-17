@@ -124,3 +124,18 @@ test_that("every user-visible string in the jamovi .js goes through _()", {
                                    paste(unique(lit), collapse = " | ")))
   }
 })
+
+
+# The language sentinel: one msgid whose TRANSLATION is the language code, which is how the backend
+# reads jamovi's results language through supported API alone (R/jmvtab-export.R).
+test_that("the sentinel msgid is in both catalogues, and answers with the code", {
+  skip_if_not_installed("jmvcore")
+  skip_if_not_installed("jsonlite")
+  po <- paste(readLines(src_path("jamovi", "i18n", "fr.po"), warn = FALSE), collapse = "\n")
+  expect_match(po, 'msgctxt "language code"\nmsgid "en"\nmsgstr "fr"', fixed = TRUE)
+
+  tr <- jmvcore:::Translator$new(jsonlite::read_json(src_path("inst", "i18n", "fr.json")))
+  expect_identical(tr$translate("en [language code]"), "fr")
+  # ... and a catalogue without it answers the msgid, which IS the fallback code
+  expect_identical(jmvcore:::Translator$new(list())$translate("en [language code]"), "en")
+})

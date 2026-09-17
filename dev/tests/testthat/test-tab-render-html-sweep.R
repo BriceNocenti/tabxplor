@@ -135,7 +135,9 @@ testthat::test_that("get_data returns a data.frame", {
 #   (c) a real tab                 -> the full render.
 testthat::test_that("tab_html renders a plain data.frame, a declassed tab and a real tab", {
   df <- data.frame(a = 1:3, b = letters[1:3])
-  testthat::expect_message(h_df <- as.character(tab_html(df)), "not a tabxplor table")
+  # a frame that was NEVER a tabxplor table is rendered as a plain table, in silence: nothing
+  # was lost, so there is nothing to say (2.0.1 phase 15a).
+  testthat::expect_no_message(h_df <- as.character(tab_html(df)))
   testthat::expect_match(h_df, "<table")
   testthat::expect_match(as.character(suppressMessages(tab_export(df, "html"))), "<table")
   testthat::expect_match(as.character(suppressMessages(tab_html(tibble::as_tibble(df)))), "<table")
@@ -446,7 +448,10 @@ testthat::test_that("tabxplor.print accepts html (taught) and kable (synonym)", 
     withr::local_options(list(tabxplor.print = val))
     txt <- utils::capture.output(res <- withVisible(print(t1)))
     testthat::expect_false(res$visible)
-    testthat::expect_s3_class(res$value, "tabxplor_kable")
+    # ⚠ print() returns its ARGUMENT -- the tab, invisibly -- whatever medium it printed in
+    # (2.0.1 phase 12); what the medium made is what was written to the output.
+    testthat::expect_s3_class(res$value, "tabxplor_tab")
+    testthat::expect_true(any(grepl("<table", txt)))
   }
   # multi-table list routes the same way (the "kable" spelling is locked in test-display-13c.R)
   withr::local_options(list(tabxplor.print = "html"))

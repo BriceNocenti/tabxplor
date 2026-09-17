@@ -611,7 +611,7 @@ The audit's fix is right — backtick the names before `reformulate()` — and s
 - jamovi's server starts the engine with `LC_ALL=en_US.UTF-8` on Linux and never sets `LANGUAGE` (`jamovi/server/engine.py`), so on Linux the table follows the user's own `LANGUAGE` variable, and — by inference, untested — on Windows and macOS the system's language settings;
 - jamovi's **results language** — a setting of its own, which defaults to the interface language — is sent by the client with every analysis request as a `.lang` option, and `jmvcore::Options` stores it in a private field that only `.()` reads.
 
-A French jamovi on an English system therefore produces French panel messages around English tables. Switching the four labels to `.()`, as proposed, would produce a French *Total* row inside an English legend. The fix is one hand-off — read the results language once and build under `options(tabxplor.lang)`, which the footer machinery already honours (whether every other generated string does is still to check) — and it needs a supported way to read that language (section 7).
+A French jamovi on an English system therefore produces French panel messages around English tables. ✓ **Solved in 2.0.1 phase 15, through supported API alone**: `translate()` is public and resolves against the module's own `inst/i18n/<code>.json`, so one sentinel msgid whose translation IS the code (`.("en [language code]")`, the compiler's own `text [context]` form) reads exactly the language `.()` will speak; `jmv_with_lang()` then wraps each `.run()` in `options(tabxplor.lang =)` + the gettext scope, so the four labels stay on `gettext()` and follow it with everything else the build writes. A language with no catalogue answers `"en"` — the panel's own fallback, so the two cannot diverge. Switching the four labels to `.()`, as proposed, would produce a French *Total* row inside an English legend. The fix is one hand-off — read the results language once and build under `options(tabxplor.lang)`, which the footer machinery already honours (whether every other generated string does is still to check) — and it needs a supported way to read that language (section 7).
 
 **The small ones, all confirmed:**
 
@@ -801,18 +801,20 @@ A timeline, from the decisions of 2026-09-17.
 
 **Autumn 2026 — the package, and the builds.**
 
-1. **The two real bugs** (section 4.4): backtick the names in `svy_design_formula()` and the three `reformulate()` calls of `svy_omnibus_one()`, check the weight path of `tab_reg()`, and test with a column `"Age group"` and a weight `"Household weight"` under `design_effect = TRUE`; escape the jamovi user's `subtext` while keeping the `FOOTER_BLOCKS` placeholders. The first gives R users a silently empty test too: before the CRAN submission if still pending, else 2.0.1.
+1. ✓ **DONE (2.0.1 phase 15) — the two real bugs** (section 4.4). Wider than reported on both counts. The quoting is one helper, `tx_backtick()`, used by every formula built from names — `svy_design_formula()`, the three `reformulate()` calls of `svy_omnibus_one()`, the multinomial/ordinal LR null model (which was failing silently inside a `tryCatch`) and `reg_fit_formula()`, which hand-backticked — so `tab_reg(wt = "Household weight")` was broken with or without `design_effect`. The escaping is NOT at the jamovi boundary: the html footer renderer escaped only its `esc` tokens and never `>`, so the weight line, the model lines and reference-level names leaked too — `legend_render_line()` now escapes every plain token, which also keeps the `<placeholder>`s for free (they resolve before rendering). ⚠ A `<b>` a user writes in a note is now SHOWN, not run.
 2. **The CI workflow of section 3.4 — all platforms**, on `master` (`.github/` already ships there): macOS arm64 and Intel, Windows, both jamovi lines, and Linux x64 through flatpak. Run it by hand against `dev` once.
 3. **Test each file by sideloading it** — a Mac with Apple silicon at least, both lines ideally, and Windows once, since the workflow builds 2.7 with the 28.3 compiler rather than the Windows checkout's pinned jmvtools 2.7.26.
 4. **Tag, let the release job attach the seven files**, and publish the one-page install guide of section 3.8. The local Windows and WSL builds stay as development tools, no longer as the release path.
-5. **The small corrections** (section 4.4):
-   - `conf_level` bounds;
-   - `clearWith` on both `html_table` elements;
-   - the spelling pass;
-   - the weights `Notice`;
-   - `jamovi/00refs.yaml`;
+5. ✓ **DONE (2.0.1 phase 15) — the small corrections** (section 4.4), all but the last:
+   - `conf_level` bounds (0.5 … 0.9999999999, as Regressions);
+   - `clearWith` on both `html_table` elements — every option except the export block, pinned by a `dev/tests/` lint so a new option cannot be forgotten. ⚠ bare `n` had to be quoted: YAML 1.1 reads it as `false`;
+   - the spelling pass, msgids and `inst/i18n/fr.json` kept in step (one msgid merged into an existing one);
+   - the weights `Notice`, guarded twice (`minApp: 2.4.0` predates `jmvcore::Notice`);
+   - `jamovi/00refs.yaml` + `refs:` — ⚠ on the RESULT ELEMENT, never the analysis: `analysisschema.yaml` is `additionalProperties: false` and has no `refs`;
    - `<em>` instead of `<i>` for the semantic italic;
-   - honouring `decSymbol`.
+   - **`decSymbol` is NOT done, and is not a correction**: tabxplor has no decimal-mark option at all, so honouring it is a new `format()` feature. The native tables of Part 4 get jamovi's separator for free.
+
+   And A4, which the section called an open question: **the results language is read**, through supported API alone — one sentinel msgid (`.("en [language code]")`) whose translation IS the code, so `jmv_results_lang()` gets exactly what `.()` resolves against, and `jmv_with_lang()` wraps each `.run()`. A language with no catalogue answers `"en"`, the panel's own fallback. Question 6 of section 7 is therefore answered for practical purposes; a real accessor would still be cleaner.
 
 **Winter 2026–2027 — the conversation and the contributions.**
 
@@ -850,7 +852,7 @@ In the submission issue or the reply, and roughly in this order:
 3. **A rule above a totals row**, which APA explicitly allows: same contribution, or a separate one?
 4. **Stability.** Is `Cell.NEGATIVE` stable API — it is documented as *"colours the value red"*?
 5. **Syntax mode.** Is overriding `asSource()` in a module's analysis class acceptable, so that Syntax mode prints a runnable `tabxplor::tab(…)` call rather than `tabxplor::jmvtab(…)`? And is a module-level option that shows argument names *inside* the panel conceivable at all, or is Syntax mode the intended place?
-6. **The results language.** Is there a supported way for a module's R code to read the results language that `.()` uses (the `.lang` option `jmvcore::Options` keeps private), so text produced by the package's own `gettext()` can follow it?
+6. **The results language.** tabxplor now reads it by TRANSLATING a sentinel msgid (section 4.4, A4), which works but is a trick. Would a real accessor for the `.lang` option `jmvcore::Options` keeps private be welcome — so a module's own `gettext()` text can follow the results language without one?
 7. **Excel.** jamovi's export has no `.xlsx` and its Copy drops colour. Would a styled-`.xlsx` export be welcome as a feature request — and in the meantime, is a module-level export acceptable in a desktop-only build?
 8. **Levels.** Merging, reordering and cutting levels has no native control. Is that a feature request jamovi would consider, or is a `CustomControl` the accepted answer for it?
 9. **In-app help.** Is there a timeline, and a format module authors can target, for the argument mapping Damian suggested moving out of the panel?

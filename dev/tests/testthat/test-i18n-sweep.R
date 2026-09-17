@@ -83,7 +83,7 @@ test_that("the per-basis weight lines translate", {
 # Phase 18z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They
 # go through the same with_legend_lang() seam as the legend, so `lang =` reaches them -- unlike the
 # footer nouns, which resolve on the ambient locale (the glibc catalogue-caching limit z2 recorded).
-z17_plot_msgids <- c("Odds ratio", "Ratio", "Rate ratio", "Percentage points", "Percentage",
+z17_plot_msgids <- c("Odds ratio", "Ratio", "Ratio of means", "Percentage points", "Percentage",
                      "Coefficient (log scale)", "Units of the outcome", "SD of the outcome",
                      "not significant", "not guaranteed", "below the first threshold")
 
@@ -99,7 +99,10 @@ test_that("the chart's words stay English under the ambient en locale", {
 test_that("the chart's words translate", {
   skip_if_no_gettext()
   with_legend_lang("fr", function(lg) {
-    for (m in z17_plot_msgids) expect_false(identical(gettext(m), m))
+    # ⚠ minus the words French spells the SAME WAY: since 2.0.1 every multiplicative
+    # comparison that is not a cote says "ratio" in French too (dev/french_glossary.md).
+    for (m in setdiff(z17_plot_msgids, "Ratio")) expect_false(identical(gettext(m), m))
+    expect_equal(gettext("Ratio"), "Ratio")
     expect_equal(gettext("not significant"), "non significatif")
     expect_match(gettextf("%s (%s%% CI)", "OR", "95"), "IC")
     expect_match(gettextf("vs %s", "la ligne Total"), "^p\\. r\\. \u00e0 ")
@@ -208,6 +211,6 @@ z16_footers <- c(
 # Phase 18z17: forest_plot()'s axis titles and guide keys are the only strings a CHART adds. They
 # go through the same with_legend_lang() seam as the legend, so `lang =` reaches them -- unlike the
 # footer nouns, which resolve on the ambient locale (the glibc catalogue-caching limit z2 recorded).
-z17_plot_msgids <- c("Odds ratio", "Ratio", "Rate ratio", "Percentage points", "Percentage",
+z17_plot_msgids <- c("Odds ratio", "Ratio", "Ratio of means", "Percentage points", "Percentage",
                      "Coefficient (log scale)", "Units of the outcome", "SD of the outcome",
                      "not significant", "not guaranteed", "below the first threshold")

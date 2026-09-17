@@ -327,7 +327,7 @@ reg_cross_resolve <- function(keys, data, reg_shapes = NULL, arg = "predictors")
     # table prints.
     out[[keys[[i]]]] <- list(key = k, modified = md, moderator = mr, arm = arm,
                      var  = k,
-                     term = if (arm == "nested") paste0("`", mr, "`:`", md, "`") else NA_character_)
+                     term = if (arm == "nested") paste0(tx_backtick(mr), ":", tx_backtick(md)) else NA_character_)
   }
   out
 }

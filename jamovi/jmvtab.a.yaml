@@ -5,6 +5,7 @@ menuGroup: tabxplor
 version: '1.0.0'
 jas: '1.2'
 weightsSupport: 'full'
+
 # description:
 #     R: >
 #      Use `tab_many()` in `Jamovi` with an user interface ; useful to learn
@@ -46,7 +47,7 @@ options:
            For numeric variables means are calculated, in a single column.
 
     - name: tab_vars
-      title: "<b>tab_vars = <i>(subtables variables)</i></b>"
+      title: "<b>tab_vars = <i>(sub-table variables)</i></b>"
       type: Variables
       suggested:
         - nominal
@@ -129,7 +130,7 @@ options:
               the standardized (SD-scaled) mean difference.
               \item \code{"ratio"}: color the relative risk (factors) or mean ratio (numeric).
               \item \code{"odds_ratio"}: for `pct == "col"` or `pct == "row"`, color based on odds
-              ratios. To PRINT them, set \code{display} (the colour and the printed quantity are two
+              ratios. To PRINT them, set \code{display} (the color and the printed quantity are two
               questions).
               \item \code{"contrib"}: color cells based on their contribution to variance
               (factor columns only).
@@ -168,7 +169,7 @@ options:
           R: >
            Set to \code{TRUE} to add a test p-value row: a Chi-square test for categorical column
            variables and an ANOVA F-test for numeric ones (chosen automatically per column type).
-           Also enables colouring cells by their contribution to variance.
+           Also enables coloring cells by their contribution to variance.
 
     - name: anova
       title: "anova = <i>(which test for numeric variables ?)</i>"
@@ -426,8 +427,10 @@ options:
     - name: conf_level
       title: ""
       type: Number
-      min: 0
-      max: 1
+      # the bounds of the Regressions panel: below 0.5 the "interval" is narrower than a coin toss,
+      # and 1 has no finite one at all.
+      min: 0.5
+      max: 0.9999999999
       default: 0.95
       description:
           R: >
@@ -449,7 +452,7 @@ options:
       default: false
       description:
           R: >
-           For a WEIGHTED table, make the confidence intervals, the significance stars, the colour
+           For a WEIGHTED table, make the confidence intervals, the significance stars, the color
            thresholds AND the p-values account for the unequal weighting (the exact flat survey-design
            variance) instead of using the raw number of respondents. Sets
            options(tabxplor.design_effect). Off by default; it moves every interval in the table, not
@@ -541,9 +544,9 @@ options:
       description:
           R: >
            How the table is painted, in the results panel and in every export.
-            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            \code{"light"} is the color palette; \code{"print_ready"} says the same thing
             typographically --- bold, italics, underlines and marks instead of blue and red ---
-            for a page that has no colour. See \code{\link{tab_css}}.
+            for a page that has no color. See \code{\link{tab_css}}.
 
     - name: totaltab
       title: totaltab

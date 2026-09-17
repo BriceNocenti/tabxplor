@@ -105,7 +105,8 @@ prop_cases <- list(
 # === SECTION: stars agree with the p-value threshold (universal inclusion) ============
 
 testthat::test_that("get_stars() maps p-values to the documented thresholds", {
-  x <- fmt(n = rep(30L, 5), scale = "points", pct_type = "row", pct = rep(0.5, 5), pvalue = c(0.20, 0.08, 0.03, 0.005, NA))
+  # the ladder is the discipline's own: .05 / .01 / .001 (TX_STARS_DEFAULT)
+  x <- fmt(n = rep(30L, 5), scale = "points", pct_type = "row", pct = rep(0.5, 5), pvalue = c(0.08, 0.03, 0.005, 0.0005, NA))
   testthat::expect_identical(get_stars(x), c("", "*", "**", "***", ""))
 })
 

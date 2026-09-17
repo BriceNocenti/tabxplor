@@ -253,8 +253,8 @@ jmvtabOptions <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             private$..conf_level <- jmvcore::OptionNumber$new(
                 "conf_level",
                 conf_level,
-                min=0,
-                max=1,
+                min=0.5,
+                max=0.9999999999,
                 default=0.95)
             private$..stars <- jmvcore::OptionBool$new(
                 "stars",
@@ -556,7 +556,55 @@ jmvtabResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$add(jmvcore::Html$new(
                 options=options,
                 name="html_table",
-                title="Table"))
+                title="Table",
+                refs=list(
+                    "tabxplor",
+                    "survey",
+                    "rao-scott",
+                    "wilson",
+                    "newcombe",
+                    "katz",
+                    "woolf",
+                    "welch",
+                    "haberman"),
+                clearWith=list(
+                    "row_vars",
+                    "col_vars",
+                    "tab_vars",
+                    "wt",
+                    "pct",
+                    "color",
+                    "color_signif",
+                    "test",
+                    "anova",
+                    "na",
+                    "lvs",
+                    "cleannames",
+                    "ref_levels",
+                    "levels_order",
+                    "levels_collapse",
+                    "shape",
+                    "ref",
+                    "ref2",
+                    "comp",
+                    "ci",
+                    "conf_level",
+                    "stars",
+                    "design_effect",
+                    "ci_method_cell",
+                    "ci_method_diff",
+                    "ci_method_mean_diff",
+                    "ci_method_mean_ratio",
+                    "tab_theme",
+                    "totaltab",
+                    "wrap_rows",
+                    "wrap_cols",
+                    "display",
+                    "n",
+                    "add_pct",
+                    "subtext",
+                    "digits",
+                    "n_min")))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="cache_state",
@@ -619,7 +667,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   the standardized (SD-scaled) mean difference.    \item \code{"ratio"}:
 #'   color the relative risk (factors) or mean ratio (numeric).    \item
 #'   \code{"odds_ratio"}: for \code{pct == "col"} or \code{pct == "row"}, color
-#'   based on odds    ratios. To PRINT them, set \code{display} (the colour and
+#'   based on odds    ratios. To PRINT them, set \code{display} (the color and
 #'   the printed quantity are two    questions).    \item \code{"contrib"}:
 #'   color cells based on their contribution to variance    (factor columns
 #'   only).  } How significance gates these colors is set separately by
@@ -634,7 +682,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   threshold show, with dimmer colors.  }
 #' @param test Set to \code{TRUE} to add a test p-value row: a Chi-square test
 #'   for categorical column variables and an ANOVA F-test for numeric ones
-#'   (chosen automatically per column type). Also enables colouring cells by
+#'   (chosen automatically per column type). Also enables coloring cells by
 #'   their contribution to variance.
 #' @param anova Which F statistic to display for numeric column variables when
 #'   the test is on: Welch's F (default, does not assume equal variances) or the
@@ -700,7 +748,7 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   Read from the same confidence interval that is displayed, so stars and
 #'   bracket always agree.
 #' @param design_effect For a WEIGHTED table, make the confidence intervals,
-#'   the significance stars, the colour thresholds AND the p-values account for
+#'   the significance stars, the color thresholds AND the p-values account for
 #'   the unequal weighting (the exact flat survey-design variance) instead of
 #'   using the raw number of respondents. Sets options(tabxplor.design_effect).
 #'   Off by default; it moves every interval in the table, not only the p-value.
@@ -718,9 +766,9 @@ jmvtabBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param ci_method_mean_ratio The confidence-interval method for a ratio of
 #'   numeric means (means with \code{ci = "ratio"}).
 #' @param tab_theme How the table is painted, in the results panel and in
-#'   every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+#'   every export.  \code{"light"} is the color palette; \code{"print_ready"}
 #'   says the same thing  typographically --- bold, italics, underlines and
-#'   marks instead of blue and red ---  for a page that has no colour. See
+#'   marks instead of blue and red ---  for a page that has no color. See
 #'   \code{\link{tab_css}}.
 #' @param totaltab The total table, if there are subtables/groups   (i.e. when
 #'   \code{tab_vars} is provided). Vectorised over \code{row_vars}.  \itemize{
