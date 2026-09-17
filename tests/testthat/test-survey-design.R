@@ -108,13 +108,21 @@ cramer_v <- function(M) {
 test_that("D7/D8 the footer says 'survey design', and tab_reg emits a weight line at all", {
   b   <- svy_fixture(n = 1000)
   des <- survey::svydesign(~psu, weights = ~w, data = b)
-  tt  <- suppressMessages(tab(des, x, y, pct = "row"))
+  tt  <- suppressMessages(tab(des, x, y, pct = "row", test = TRUE))
   line <- tabxplor:::tab_weight_line(tt, lang = "en")
   expect_true(!is.null(line))
   expect_false(grepl(".svy_weights", line, fixed = TRUE))
   # z14-ii replaced z14-i's placeholder ("Weighted by the survey design.") by ruling Q7's sentence,
   # now that the intervals account for the design too (test-survey-variance.R pins the wording).
   expect_match(line, "sample design")
+
+  # ...and the SHORT half of it where the table shows no interval, star, test or gated colour:
+  # the caveat has nothing to qualify there (v2.0.1 phase 4).
+  plain <- suppressMessages(tab(des, x, y, pct = "row"))
+  expect_false(tabxplor:::tab_shows_inference(plain))
+  expect_equal(tabxplor:::tab_weight_line(plain, lang = "en"),
+               "Design-based (survey): weighted estimates.")
+  expect_false(grepl(".svy_weights", tabxplor:::tab_weight_line(plain, lang = "en"), fixed = TRUE))
 
   tr <- suppressMessages(tab_reg(des, outcome = "y", predictors = "x", family = "binomial"))
   line_reg <- tabxplor:::tab_weight_line(tr, lang = "en")
@@ -160,6 +168,26 @@ test_that("Q2 the test rung follows the input and `test` takes no other value", 
   expect_error(tab(b, x, y, test = "surveyy"), "TRUE")
   expect_error(tab_counts(data.frame(r = "a", c = "b", n = 1L),
                           r, c, counts = n, test = "survey"), "TRUE")
+})
+
+
+test_that("a variable or weight name that is not syntactic reaches every survey formula", {
+  b  <- svy_fixture(n = 1000)
+  b2 <- b
+  names(b2)[match(c("x", "num", "w"), names(b2))] <- c("Age group", "Income (EUR)", "Household weight")
+  withr::with_options(list(tabxplor.design_effect = TRUE), {
+    t1 <- get_test(tab(b, x, y, wt = w, pct = "row", test = TRUE))
+    t2 <- get_test(tab(b2, `Age group`, y, wt = `Household weight`, pct = "row", test = TRUE))
+    expect_false(is.na(t2$pvalue[1]))
+    expect_equal(t2$pvalue, t1$pvalue)
+    f1 <- get_test(tab(b, y, num, wt = w, test = TRUE))
+    f2 <- get_test(tab(b2, y, `Income (EUR)`, wt = `Household weight`, test = TRUE))
+    expect_false(is.na(f2$pvalue[1]))
+    expect_equal(f2$pvalue, f1$pvalue)
+  })
+  r1 <- tab_reg(b, y, predictors = c(x, z), wt = w)
+  r2 <- tab_reg(b2, y, predictors = c(`Age group`, z), wt = `Household weight`)
+  expect_equal(get_num(r2[[3]]), get_num(r1[[3]]))
 })
 
 

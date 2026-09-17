@@ -6,8 +6,11 @@
 # KEY CONSTRAINTS:
 #   - THE CSS IS TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole point of
 #     naming a class after a palette SLOT rather than a break value. It lets a document emit the
-#     stylesheet ONCE and reuse it for every table, and it makes class collisions impossible --
-#     `.p3` is the same shade in every table, whatever its color_breaks.
+#     stylesheet ONCE and reuse it for every table -- `.p3` is the same shade in every table,
+#     whatever its color_breaks. A COLOUR theme is the page's; a PUBLICATION palette is the table's
+#     (`print_ready` picks one per table), so every sheet also carries each publication palette,
+#     scoped to the `tx-<palette>` class its tables wear (tx_print_scope_sel()): one page can hold a
+#     colour table and a black-and-white one.
 #   - "auto" is a RENDER intent, never a palette. Every palette lookup funnels through
 #     tx_palette_theme(), or a key like "text_auto" gets built and errors on a length-0 vector.
 #   - WARNING: NO BORDER SHORTHAND, anywhere. A shorthand resets border-*-color to `currentColor` --
@@ -68,10 +71,11 @@ tx_resolve_theme <- function(theme) {
 #   "console" the palette the terminal is using                (auto-detected from the editor)
 # WARNING: reaching for the console pair on the export path (or vice-versa) silently picks the wrong
 # theme -- render_footer() once did this when its `theme` argument was NULL.
-# THE AIR UNDER A FINISHED TABLE, as one value both stylesheets read: tab_css() puts it on the table
-# itself, and jamovi's own wrapper moves it onto the scrollbox (jmv_results_style), so the gap sits
-# below a horizontal scrollbar rather than above it. "About one line of text" of the SURROUNDING
-# prose -- `em` here resolves against the page's font size, the table declaring none of its own.
+# THE AIR UNDER A FINISHED TABLE, as one value the whole stylesheet reads. It hangs off the
+# SCROLLBOX for an html table and off `.tabxplor-tab` itself for a markdown one (a fenced div, never
+# boxed): a margin inside a scrolling box would sit above the horizontal scrollbar instead of below
+# the whole thing. "About one line of text" of the SURROUNDING prose -- `em` here resolves against
+# the page's font size, the table declaring none of its own.
 #' @keywords internal
 #' @noRd
 TX_TAIL_SPACE <- "1.2em"
@@ -245,6 +249,46 @@ tx_css_rules <- function(chrome = TRUE, print_theme = "print_minimalistic") {
     # opaque cell paints over its row hover. `transparent` is what a cell has with no rule at all.
     add(".tabxplor-tab th,.tabxplor-tab td", "background-color",
         "transparent", "transparent", cp$bg)
+    # THE DATA BAR (set_bars()): a bar chart inside the table, TWO stacked pseudo-elements -- the
+    # GROOVE (::before, `.tx-bar`: square, the cell's whole width, saying how far a full bar reaches)
+    # and the BAR itself (::after, `.tx-bar-on`: rounded, bordered, as long as its value). A groove is
+    # what makes a short bar readable, and a bar cannot be its own: an element has one background.
+    # Only the LENGTH is inline, in the `--tx-bar` custom property the html engine writes per cell.
+    # ⚠ Paint order is TREE order at one z-index, so ::after covers ::before without a second layer;
+    #   `isolation:isolate` + `z-index:-1` puts the pair ABOVE the cell's own ground and UNDER its
+    #   digits, and the row hover, painted outside that stacking context, still reads through both.
+    # ⚠ `box-sizing:border-box`: the border is INSIDE the length, or a full bar would overhang its
+    #   groove by twice the border and a very short one would be all border.
+    # THE INK is `--tx-bar-ink`: the cell's own slot colour where it HAS one, so a bar agrees with the
+    # shade beside it (and a deviation still reads its direction), the chrome's `accent` where it has
+    # none -- which is the ordinary case, a bar column being a count or a share nobody grades. The
+    # groove takes no measure at all: it is the chrome's `track`, an ALPHA shadow of whatever ground
+    # the page has, so one declaration serves a white page and a dark one.
+    # ⚠ NOT the `.o3` fill hex: the DARK fills are light panels, not tints (see COLOR_RAMPS), and a
+    #   digit sitting half on the bar's edge could then have no readable ink -- `on_fill` decides for a
+    #   whole cell, never for half of one. A mix says the same thing and holds in both themes: the
+    #   border at full strength IS `.p3`, and the fill lightens a white page where it darkens a dark
+    #   one, the groove under it lifting the ground by the little the alpha says.
+    add(".tabxplor-tab td.tx-bar", "position", "relative", "relative", "relative")
+    add(".tabxplor-tab td.tx-bar", "isolation", "isolate", "isolate", "isolate")
+    add(".tabxplor-tab td.tx-bar", "--tx-bar-ink", "currentColor", "currentColor", "currentColor")
+    add(paste0(".tabxplor-tab td.tx-bar", notxt), "--tx-bar-ink", cl$accent, cd$accent, cp$accent)
+    # ⚠ one value per THEME, always: add() appends to three parallel vectors, so a NULL would drop a
+    #   row from one of them and shift every rule below it. A theme-blind declaration says itself 3x.
+    same <- function(sel, prop, v) add(sel, prop, v, v, v)
+    both <- ".tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after"
+    same(both, "content", '""');   same(both, "position", "absolute")
+    same(both, "z-index", "-1");   same(both, "box-sizing", "border-box")
+    same(both, "top", "2px"); same(both, "bottom", "2px"); same(both, "left", "0")
+    # the groove: the whole cell, square-cornered, no border -- it is a ground, not a shape.
+    same(".tabxplor-tab td.tx-bar::before", "right", "0")
+    add(".tabxplor-tab td.tx-bar::before", "background", cl$track, cd$track, cp$track)
+    # the bar: its own length, rounded, and a border of twice the groove's weight to carry the edge.
+    same(".tabxplor-tab td.tx-bar-on::after", "width", "var(--tx-bar,0%)")
+    same(".tabxplor-tab td.tx-bar-on::after", "border-radius", "3px")
+    same(".tabxplor-tab td.tx-bar-on::after", "border", "2px solid var(--tx-bar-ink)")
+    mix <- function(pct) paste0("color-mix(in oklch,var(--tx-bar-ink) ", pct, "%,transparent)")
+    add(".tabxplor-tab td.tx-bar-on::after", "background", mix(14), mix(14), mix(10))
     # THE one border-colour rule -- every border in this stylesheet takes its colour from here.
     # WARNING: that only holds because no rule below uses a border SHORTHAND (`border-right:1px solid`
     # would reset border-right-color to the CELL's palette hex). Longhands only; locked by
@@ -322,13 +366,52 @@ tx_cell_sel <- function(cls) paste0(".", cls, ",.tabxplor-tab .", cls)
 # A chrome value that may be absent: "" is how this builder spells "say nothing at this layer".
 tx_na_blank <- function(x) if (is.null(x) || is.na(x)) "" else x
 
+# the top-level parts of a selector list. ⚠ Only a comma OUTSIDE parentheses separates two: the
+# `:not(.p1,.p2)` / `:is(.o1,.o2)` lists are one part each, and splitting inside them would write a
+# prefix into the middle of a pseudo-class.
+tx_sel_parts <- function(s) {
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  depth <- cumsum((ch == "(") - (ch == ")"))
+  cut <- which(ch == "," & depth == 0L)
+  trimws(substring(s, c(1L, cut + 1L), c(cut - 1L, length(ch))))
+}
+
 # prefixes every part of a (possibly comma-separated) selector with every hook.
 # `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
 tx_hook_sel <- function(sel, hooks) {
   vapply(sel, function(s) {
-    parts <- trimws(strsplit(s, ",", fixed = TRUE)[[1]])
+    parts <- tx_sel_parts(s)
     paste0(as.vector(t(outer(hooks, parts, function(h, p) paste0(h, " ", p)))), collapse = ",")
   }, character(1), USE.NAMES = FALSE)
+}
+
+# DESIGN: a PUBLICATION palette is a fact of the TABLE, not of the page -- `print_ready` picks one per
+# table, and a page may show a colour table beside a black-and-white one -- so its rules are scoped by
+# the `tx-<palette>` class the table carries. `:root` + that class add (0,2,0) to every selector, where
+# a page hook adds at most (0,1,1): a scoped rule out-specifies every colour layer, whatever the
+# source order and however many sheets the page holds.
+tx_print_scope_sel <- function(sel, palette) {
+  host <- paste0(":root .tabxplor-tab.tx-", palette)
+  vapply(sel, function(s) {
+    parts <- tx_sel_parts(s)
+    own   <- grepl("^\\.tabxplor-tab($|[ .:])", parts)
+    out   <- ifelse(own, paste0(host, substring(parts, nchar(".tabxplor-tab") + 1L)),
+                    paste0(host, " ", parts))
+    paste0(unique(out), collapse = ",")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# the class a table carries for its palette: `tx-<palette>` on a publication palette, none on a colour
+# theme (a colour theme is the page's, see tx_print_scope_sel()).
+tx_palette_class <- function(theme) if (tx_is_print(theme)) paste0("tx-", theme[1]) else NULL
+
+# Every publication palette's layer, scoped to the tables that carry it (tx_print_scope_sel()).
+tx_print_scoped_layers <- function(chrome = TRUE) {
+  unlist(lapply(names(PRINT_PALETTES), function(p) {
+    r <- tx_css_rules(chrome = chrome, print_theme = p)
+    r$sel <- tx_print_scope_sel(r$sel, p)
+    tx_css_layer(r, "print")
+  }), use.names = FALSE)
 }
 
 tx_css_layer <- function(rules, which = c("light", "dark", "print"), hooks = NULL, indent = "") {
@@ -392,14 +475,42 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # ⚠ the `.tabxplor-tab table` half of the rule above keeps `margin:0`, and out-specifies this at
     # (0,1,1): a markdown div's INNER table must not add a second gap.
     paste0(".tabxplor-tab{margin-bottom:", TX_TAIL_SPACE, ";}"),
+    # THE SCROLLBOX -- the `<div>` tx_scrollbox() wraps every html table in. A table wider than the
+    # space it has must SCROLL; without this it widens the document and drags the prose sideways
+    # with it. Idle where the table fits, so nothing has to be decided at render time.
+    # ⚠ `width:max-content` WITH `max-width:100%`: the box hugs a narrow table (its trailing margin
+    # and any ground a host paints then stop at the table's own edge) and caps at the space
+    # available for a wide one, which is what makes the content overflow and the bar appear.
+    # ⚠ THE AIR MOVES ONTO THE BOX. `overflow-x` makes it a formatting context, so the table's own
+    # trailing margin would sit INSIDE it -- above the horizontal scrollbar rather than below the
+    # whole thing. The box takes TX_TAIL_SPACE and the table gives its own up.
+    # ⚠ `display:table;overflow:visible` is A HOST RESET, not decoration: pkgdown makes every table
+    # its own scroll box (`main table{display:block;overflow:auto}`), which would nest a second
+    # scrollbar inside ours AND cost the table its shrink-to-fit width. (0,2,0) beats its (0,0,2).
+    paste0(".tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;",
+           "overscroll-behavior-x:contain;margin-bottom:", TX_TAIL_SPACE, ";}"),
+    ".tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}",
+    # (on paper the box must not clip -- that declaration is in tx_print_block(), which owns the
+    # sheet's ONE @media print block.)
     # the table TITLE is ONE class on one of two elements: a `<div>` sibling emitted BEFORE the
     # <table>, or -- under bookdown, the one host that numbers tables by scanning for a `<caption>` --
     # a `<span>` inside a real `<caption>` (R/tab-render-html.R, tx_caption_host()). `width:0;
-    # min-width:100%` is the same idiom as `.tx-foot` below: otherwise a long title would SIZE a
-    # shrink-to-fit container (jamovi's `.tx-scrollbox`), and `display:block` is what lets the span
-    # honour it. Its colour (full-contrast) is added to the rule table below.
-    paste0(".tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;",
-           "white-space:normal;width:0;min-width:100%;}"),
+    # min-width:100%` is the same idiom as `.tx-foot` below: otherwise a long title would SIZE the
+    # shrink-to-fit container it sits in (jamovi's `.jmv-results-html`), and `display:block` is what
+    # lets the span honour it. Its colour (full-contrast) is added to the rule table below.
+    # ⚠ the title is emitted OUTSIDE the scrollbox, so it stays put while the table scrolls under it.
+    # ITALIC as well as bold: a table's title is a caption, not a heading -- it names the table
+    # rather than opening a section, and the italic is what says so at a glance on a page where a
+    # heading is also bold. Carried here since 2.0.1, from the courses' own stylesheet, which
+    # had been restating it under every document.
+    # `margin-top` for the same reason it is here rather than in a document's own sheet: a caption
+    # opens a table and belongs to it, so the air that separates the pair from the paragraph above
+    # is the TABLE's, in every medium. Without it the title sat flush against the previous line and
+    # read as its continuation. `margin-bottom: 0` keeps the caption tight against the table it
+    # names -- the gap must be above the pair, never inside it.
+    paste0(".tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;",
+           "font-size:110%;white-space:normal;width:0;min-width:100%;",
+           "margin-top:1.2em;margin-bottom:0;}"),
     # ⚠ `caption-side` is not decoration: BOOTSTRAP puts a caption at the BOTTOM, and tabxplor injects
     # bootstrap into every knitted document (tx_html_deps()) -- so without this the bookdown arm's
     # title would sit under its table. The padding reset is Bootstrap's too; text-align and colour
@@ -504,10 +615,10 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # the footnote must not SIZE the table: `width:0` is a definite size (contributes 0 to
     # max-content), and once the cell's own width is definite `min-width:100%` resolves and the text
     # fills it -- the same idiom as `.tabxplor-caption` above.
-    # `padding-bottom` is the strip a HOST's scrollbar sits in. pkgdown makes every table its own
-    # scroll box (`main table{display:block;overflow:auto}`), and an overlay scrollbar -- the default
-    # on Windows and on Chrome -- is drawn OVER the content at the box's bottom edge, which is the
-    # legend's last line. 5px is enough to clear it and too little to read as space.
+    # `padding-bottom` is the strip the SCROLLBAR sits in -- ours (`.tx-scrollbox`) on a table that
+    # overflows, a host's on one it boxes itself. An overlay scrollbar (the default on Windows and
+    # on Chrome) is drawn OVER the content at the box's bottom edge, which is the legend's last
+    # line. 5px is enough to clear it and too little to read as space.
     ".tabxplor-tab .tx-foot{width:0;min-width:100%;padding-bottom:5px;}",
     # a background HUGS its text (rounded, inline) rather than flooding the cell: a full fill reads as
     # a blocky grid and swallows the row hover.
@@ -546,7 +657,8 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     tx_css_layer(rules, if (tx_is_print(theme)) "print" else theme)
   }
 
-  paste0(c(static, body, tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
+  paste0(c(static, body, tx_print_scoped_layers(chrome),
+           tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
 }
 
 # WHICH publication palette a COLOURED page falls back to when it is printed. `TRUE` = the default
@@ -581,8 +693,14 @@ tx_print_rules_palette <- function(print_rules) {
 tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
   if (!isTRUE(print_rules)) return(character(0))
   inner <- c(
-    if (isTRUE(chrome))
+    if (isTRUE(chrome)) c(
       "  .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
+      # a data bar is a background too, and a scree bar is worth the ink on paper
+      "  .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}",
+      # A PRINTER HAS NO SCROLLBAR: left clipping, the box would simply lose the table's right-hand
+      # columns. ⚠ `overflow`, not `overflow-x` -- the computed `overflow-y:auto` that `overflow-x:
+      # auto` leaves behind forces `overflow-x` back to `auto`, and it would clip all the same.
+      "  .tx-scrollbox{max-width:none;overflow:visible;}"),
     # a print theme already IS the publication palette: re-stating it would be dead weight.
     if (!tx_is_print(theme)) c(
       tx_css_layer(rules, "print", indent = "  "),
@@ -626,8 +744,10 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' ````
 #'
 #' Every later [tab_html()] then emits classes only. Two things to know: with `css = FALSE` and **no**
-#' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` for the whole
-#' document.
+#' `tab_css()` call the tables render uncoloured; and one stylesheet means one colour `theme` for the
+#' whole document. A black-and-white table (`theme = "print_ready"` or a publication palette on the
+#' table's own call) still renders as such under it: every stylesheet carries the publication palettes,
+#' scoped to the tables that wear them.
 #'
 #' @section Restyling a table:
 #' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own
@@ -646,6 +766,11 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' background-coloured value), `.tx-span` (the variable-name header row), `.tx-foot` (the footnote).
 #' Rows carry `.tx-bt`/`.tx-bb`/`.tx-bb2` (top / bottom / thick-bottom rules).
 #'
+#' Each html table is wrapped in a `.tx-scrollbox`, which scrolls it sideways rather than let it
+#' widen the page. Its title stays outside, so it does not scroll away, and the `@media print` block
+#' lifts the clip (a printer has no scrollbar). To let a table widen the page on screen too:
+#' `.tx-scrollbox { overflow-x: visible; max-width: none; }`.
+#'
 #' @param theme `"light"`, `"dark"`, a black-and-white publication palette (`"print_ready"`,
 #'   `"print_marks"`, `"print_emphasis"`, `"print_minimalistic"`; `"bw"` is a synonym of the last --
 #'   see the section below), or -- opt-in -- `"auto"` to follow the reader's colour scheme (their
@@ -659,7 +784,9 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #'   and the colours are the point, or name a palette (`"print_emphasis"`) to print in that one.
 #'   `"print_marks"` cannot be used here: its marks are cell text, and a print rule can restyle a
 #'   page but not add characters to it. It adds roughly 1.5 KB to a `light`/`dark` stylesheet and
-#'   6 KB to an `"auto"` one.
+#'   6 KB to an `"auto"` one. `FALSE` drops the whole block, including the two declarations that are
+#'   not about colour: the one that makes a background fill reach the paper, and the one that stops
+#'   the scrollbox clipping a wide table there.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`): the text channel always uses the text palette, and the colour CHANNEL is chosen
 #'   by `color = c(text, background)` (see [tab()]).

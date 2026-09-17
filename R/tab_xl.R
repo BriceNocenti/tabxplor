@@ -192,10 +192,11 @@ tab_xl <-
     # graceful degrade: an unreadable input writes as a raw frame (+ a message) instead of crashing.
     rv <- if (is.data.frame(tabs)) tab_render_vars(tabs) else list(degrade = FALSE)
     if (isTRUE(rv$degrade)) {
-      tab_degrade_inform(rv$reason)
+      tab_degrade_inform(rv)
       xl_finish(function(p) xlb_write_xlsx(tibble::as_tibble(tabs), p), path, replace, open)
       return(invisible(tabs_base))
     }
+    tabs <- tx_with_footer_tabs(tabs)   # subordinate tables become sheets/blocks of their own
     if (is.data.frame(tabs)) tabs <- list(tabs)
 
     # transpose is a render-model flip AFTER materialise (tx_transpose_render), so a transposed `tab`
@@ -208,7 +209,7 @@ tab_xl <-
     prep <- tab_export_prep(
       tabs, backend = "xl", drop_tab_vars = remove_tab_vars,
       list_method = TRUE, compute = compute, transpose = transpose,
-      theme = theme, var_names = o$var_names,
+      theme = theme, var_names = o$var_names, lang = lang,
       # `brk = "\n"` is what a wrapped Excel cell honours; spaces stay ordinary (the U+202F
       # substitution is only there to stop a BROWSER re-breaking what was wrapped -- Excel does not).
       wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 1,
@@ -218,7 +219,7 @@ tab_xl <-
     rd <- prep$tables
 
     if (any(purrr::map_lgl(rd, ~ isTRUE(.$vars$degrade)))) {
-      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars$reason))
+      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars))
       xl_finish(function(p) xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), p),
                 path, replace, open)
       return(invisible(tabs_base))
@@ -253,36 +254,36 @@ tab_xl <-
         sheets
       }
 
-    # subtext (+ colour legend) computed once. A workbook cell holds one line, so the render model's
-    # `subtext` is newline-flattened here.
-    subtext <- purrr::map(prep$tables, "subtext") |>
+    # THE WHOLE REGION as RICH-TEXT run lines from the shared builder, in FOOTER_BLOCKS' own order --
+    # the user's own lines included, so Excel reads the footer in the order every other medium does.
+    # Each break-word carries its palette hex + bold while the rest stays plain black; the plain text
+    # is derived from the runs, byte-for-byte, and drives the row geometry below.
+    # A workbook cell holds one line, so a line carrying a newline is flattened here.
+    legend_runs <- purrr::map(seq_along(tabs_src), function(i) {
+      rd <- prep$tables[[i]]
+      rd_blocks(tabs_src[[i]], "runs", theme = theme, want_legend = isTRUE(rd$want_legend),
+                subtext = rd$subtext, lang = lang, host = !isTRUE(rd$subordinate))
+    })
+    subtext <- purrr::map(legend_runs, ~ purrr::map_chr(
+      ., function(line) paste0(purrr::map_chr(line, "text"), collapse = ""))) |>
       purrr::map(~ gsub(" +", " ", gsub("\\\n", " ", ., perl = TRUE), perl = TRUE))
-    # the whole footer (weight -> Model: -> colour legend -> stars) as RICH-TEXT run lines from the
-    # shared builder, so each break-word carries its palette hex + bold while the rest stays plain
-    # black; its plain text (derived from the runs, byte-for-byte) merges into `subtext` for geometry,
-    # and the legend occupies the first `length(legend_runs)` subtext rows, overwritten below.
-    legend_runs <- purrr::map(tabs_src, function(t)
-      rd_footer(t, "runs", theme = theme, want_legend = isTRUE(color_legend), lang = lang))
-    if (any(purrr::map_lgl(legend_runs, ~ length(.) > 0L))) {
-      legend_plain <- purrr::map(legend_runs, ~ purrr::map_chr(
-        ., function(line) paste0(purrr::map_chr(line, "text"), collapse = "")))
-      subtext <- purrr::map2(subtext, legend_plain, ~ c(.y, .x))
-    }
 
     if (missing(titles)) {
       # a regression table titles itself from its `meta` (family + outcome + predictors, or outcome +
       # reference + effect for a comparison); a NAMED tabxplor_tabs (several row_vars -> names = the
       # row_vars) uses its element names; a plain table gets the vars-derived "X by Y" title.
-      base_nm <- names(tabs_base)
-      named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs) &&
-        all(nzchar(base_nm))
+      # the EXPANDED list's names: tx_with_footer_tabs() keeps each member's own and gives its
+      # subordinates none, so a named member still titles itself while a subordinate falls through.
+      base_nm <- names(tabs) %||% rep("", length(tabs))
+      named_tabs <- inherits(tabs_base, "tabxplor_tabs") && length(base_nm) == length(tabs)
       # shared rd_caption() (user caption -> set_caption() -> reg auto-title), with xl's own two extra
       # fallbacks passed as the closure -- one caption rule, one place.
       titles <- purrr::pmap_chr(
         list(prep$tables, tabs_src, row_vars, col_vars_plain, tab_vars, seq_along(tabs)),
         function(rd, t, rv, cv, tv, i) {
           cap <- rd_caption(rd, caption, fallback = function()
-            if (named_tabs) base_nm[[i]] else tab_get_titles(t, rv, cv, tv))
+            if (named_tabs && nzchar(base_nm[[i]])) base_nm[[i]]
+            else tab_get_titles(t, rv, cv, tv))
           if (is.null(cap)) NA_character_ else cap
         })
     } else {
@@ -298,10 +299,8 @@ tab_xl <-
     # subtext + 6 blank, +1 for the col_var spanning-name header row); absolute geometry is derived
     # from `start` in the plan builder. Observed-curve shape tables (below) join the same offset, or a
     # second table on the sheet would land on top of one.
-    shapes <- purrr::map(tabs_src, function(t)
-      if (is_tab(t) && tab_wants_shape_table(t, "xl")) reg_shape_table(t) else NULL)
-    shape_n <- purrr::map_int(shapes, function(st)
-    if (is.null(st)) 0L else nrow(st) + length(attr(st, "note")) + 2L)
+    shapes  <- purrr::map(tabs_src, footer_notes, medium = "xl")
+    shape_n <- purrr::map_int(shapes, note_xl_rows)
     # model-check pictures are drawn BEFORE the geometry too, so their height joins the same offset.
     check_imgs <- xl_check_images(tabs_src, check, data, theme = theme, lang = lang)
     check_n    <- purrr::map_int(check_imgs, xl_check_rows)
@@ -336,13 +335,17 @@ tab_xl <-
       text_size_headers = text_size_headers,
       text_size_subtext = text_size_subtext,
       ratio_cells       = ratio_cells,           # what a multiplicative cell holds: fold/raw/text
-      theme             = theme                  # format() needs it for a publication palette's marks
+      theme             = theme,                 # the chrome, the fills, the faces
+      # THE THEME THE CELL SUFFIX READS, which is not always the table's: a publication palette MARKS
+      # its cells, and a mark is the cell's own signal rather than an aside -- so `color = FALSE` takes
+      # it away with the colour (fmt_cell_suffix() draws nothing at all on a NULL theme).
+      marks             = if (isTRUE(color)) theme else NULL
     )
 
     # === Per-table plans (pure: raw values + numFmt codes + colour slots + font plan + geometry) ===
     plans <- purrr::pmap(
       list(tab = tabs, roles = roles, ann = purrr::map(rd, "ann"),
-           bold_rows = purrr::map(rd, "bold_rows"),
+           bold_rows = purrr::map(rd, "bold_rows"), bars = purrr::map(rd, "bars"),
            col_var_header = purrr::map(rd, "col_var_header"),
            start = start, sheet = sheet, title = titles, subtext = subtext, shape = shapes,
            check_imgs = check_imgs,
@@ -530,7 +533,7 @@ XL_BOLD_RATIO <- 1.12
 xl_text_width <- function(x) {
   x <- x[!is.na(x) & nzchar(x)]
   if (!length(x)) return(0L)
-  max(nchar(unlist(strsplit(x, "[\n\r]"), use.names = FALSE)), 0L)
+  max(tx_line_width(x), 0L)
 }
 
 # the width vector for one table, one entry per sheet column: fmt columns -- the widest rendered
@@ -543,6 +546,11 @@ XL_HEAD_LINES <- 2L
 # smaller size (8pt) keeps a long tag inside the figures above it, and its angle brackets -- the
 # console's own notation -- are excluded from the count.
 XL_UNIT_SIZE <- 8
+
+# The col_var SPAN row's own size. Like the unit row it is a label ABOUT the columns, not a column
+# header, so it is set small and plain -- and it wraps, since a merged cell is the one place Excel
+# will not find the room by itself.
+XL_SPAN_SIZE <- 8
 # `bold`: one logical per DATA row per column -- the cells Excel will draw bold (xl_build_styles's
 # own set: the reference rows and columns, the variable-name column, a measure's own face). NULL =
 # nothing bold, which is what a caller that has not computed the styles yet gets.
@@ -637,8 +645,8 @@ xl_prose_height <- function(text, span_px, size = 9) {
   lines * (size * 1.28) + 2
 }
 
-# The shape table as (row, col, span, text) cells: a header row, one row per curve, then the note --
-# the same four columns every other medium prints, in the order reg_shape_table() declares.
+# A NOTE as (row, col, span, text) cells: a header row, one row per row of the note, then its own
+# lines -- the same columns every other medium prints, in the order the note declares.
 # THE SHAPE TABLE BORROWS THE MAIN TABLE'S GRID, so it must be laid over it rather than into it: the
 # first column holds a formula and takes the whole INDEX BLOCK, landing under the row labels, and
 # every other column takes TWO data columns, a data column being one number wide -- except the LAST,
@@ -648,7 +656,7 @@ xl_prose_height <- function(text, span_px, size = 9) {
 # column count. On a narrow table it runs one column past the right edge, which costs nothing (it
 # draws no border and nothing else sits there) where clamping would cut the one cell that cannot
 # wrap or shorten.
-xl_shape_cells <- function(shape, row0, index_cols = 1L) {
+note_xl <- function(shape, row0, index_cols = 1L) {
   if (is.null(shape) || nrow(shape) == 0L) return(NULL)
   hd <- attr(shape, "headers"); nt <- attr(shape, "note")
   spans <- c(index_cols, rep(2L, max(0L, length(hd) - 2L)), if (length(hd) > 1L) 3L)
@@ -665,7 +673,7 @@ xl_shape_cells <- function(shape, row0, index_cols = 1L) {
 
 tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, sheet, title, subtext,
                             shape = NULL, check_imgs = NULL, legend_runs = list(), colwidth, o,
-                            transposed = FALSE) {
+                            transposed = FALSE, bars = NULL) {
   n   <- nrow(tab)
   ncl <- ncol(tab)
   # a col_var spanning-NAME header row sits above the level-name header (whenever the table has a
@@ -684,6 +692,11 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   unit_row   <- header_row + 1L                  # used only if has_unit
   data_row0  <- header_row + unit_off            # data row i -> i + data_row0
   data_rows  <- seq_len(n) + data_row0
+  # An UNGRADED row (a base count, a share, a test -- ROW_KINDS$graded, R/row-model.R) is not bolded
+  # by structure, on the row axis or on the column one: a reference COLUMN would otherwise shout a
+  # summary row that html leaves plain.
+  graded_rows <- if (isTRUE(transposed)) data_rows
+                 else data_rows[row_kind_graded(tab_row_roles(tab))]
   last_row   <- data_row0 + n
 
   fmt_cols    <- roles$fmt_cols
@@ -716,7 +729,8 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
   n_rows_tab <- nrow(tab)
   bold_of <- purrr::map(seq_len(ncl), function(j) {
     b <- seq_len(n_rows_tab) %in% bold_rows
-    if (j %in% ref_cols || j %in% unname(roles$var_name_col)) b <- rep(TRUE, n_rows_tab)
+    if (j %in% ref_cols) b <- seq_len(n_rows_tab) %in% (graded_rows - data_row0)
+    if (j %in% unname(roles$var_name_col)) b <- rep(TRUE, n_rows_tab)
     a <- ann[[names(tab)[[j]]]]$bold
     if (!is.null(a)) b <- b | rep_len(a, n_rows_tab)
     b
@@ -739,19 +753,17 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
 
   # label runs lifted to ABSOLUTE sheet rows: `label_merges` skips length-1 runs (Excel rejects a
   # 1-cell "merge"); `vname_runs` are the name column's, the only ones that also rotate.
-  label_merges <- purrr::imap(roles$label_runs, function(run, cl) {
+  label_merges <- purrr::map2(roles$label_runs, unname(roles$label_cols), function(run, j) {
     at <- which(run$show & run$span > 1L)
-    tibble::tibble(col = match(cl, names(tab)),
-                   row1 = at + data_row0, row2 = at + run$span[at] - 1L + data_row0)
+    tibble::tibble(col = j, row1 = at + data_row0, row2 = at + run$span[at] - 1L + data_row0)
   })
   label_merges <- if (length(label_merges)) dplyr::bind_rows(label_merges)
                   else tibble::tibble(col = integer(), row1 = integer(), row2 = integer())
   # which names turn is the prep's shared decision (tab_vname_plan), read here and by the html engine
-  # so the two media agree.
-  vname_runs   <- purrr::imap(roles$vname_plans %||% list(), function(p, cl) {
-    j   <- match(cl, names(tab))
-    run <- roles$label_runs[[cl]]
-    at  <- if (is.null(run) || is.na(j)) integer(0) else which(run$show & run$span > 1L & p$vert)
+  # so the two media agree. `vname_plans` is parallel to `label_cols`, NULL where a column has none.
+  vname_runs   <- purrr::pmap(list(roles$vname_plans %||% list(), roles$label_runs,
+                                   unname(roles$label_cols)), function(p, run, j) {
+    at <- if (is.null(p) || is.null(run)) integer(0) else which(run$show & run$span > 1L & p$vert)
     tibble::tibble(col = rep(j, length(at)), row1 = at + data_row0,
                    row2 = at + run$span[at] - 1L + data_row0)
   })
@@ -791,11 +803,36 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
       txt <- format(cc, special_formatting = TRUE, na = "", stars = FALSE, pad = fig_space)
       tibble::tibble(col = as.integer(ci), row = hit + data_row0, text = txt[hit])
     }))
-  for (cl in names(roles$label_cols)) {
-    if (!cl %in% names(xl_data)) next
-    xl_data[[cl]] <- as.character(xl_data[[cl]])
-    xl_data[[cl]][!roles$label_runs[[cl]]$show] <- NA_character_
+  for (k in seq_along(roles$label_cols)) {
+    j <- roles$label_cols[[k]]
+    if (is.na(j) || j > length(xl_data)) next
+    xl_data[[j]] <- as.character(xl_data[[j]])
+    xl_data[[j]][!roles$label_runs[[k]]$show] <- NA_character_
   }
+
+  # THE DATA BAR (set_bars()), Excel's half: one dataBar per barred column, over its DATA rows only,
+  # bounded by the very ceiling the prep resolved (it rides on the fractions as `max`). Name -> index
+  # is done HERE and nowhere earlier: this `tab` is the materialised one, aside columns included.
+  # ⚠ THE GATE, one rule: Excel draws from the number IT holds, so the bar is written only where that
+  #   number IS the one html measured -- which excludes a negative value (html reads a magnitude, a
+  #   cfvo cannot) and a multiplicative column (the cell holds the signed fold, not get_num()).
+  #   Anything else would put a bar of one length under a figure of another.
+  databars <- purrr::list_rbind(purrr::imap(bars %||% list(), function(frac, nm) {
+    ci <- match(nm, names(tab)); m <- attr(frac, "max")
+    if (is.na(ci) || is.null(m) || !is_fmt(tab[[ci]])) return(NULL)
+    at <- which(!is.na(frac) & frac > 0)
+    if (!length(at)) return(NULL)
+    v <- xl_data[[ci]]
+    if (!is.numeric(v) || !isTRUE(all.equal(unname(v[at]), unname(get_num(tab[[ci]])[at]))) ||
+        any(v[at] < 0)) {
+      tx_inform_once(paste0("bars_xl_", nm), c(
+        "No data bar in Excel for {.val {nm}}.",
+        i = "A bar reads a magnitude, and Excel can only draw the value the cell holds."))
+      return(NULL)
+    }
+    tibble::tibble(col = as.integer(ci), dims = xl_coalesce(rep(ci, length(at)), at + data_row0),
+                   max = as.double(m))
+  }))
 
   # fold significance stars into the numFmt literal (0.0%\*\*\*), keeping the cell a real number; a
   # "TEXT"-coded column (ci / OR) is written as a string with Excel's "@" text format; NA codes stay
@@ -815,7 +852,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     code <- xl_code(col)
     # the SAME suffix format() writes into the text, so Excel and every other backend annotate a cell
     # identically -- and a `contrib` column, which stars nothing, gets nothing here either.
-    st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$theme)
+    st   <- fmt_cell_suffix(col, stars = TRUE, theme = o$marks)
     val  <- !is.na(code) & code != "TEXT"
     if (any(val & nzchar(st))) {
       # an unstarred "" is width 0, so max() over every value cell IS the column-max star width.
@@ -880,7 +917,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
                          color = tx_chrome_hex(o$theme)$grey),
     # a variable name is a heading, so the name column is bold throughout, as html has always done.
     mk_src(c(header_row, data_rows), roles$var_name_col, bold = TRUE),
-    mk_src(c(header_row, data_rows), ref_cols, bold = TRUE),                     # reference cols
+    mk_src(c(header_row, graded_rows), ref_cols, bold = TRUE),                   # reference cols
     mk_src(ref_rows, ref_row_cols, bold = TRUE),                                 # reference rows
     mk_src(start, 1L, bold = TRUE, size = 12),                                   # title
     mk_src(subtext_rows, 1L, size = o$text_size_subtext),                        # subtext
@@ -933,12 +970,14 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     sheet = sheet,
     title = title, title_row = start,
     subtext = subtext_clean, subtext_row = last_row + 1L,
-    # header row, one row per curve, then the note -- one blank line under the subtext block.
-    shape_cells = xl_shape_cells(shape, last_row + length(subtext_clean) + 2L,
-                                 index_cols = max(1L, length(txt_cols))),
+    # each note: a header row, one row per row of it, then its own lines -- one blank line under the
+    # subtext block, and one between two notes.
+    shape_cells = note_xl_all(shape, last_row + length(subtext_clean) + 2L,
+                              index_cols = max(1L, length(txt_cols))),
     check_imgs = check_imgs,
-    check_row = last_row + length(subtext_clean) + 2L +
-      (if (is.null(shape)) 0L else nrow(shape) + 3L),
+    # ⚠ ONE arithmetic for the block's height (note_xl_rows), shared with the sheet-stacking budget:
+    # two of them drifted, and a model-check picture landed on top of a note.
+    check_row = last_row + length(subtext_clean) + 2L + note_xl_rows(shape),
     # the legend runs occupy the FIRST subtext rows (merged above), overwritten with rich text below.
     legend_runs = legend_runs, legend_row = last_row + 1L,
     # a text-mode column (ci = "cell" / OR) is written as its format() display STRING; every other
@@ -961,6 +1000,7 @@ tab_xl_plan_one <- function(tab, roles, ann, bold_rows, col_var_header, start, s
     # one narrow column; a kept tab_var is merged but never rotated -- its values are levels.
     label_merges = label_merges, vname_col = unname(roles$var_name_col),
     col_widths = col_widths,
+    databars = databars,                               # set_bars(): one dataBar range per barred column
     spark_cells = spark_cells,                         # base-count cells holding a sparkline, not a count
     text_cells = text_cells,                           # cells no number can hold (a `{ci}`, an `{n_range}`)
     styles = styles, numfmt = numfmt
@@ -1278,12 +1318,12 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
   # --- styles: one composed xf (font + fill + border + alignment) per distinct cell style ---
   xl_apply_styles(wb, s, plan$styles, reg)
 
-  # style the col_var spanning-name row (bold + centred); wrap_text when any span carries a
-  # sub-population line, so the two lines show.
+  # style the col_var spanning-name row: centred, small and PLAIN (a variable name labels the columns,
+  # it is not one of their headers), and always wrapped -- Excel never auto-fits a merged cell, so
+  # without this a name longer than its block is simply cut off.
   if (!is.na(plan$span_row)) {
-    span_wrap <- if (any(nzchar(plan$header_runs$groups))) "1" else ""
-    xf <- reg$xf_id(o$font_text, o$text_size_headers, TRUE, NA_character_, NA_character_,
-                    0L, 0L, 0L, 0L, "center", "", span_wrap, "")
+    xf <- reg$xf_id(o$font_text, XL_SPAN_SIZE, FALSE, NA_character_, NA_character_,
+                    0L, 0L, 0L, 0L, "center", "", "1", "")
     xlb_set_cell_style(wb, s, paste0(xl_cell(plan$span_row, 1L), ":", xl_cell(plan$span_row, plan$ncl)), xf)
   }
 
@@ -1305,6 +1345,15 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     }
   }
 
+  # --- the data bars: a conditional-format pass of their own (a dataBar is a range property, so it
+  #     cannot ride the precomposed xf the styles pass applies), reading the accent from the one
+  #     chrome resolver -- a publication theme therefore exports a grey bar. ---
+  if (!is.null(plan$databars) && nrow(plan$databars)) {
+    ink <- tx_chrome_hex(tx_palette_theme(o$theme))$accent
+    purrr::pwalk(plan$databars, function(col, dims, max)
+      xlb_databar(wb, s, dims, ink, 0, max))
+  }
+
   # --- column widths / row heights: set per SHEET (pmax over every table stacked on it), not per table ---
   w <- widths %||% plan$col_widths
   # a ROTATED column header needs width for its turned line rather than for its text
@@ -1320,9 +1369,12 @@ xl_write_table <- function(wb, plan, o, reg, widths = NULL) {
     at   <- cumsum(c(1L, utils::head(hr$spans, -1L)))
     span_w <- vapply(seq_along(at), function(k)
       sum(w[at[[k]]:min(length(w), at[[k]] + hr$spans[[k]] - 1L)]), double(1))
+    # in the span row's OWN font: the widths are in base-font characters, and a smaller face fits
+    # proportionally more of them per column.
+    span_w <- span_w * as.double(o$text_size) / XL_SPAN_SIZE
     ln <- max(xl_row_lines(hr$labels, pmax(1, span_w)) +
                 as.integer(nzchar(hr$groups)))
-    if (ln > 1L) xlb_row_heights(wb, s, plan$span_row, ln * (as.double(o$text_size_headers) * 1.35))
+    if (ln > 1L) xlb_row_heights(wb, s, plan$span_row, ln * (XL_SPAN_SIZE * 1.35))
   }
 
   invisible(wb)
@@ -1340,21 +1392,12 @@ tab_title_rows_first <- function(tabs) {
   length(dir) > 0 && all(dir == "col")
 }
 
-# Name a variable set for a title: every name up to `max`, then "+N more" -- never "multi", which named
-# nothing, and never a bare index. Placeholders and empties drop out.
-tab_title_names <- function(x, max = 2) {
-  x <- as.character(x)
-  x <- x[is_real_col_var(x)]
-  if (length(x) == 0) return("")
-  if (length(x) <= max) return(paste(x, collapse = ", "))
-  paste0(paste(x[seq_len(max)], collapse = ", "), " +", length(x) - max, " more")
-}
-
-tab_get_titles <- function(tabs, row, col, tab, max = 2) {
+tab_get_titles <- function(tabs, row, col, tab, max = 3) {
   # the DEPENDENT variable is named first ("ROCK, JAZZ by DIPLOM" reads as the thing described, then
   # what it is broken down by), which under pct="row" is the col_vars.
-  rows <- tab_title_names(row, max)
-  cols <- tab_title_names(col, max)
+  nv   <- gettext("variables")
+  rows <- tab_title_names(row, max, noun = nv)
+  cols <- tab_title_names(col, max, noun = nv)
   swap <- tab_title_rows_first(tabs)
   a    <- if (swap) rows else cols     # the outcome axis, named first
   b    <- if (swap) cols else rows
@@ -1362,7 +1405,7 @@ tab_get_titles <- function(tabs, row, col, tab, max = 2) {
           else if (!nzchar(a)) b
           else if (!nzchar(b)) a
           else paste(a, "by", b)
-  tabn <- if (missing(tab)) "" else tab_title_names(tab, max)
+  tabn <- if (missing(tab)) "" else tab_title_names(tab, max, noun = nv)
   if (nzchar(tabn)) res <- paste0(res, " (tabbed by ", tabn, ")")
   res
 }

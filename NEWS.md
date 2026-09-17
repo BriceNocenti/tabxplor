@@ -1,3 +1,71 @@
+# tabxplor 2.0.1
+
+## New features
+
+* **The footer under a table is a template you can edit.** Everything printed there — the weight
+  line, the colour legend, the significance-stars key — is a `<placeholder>` in the table's
+  `subtext`, and everything you write is a line: the order of the lines is the order of the footer.
+  `get_subtext()` shows it, `set_subtext()` replaces it, and dropping `<legend>` drops the legend, in
+  the console too. `set_legend_words()` re-states what that legend calls a measure, for a table
+  grading the same ladder on another quantity. See `?tabxplor-footer`.
+
+* **A note, or a second table, under a table.** `set_footer_tabs()` takes a `tabxplor_tab` and
+  renders it as a table, or any other data.frame and renders it as a grey note; `tab_note()` sets
+  that note's headers, alignment and footnote.
+
+* **Data bars.** `set_bars()` draws a bar chart inside the table — in html and in Excel — scaled to
+  the column's own largest data cell, or to a ceiling you state.
+
+* **`options(tabxplor.print = "md")`.** A bare table prints as markdown instead of in the console or
+  the Viewer, which is what a Quarto or R Markdown notebook knitted without pandoc needs.
+
+* **A wide html table scrolls instead of widening the page**, in a document, on a pkgdown site, in
+  the Viewer and in jamovi alike. Its title stays outside the box, and printing lifts the clip.
+
+* **`tab_html(cells = )` — write back what `get_data = TRUE` reads.** Hand back the same data.frame
+  with some cells edited and each edit is written verbatim into its `<td>`, keeping the cell's
+  colours, alignment and tooltip. This is the supported way to splice an input box, a link or a badge
+  into a tabxplor table.
+
+* **The jamovi module is now built for macOS (Apple silicon and Intel), Windows and Linux**, on both
+  jamovi lines, and published as downloadable files. It is installed by sideloading, not from
+  jamovi's library: the procedure and the links are in the README and on the package website.
+
+## Minor improvements and fixes
+
+* **Two bugs with weighted data, both silent.** A variable whose name is not syntactic (`Age group`,
+  `Household weight`) broke every formula built from names: with `design_effect = TRUE` the
+  design-based tests returned `NA` with no message, and `tab_reg(wt = )` stopped on a parse error.
+
+* **A `subtext` written by a user is escaped in html.** It is now shown, never executed — which
+  matters for a table shared inside jamovi, where an html result can run scripts.
+
+* **Significance stars are now `.05` / `.01` / `.001`**, the discipline's usual scale, instead of
+  `.10` / `.05` / `.01`. At the default confidence level a greyed cell can therefore no longer carry
+  a star.
+
+* **`display = "odds"`** prints the odds behind a percentage — the middle rung between a percentage
+  and an odds ratio.
+
+* **Options set in `.Rprofile` are no longer overwritten when the package loads.** `tabxplor.print`
+  and `tabxplor.theme` set before `library(tabxplor)` now hold.
+
+* A regression's multiplicative count measure is named `RoM` (ratio of means) rather than `IRR`, so a
+  column is headed `Model_RoM`; `measure = "IRR"` is still accepted.
+
+* The weight footer no longer mentions intervals and tests that are not in the table: a weighted
+  table showing none of them prints only "Weighted by `<wt>`."
+
+* **A `col_var` span header is wrapped and compacted like every other header.** It was the one
+  header no rule owned, so a long variable name widened the whole block. One visible consequence:
+  its spaces are now narrow no-break spaces in html, as every other header's already were — code
+  that matches a span's text literally has to allow for that.
+
+* A host table and its subordinate share one footer, instead of printing the colour legend twice in
+  html and not at all in the console.
+
+* French translations: every multiplicative comparison that is not an odds ratio now reads
+  *ratio*, and six mistranslated strings that were printing in English are fixed.
 
 # tabxplor 2.0.0
 
@@ -36,7 +104,8 @@
 * **One display grammar for both producers.** Named layouts (`"est"`, `"est_ci"`, `"est_base"`, …)
   built on `{}` tokens — `display = "{pct} (n={n})"` — where `{est}` is whatever the column estimates
   and `{base}` the level it sits on. It is post-hoc: `set_display()` on a finished table gives the
-  same table as asking at build time. Every cell of a percentage table now carries its odds ratio.
+  same table as asking at build time. Every cell of a percentage table now carries its odds ratio,
+  and `display = "odds"` prints the odds it is a ratio of.
 * **`shape =` decides how a number enters a table**: quantile groups, bands at the mean and one
   standard deviation either side, one level per value, or a `"log"` / `"sqrt"` transformation. A
   numeric `row_vars` / `tab_vars` is grouped rather than exploded; a mean cell shows `49 (cv 36%)`.
@@ -147,8 +216,8 @@
 
 * The step-by-step chain warns on every call. What goes away is the *chaining API*, not the
   statistics: `tab()` and `tab_num()` compute the same numbers, in one pass.
-* `tab_prepare()`, `complete_partial_totals()` and `fct_recode_helper()` will become internal or be
-  removed; `tab_prepare()`'s work is done by `tab()` itself.
+* `tab_prepare()` and `complete_partial_totals()` will become internal or be removed; `tab_prepare()`'s
+  work is done by `tab()` itself.
 
 ### Removed (now an error)
 

@@ -8,6 +8,61 @@ items:
     - name: html_table
       title: Table
       type: Html
+      # The works this table rests on, shown in jamovi's own References list; the entries are
+      # in jamovi/00refs.yaml. ⚠ HERE and not in the .a.yaml: a `refs:` belongs to a RESULT
+      # ELEMENT, and the analysis schema is additionalProperties: false.
+      refs:
+        - tabxplor
+        - survey
+        - MASS
+        - nnet
+        - VGAM
+        - svyVGAM
+        - marginaleffects
+        - brant
+        - brant-test
+        - wilson
+        - katz
+        - woolf
+    # `clearWith` = the options that make this table say something else, so an edit to one blanks it
+    # until the run repaints it. The DEFAULT is "*" -- every option, the export path and the file name
+    # included -- which made a table blink for an edit that cannot change a number. The list is
+    # therefore every option of the analysis EXCEPT the export block (dev/tests: the two sets are
+    # checked against jmvtab{,reg}.a.yaml, so a new option cannot be forgotten here).
+      clearWith:
+        - outcome
+        - predictors
+        - tab_vars
+        - wt
+        - family
+        - link
+        - outcome_level
+        - trials
+        - effect
+        - measure
+        - empirical
+        - models
+        - na
+        - run_compare
+        - levels_order
+        - levels_collapse
+        - crosses
+        - ref_levels
+        - shape
+        - multiplier
+        - conf_level
+        - ci_method
+        - stars
+        - color
+        - color_signif
+        - display
+        - "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
+        - digits
+        - cleannames
+        - subtext
+        - tab_theme
+        - wrap_rows
+        - wrap_cols
 
     # Hidden state carrier for the live fit cache. Only Image elements persist a `$state` across the
     # engine reset, so this 0-size Image hosts the (gzip-RDS'd) store of fit digests / raw fits. It

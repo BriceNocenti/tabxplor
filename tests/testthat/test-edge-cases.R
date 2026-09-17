@@ -203,18 +203,25 @@ degrade_shapes <- list(
 empty_tab <- dplyr::filter(tb10c, FALSE)
 
 
-testthat::test_that("tab_kable degrades gracefully (message, no error)", {
+# a frame that never was a tabxplor table renders plain IN SILENCE -- a plain table is what was asked;
+# a tabxplor table that still degrades says why.
+degrade_says <- c(plain_df = FALSE, no_fmt = FALSE, no_factor = TRUE)
+
+testthat::test_that("tab_kable degrades gracefully (no error; a message only for a tabxplor table)", {
   for (nm in names(degrade_shapes)) {
-    testthat::expect_message(out <- tab_kable(degrade_shapes[[nm]]), "skipped", info = nm)
+    if (degrade_says[[nm]])
+      testthat::expect_message(out <- tab_kable(degrade_shapes[[nm]]), "skipped", info = nm)
+    else testthat::expect_no_message(out <- tab_kable(degrade_shapes[[nm]]))
     testthat::expect_s3_class(out, "knitr_kable")
   }
 })
 
 
-testthat::test_that("tab_md degrades gracefully (message, no error)", {
+testthat::test_that("tab_md degrades gracefully (no error; a message only for a tabxplor table)", {
   for (nm in names(degrade_shapes)) {
-    testthat::expect_message(out <- tab_md(degrade_shapes[[nm]], print = FALSE),
-                             "skipped", info = nm)
+    if (degrade_says[[nm]])
+      testthat::expect_message(out <- tab_md(degrade_shapes[[nm]], print = FALSE), "skipped", info = nm)
+    else testthat::expect_no_message(out <- tab_md(degrade_shapes[[nm]], print = FALSE))
     testthat::expect_type(out, "character")
   }
 })
@@ -231,8 +238,9 @@ testthat::test_that("tab_xl degrades gracefully (writes the raw frame, no error)
   testthat::skip_if_not_installed("openxlsx2")
   for (nm in names(degrade_shapes)) {
     p <- withr::local_tempfile(fileext = ".xlsx")
-    testthat::expect_message(tab_xl(degrade_shapes[[nm]], path = p, open = FALSE),
-                             "skipped", info = nm)
+    if (degrade_says[[nm]])
+      testthat::expect_message(tab_xl(degrade_shapes[[nm]], path = p, open = FALSE), "skipped", info = nm)
+    else testthat::expect_no_message(tab_xl(degrade_shapes[[nm]], path = p, open = FALSE), message = "skipped")
     testthat::expect_true(file.exists(p))
   }
 })

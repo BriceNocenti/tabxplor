@@ -46,7 +46,7 @@
             "<b>Models and references</b>": [
                 "<b>Modèles et références</b>"
             ],
-            "<b>Models comparison and interactions</b>": [
+            "<b>Model comparison and interactions</b>": [
                 "<b>Interactions et comparaison de modèles</b>"
             ],
             "<b>n_min = <i>(hide rows/cols with small n)</i></b>": [
@@ -55,7 +55,7 @@
             "<b>Other formatting</b>": [
                 "<b>Autres mises en forme</b>"
             ],
-            "<b>outcome = <i>(dependent variable[s])</i></b>": [
+            "<b>outcome = <i>(dependent variables)</i></b>": [
                 "<b>outcome = <i>(variable[s] à expliquer)</i></b>"
             ],
             "<b>Percentages, colors and tests</b>": [
@@ -65,7 +65,7 @@
                 "<b>predictors = <i>(variables explicatives)</i></b>"
             ],
             "<b>References (points of comparison), levels and missing values</b>": [
-                "<b>Références (points de comparaison), modalités, manquants</b>"
+                "<b>Références (points de comparaison), modalités, valeurs manquantes</b>"
             ],
             "<b>row_vars = <i>(row variables)</i></b>": [
                 "<b>row_vars = <i>(variables de ligne)</i></b>"
@@ -79,11 +79,11 @@
             "<b>tab_vars = <i>(fit within each group)</i></b>": [
                 "<b>tab_vars = <i>(un modèle par groupe)</i></b>"
             ],
-            "<b>tab_vars = <i>(subtables variables)</i></b>": [
+            "<b>tab_vars = <i>(sub-table variables)</i></b>": [
                 "<b>tab_vars = <i>(variables de sous-tableaux)</i></b>"
             ],
-            "<b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for numeric)</i></b>": [
-                "<b>test = <i>(Chi2/V de Cramér si var. catégorielle; ANOVA F/eta2 si var. numérique</i></b>"
+            "<b>test = <i>(Chi2 and Cramér's V for categorical; ANOVA F and eta2 for numeric)</i></b>": [
+                "<b>test = <i>(Chi2/V de Cramér si var. catégorielle; ANOVA F/eta2 si var. numérique)</i></b>"
             ],
             "<b>wt = <i>(survey weights)</i></b>": [
                 "<b>wt = <i>(poids de sondage)</i></b>"
@@ -121,8 +121,11 @@
             "adjustment <i>(gap between model/observed)</i>": [
                 "adjustment <i>(distance modèle/observé)</i>"
             ],
-            "all": [
-                "all (toutes les garder)"
+            "all (whole table)": [
+                "all (tout le tableau)"
+            ],
+            "all <i>(keep every level)</i>": [
+                "all <i>(garder toutes les modalités)</i>"
             ],
             "all (compare with the total subtable)": [
                 "all (comparer avec le total général)"
@@ -136,10 +139,10 @@
             "anova = <i>(which test for numeric variables ?)</i>": [
                 "anova = <i>(quel test pour les var. numériques ?)</i>"
             ],
-            "assumption checks plots": [
+            "assumption-check plots": [
                 "graph. vérification des hypothèses (Excel)"
             ],
-            "assumption checks plots in Excel": [
+            "assumption-check plots in Excel": [
                 "graphiques de vérification des hypothèses dans Excel"
             ],
             "at_reference (at the reference profile)": [
@@ -315,9 +318,6 @@
             ],
             "display = <i>(what each cell shows)</i>": [
                 "display = <i>(ce que montre la case)</i>"
-            ],
-            "display = <i>(what numbers the cell show)</i>": [
-                "display = <i>(quels chiffres la case affiche-t-elle ?)</i>"
             ],
             "drop <i>(each col_var drops its own NA)</i>": [
                 "drop <i>(chaque col_var retire ses NA)</i>"
@@ -526,7 +526,7 @@
             "Model options changed, table below is outdated. Click <b>Run comparison</b> to refresh.": [
                 "Les options du modèle ont changé. Cliquer sur <b>Lancer la comparaison</b> pour actualiser le tableau."
             ],
-            "Models comparison: choose predictors subsets": [
+            "Model comparison: choose predictor subsets": [
                 "Comparaison de modèles : sous-ensembles de prédicteurs"
             ],
             "multinomial": [
@@ -581,7 +581,7 @@
                 "odds_ratio"
             ],
             "odds_ratio <i>(odds ratios)</i>": [
-                "odds_ratio <i>(rapport de cotes)</i>"
+                "odds_ratio <i>(rapport de cotes : ratio de deux cotes)</i>"
             ],
             "odds_ratio <i>(OR)</i>": [
                 "odds_ratio <i>(OR)</i>"
@@ -665,13 +665,13 @@
                 "ratio"
             ],
             "ratio (ratio to ref)": [
-                "ratio (rapport, risque rel.)"
+                "ratio (risque relatif)"
             ],
             "ratio <i>(relative risk, or mean ratio)</i>": [
-                "ratio <i>(rapport case/réf., risque relatif)</i>"
+                "ratio <i>(risque relatif, ou ratio de moyennes)</i>"
             ],
-            "ratio <i>(RR, IRR, RoM)</i>": [
-                "ratio <i>(RR, IRR, RoM)</i>"
+            "ratio <i>(RR, RoM)</i>": [
+                "ratio <i>(RR, RoM)</i>"
             ],
             "raw_coefficient <i>(log, etc.)</i>": [
                 "raw_coefficient <i>(log, etc.)</i>"
@@ -726,6 +726,9 @@
             ],
             "Run comparison": [
                 "Lancer la comparaison"
+            ],
+            "Weighted by the `wt` variable. jamovi's own row weights are not used.": [
+                "Pondération par la variable `wt` : les poids de lignes de jamovi ne sont pas utilisés."
             ],
             "Saved to:": [
                 "Enregistré dans :"
@@ -853,11 +856,14 @@
             "wn (weighted counts)": [
                 "wn (effectifs pondérés)"
             ],
-            "wrap_cols = <i>(nb chars for line break)</i>": [
+            "wrap_cols = <i>(characters before a line break)</i>": [
                 "wrap_cols = <i>(noms col., saut de ligne à:)</i>"
             ],
-            "wrap_rows = <i>(nb chars for line break)</i>": [
+            "wrap_rows = <i>(characters before a line break)</i>": [
                 "wrap_rows = <i>(noms lignes, saut de ligne à:)</i>"
+            ],
+            "language code\u0004en": [
+                "fr"
             ]
         }
     }

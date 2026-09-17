@@ -341,3 +341,34 @@ test_that("a figure column is wide enough for its own BOLD ink", {
     expect_gte(w[[j]], need)
   }
 })
+
+
+# *An Excel bar that scaled itself would say a different length from the html one under the same
+# figure: Excel's own min/max would read the Total rows the html bar excludes.*
+testthat::test_that("set_bars() writes a dataBar over the data rows, on pinned bounds", {
+  testthat::skip_if_not_installed("openxlsx2")
+  t <- set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married")
+  f <- withr::local_tempfile(fileext = ".xlsx")
+  tab_xl(t, path = f, open = FALSE, replace = TRUE)
+  cf <- openxlsx2::wb_load(f)$worksheets[[1]]$conditionalFormatting
+  testthat::expect_equal(nrow(cf), 1L)
+  testthat::expect_match(cf$cf, 'type="dataBar"')
+  # the bounds are PINNED to the ceiling the prep resolved, never left to Excel
+  testthat::expect_match(cf$cf, '<cfvo type="num" val="0"/>', fixed = TRUE)
+  testthat::expect_match(cf$cf, paste0('val="', max(get_num(t$Married)[!is_totrow(t$Married)])),
+                         fixed = TRUE)
+  # ...over the DATA rows only: three of the four rows of that one column
+  rng <- strsplit(cf$sqref, ":", fixed = TRUE)[[1]]
+  testthat::expect_identical(sub("[0-9]+$", "", rng[[1]]), sub("[0-9]+$", "", rng[[2]]))
+  testthat::expect_identical(diff(as.integer(sub("^[A-Z]+", "", rng))), 2L)
+  # the ink is the chrome's accent, the same one the stylesheet gives an uncoloured bar
+  testthat::expect_match(cf$cf, toupper(sub("#", "", tx_chrome_hex("light")$accent)))
+
+  # THE GATE: Excel draws the value it HOLDS, so a magnitude bar over signed values is refused
+  # rather than drawn at another length than the html one.
+  tn <- set_bars(set_display(tab(fx_gss(), race, marital, pct = "row"), "diff"), "Married")
+  f2 <- withr::local_tempfile(fileext = ".xlsx")
+  tx_reset_messages()
+  testthat::expect_message(tab_xl(tn, path = f2, open = FALSE, replace = TRUE), "No data bar")
+  testthat::expect_length(openxlsx2::wb_load(f2)$worksheets[[1]]$conditionalFormatting, 0L)
+})

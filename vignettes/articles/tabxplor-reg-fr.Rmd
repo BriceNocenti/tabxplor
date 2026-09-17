@@ -27,7 +27,7 @@ library(dplyr)
 # test_pvalue_descriptor / test_es_measure) passent par gettext, que seul LANGUAGE atteint. Sans
 # lui, une ligne de diagnostic s'intitule "Linearity" et non "Linearite" des que le document est
 # construit sur une machine anglaise. (La notation n'est deliberement PAS traduite : "LR vs null",
-# OR/IRR/beta restent tels quels.)
+# OR/RoM/beta restent tels quels.)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
@@ -99,7 +99,7 @@ Il est rare d'avoir à fixer `family` à la main — `tab_reg()` le détecte le 
 |:---------------------|:---------------|:---------------------------------------------|
 | facteur à 2 modalités | binomial (logistique) | rapport de cotes (`OR`) |
 | numérique (continue) | gaussien (linéaire) | différence de moyennes (`diff`) |
-| comptage | poisson | rapport de taux d'incidence (`IRR`) |
+| comptage | poisson | ratio de moyennes (`RoM`) |
 | facteur non ordonné à 3 modalités ou plus | multinomial | une colonne `OR` par catégorie, contre la référence |
 | facteur ordonné à 3 modalités ou plus | ordinal (cotes proportionnelles) | `OR` cumulé, ou `D` de Somers |
 
@@ -112,7 +112,7 @@ Une seule règle couvre tous les cas : **l'effet observé est l'effet de ce pré
 - 2 modalités, logistique (binomial) → pourcentages observés, et rapports de cotes observés
 - 3 modalités ou plus, logistique (multinomial) → les OR observés sont affichés en infobulle sur les cases du modèle, dans les exports html
 - gaussien (linéaire) → moyennes de groupe et leur différence
-- poisson (comptages) → taux observé et rapport de taux observé
+- poisson (comptages) → comptage moyen observé et ratio de moyennes observé
 
 Un prédicteur continu n'a pas de modalités : sa case ne montre que l'**effet** — il n'y a pas de pourcentage ni de moyenne observés à mettre à côté —, et sa distribution (moyenne, écart-type, et moyenne dans chaque groupe de la variable à expliquer) s'affiche en infobulle html à la place.
 
@@ -195,7 +195,7 @@ variable à expliquer ──auto──▶ family ──auto──▶ link ──
 **Une seule règle les sous-tend, et c'est elle qui diffère de `tab()`.** Seul **`link`** change le
 modèle estimé. `measure` et `effect` changent ce qu'on y *lit*, et `display` ne change que ce que la
 case **affiche**. Dans un tableau croisé, chaque mesure vient des mêmes effectifs : demander un
-rapport plutôt qu'une différence y est un choix d'affichage. Dans une régression, c'est une étape de
+ratio plutôt qu'une différence y est un choix d'affichage. Dans une régression, c'est une étape de
 calcul — le modèle dérive la mesure demandée de ses prédictions — mais c'est toujours le *même
 ajustement*. Un risque relatif et un rapport de cotes peuvent donc être deux lectures d'un même modèle
 logistique, et un *autre* modèle est quelque chose qu'on demande par son nom.
@@ -217,7 +217,7 @@ Les trois valeurs d'`effect` nomment trois quantités :
 | `"marginal"`     | si tout le monde en changeait, de combien cela bougerait-il ?  | effet marginal moyen (AME)    |
 | `"at_reference"` | la même chose, pour une personne au profil de référence        | effet au profil de référence  |
 
-À la main, on les obtiendrait avec `coef(glm(...))` (exponentié quand la mesure est un rapport), avec
+À la main, on les obtiendrait avec `coef(glm(...))` (exponentié quand la mesure est un ratio), avec
 `marginaleffects::avg_comparisons(model)`, et avec le même appel sur un profil d'une seule ligne où
 chaque autre prédicteur est à sa modalité de référence ou à sa moyenne. On n'en tapera presque jamais
 aucun : `"auto"` choisit `"conditional"` chaque fois que la mesure rapportée *est* celle du modèle —
@@ -254,7 +254,7 @@ résout.
 | numérique, score | `binomial`+trials| un pourcent.  | les trois mêmes  | les mêmes, par item       | `OR`/`RR`/`RD` |
 | numérique        | `gaussian`       | une moyenne   | `"difference"` † | régression linéaire       | `diff`         |
 |                  |                  |               | `"ratio"`        | pseudo-Poisson à lien log | `RoM`          |
-| numér., comptage | `poisson`        | un comptage   | `"ratio"` †      | Poisson, ET quasi-Poisson | `IRR`          |
+| numér., comptage | `poisson`        | un comptage   | `"ratio"` †      | Poisson, ET quasi-Poisson | `RoM`          |
 | facteur, 3+ n.o. | `multinomial`    | un pourcent.  | `"odds_ratio"` † | logit multinomial         | `OR`           |
 | facteur ordonné  | `ordinal`        | un rang       | `"odds_ratio"` † | modèle à cotes proport.   | `cumOR`        |
 
@@ -278,7 +278,7 @@ après le préfixe constant `Model_`.
 | une moyenne   | `"difference"` | `diff`                  | `mdiff`      | `refdiff`        |
 | une moyenne   | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
 | une moyenne   | `"odds_ratio"` | non défini              | non défini   | non défini       |
-| un comptage   | `"ratio"`      | `IRR`                   | `mIRR`       | `refIRR`         |
+| un comptage   | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
 | un comptage   | `"difference"` | —                       | `mdiff`      | `refdiff`        |
 | un comptage   | `"odds_ratio"` | non défini              | non défini   | non défini       |
 | un rang       | `"difference"` | —                       | `mD`         | non proposé ²    |
@@ -303,7 +303,7 @@ contient qu'une.
 `reg_measures(data, outcome)` affiche cette grille pour **sa propre** variable à expliquer, et
 n'affiche que ce qui est constructible : une combinaison *non définie* n'a pas de ligne, et le message
 au-dessus du tableau dit pourquoi. Ses deux refus ne sont pas le même — une quantité n'a pas de cotes
-dont prendre le rapport, quoi qu'on implémente, tandis que *non proposé* signifie que tabxplor ne le
+dont prendre le ratio, quoi qu'on implémente, tandis que *non proposé* signifie que tabxplor ne le
 construit pas et que l'erreur liste ce que cette variable à expliquer offre, sur ce modèle et sur les
 autres.
 
@@ -313,7 +313,7 @@ L'appel le dit, et pour la différence de proportion il bascule sur le modèle d
 `measure = "raw_coefficient"` n'est pas une quatrième colonne : c'est **le coefficient du modèle
 lui-même**, la quantité estimée montrée non transformée. Là où la mesure rapportée est
 multiplicative, c'est son logarithme, et l'en-tête dit lequel il logarithme (`Model_log(OR)`,
-`Model_log(IRR)`, `Model_log(RoM)`) ; là où le modèle est déjà additif, il n'y a rien à
+`Model_log(RR)`, `Model_log(RoM)`) ; là où le modèle est déjà additif, il n'y a rien à
 dé-exponentier et le coefficient EST l'estimation additive que la colonne montre déjà. Il répond
 donc pour toutes les familles — ce qui permet de demander ses coefficients à un tableau mêlant une
 variable à expliquer logistique et une variable linéaire. Étant le nombre *propre* de l'ajustement,
@@ -332,8 +332,7 @@ acronyme à chercher par quantité, et une marque à lire par-dessus.
 | `cumOR`  | rapport de cotes cumulé      | `exp(coef(MASS::polr(...)))`, le modèle à cotes proportionnelles  |
 | `RR`     | risque relatif               | Poisson modifiée, ET robuste (Zou 2004)                           |
 | `RD`     | différence de proportion, en points | `glm(y ~ ., binomial("identity"))`, ET robuste             |
-| `IRR`    | rapport de taux d'incidence  | `exp(coef(glm(y ~ ., poisson)))`                                  |
-| `RoM`    | rapport de moyennes          | pseudo-Poisson à lien log, ET robuste (Santos Silva & Tenreyro 2006) |
+| `RoM`    | ratio de moyennes            | un comptage : `exp(coef(glm(y ~ ., poisson)))` ; une moyenne : pseudo-Poisson à lien log, ET robuste (Santos Silva & Tenreyro 2006) |
 | `diff`   | différence de moyennes       | `coef(lm(...))`                                                   |
 
 | marque        | se lit                                                | exemple         |
@@ -359,8 +358,8 @@ n'avait pas voulue. Chaque lien achète un coefficient directement lisible au pr
 | binomial · `"ratio"` | Poisson modifiée, ET robuste | un risque relatif constant |
 | binomial · `"difference"` | binomiale à lien identité, ET robuste | une différence de proportion constante |
 | gaussian · `"difference"` *(défaut)* | régression linéaire | une différence de moyennes constante |
-| gaussian · `"ratio"` | pseudo-MV de Poisson à lien log, ET robuste | E(y) = exp(xβ), un rapport de moyennes constant |
-| poisson · `"ratio"` *(défaut)* | Poisson, ET quasi-Poisson | un rapport de taux constant |
+| gaussian · `"ratio"` | pseudo-MV de Poisson à lien log, ET robuste | E(y) = exp(xβ), un ratio de moyennes constant |
+| poisson · `"ratio"` *(défaut)* | Poisson, ET quasi-Poisson | un ratio de moyennes constant |
 | ordinal · `"odds_ratio"` *(défaut)* | modèle à cotes proportionnelles | un seul rapport de cotes, à chaque seuil |
 | multinomial · `"odds_ratio"` *(défaut)* | logit multinomial | un rapport de cotes constant par catégorie |
 
@@ -376,7 +375,7 @@ Ce que dit la littérature sur les trois liens non-défaut :
   peut prédire des risques impossibles et tout simplement ne pas converger. Le cas échéant, tabxplor
   estime le modèle de probabilité linéaire à la place et le bas de tableau le dit — les deux visent la
   même quantité, mais ce sont des estimateurs différents, qui ne coïncident que si le modèle est juste.
-- **Le rapport de moyennes est consistant dès que la fonction de moyenne est juste.** La
+- **Le ratio de moyennes est consistant dès que la fonction de moyenne est juste.** La
   pseudo-vraisemblance de Poisson ne prétend pas que la variable à expliquer est un comptage : c'est
   un dispositif pour le lien log, et son erreur-type robuste n'exige pas que la variance de Poisson
   soit correcte. Rien, en revanche, ne rattrape une mauvaise fonction de moyenne — et la variable à
@@ -409,7 +408,7 @@ a tourné.
   jamais un lien à l'insu de qui appelle ; le message nomme les deux choses que cette écriture pouvait
   vouloir dire — `link = "ratio"` (le risque relatif *conditionnel* de la Poisson modifiée) et
   `measure = "ratio"` (le *marginal*).
-- **`link = "ratio"` sur une variable numérique s'arrête sur une variable négative.** Un rapport de
+- **`link = "ratio"` sur une variable numérique s'arrête sur une variable négative.** Un ratio de
   moyennes n'y est pas défini ; l'appel suggère de modéliser le `log()` d'une variable positive, ou de
   laisser `link` tranquille.
 - **`Model_RD` et `Model_mRD` sont tous deux en points de pourcentage, et ce ne sont pas le même
@@ -606,7 +605,7 @@ reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), link    = "ratio")
 ```
 
 Deux colonnes répondent. `link` est la mesure que le modèle estime — `odds_ratio` pour le premier, dont
-le rapport est donc calculé à partir des prédictions ; `ratio` pour le second, qui l'estime
+le ratio est donc calculé à partir des prédictions ; `ratio` pour le second, qui l'estime
 directement — et c'est le mot que prend `link =`. `fit` est l'appel R : `glm(binomial("logit"))`
 contre `svyglm(quasipoisson("log"))`, un tout autre modèle. Une ligne `svyglm()` signale aussi des
 erreurs-types robustes (Huber-White), et c'est précisément pour cela qu'on peut poser une
@@ -615,7 +614,7 @@ vraisemblance de Poisson sur une variable en 0/1.
 **Lequel utiliser.** Préférer **`measure = "ratio"`**, le marginal, dans presque tous les cas : le
 modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le
 nombre qu'il donne décrit les personnes réellement interrogées. Recourir à **`link = "ratio"`** quand
-c'est le risque relatif *conditionnel* qu'il faut — celui qui suppose que le même rapport vaut pour
+c'est le risque relatif *conditionnel* qu'il faut — celui qui suppose que le même ratio vaut pour
 tout le monde, ce qu'attend un lecteur venu de l'épidémiologie, et ce qu'il faut employer pour
 s'aligner sur une estimation publiée en Poisson modifiée. Ce sont deux quantités différentes, pas deux
 écritures d'une seule.
@@ -663,23 +662,23 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-Un **rapport de taux d'incidence** (IRR) de 1,5 signifie « 50 % d'heures de télévision de plus par jour ». Les modèles de Poisson non pondérés utilisent automatiquement des erreurs-types proportionnelles à la dispersion observée (quasi-Poisson), si bien que les comptages surdispersés obtiennent des intervalles honnêtes, plus larges. Concrètement : avec une variable à expliquer surdispersée, `family = "poisson"` renvoie des intervalles et des pvalues **identiques à `family = "quasipoisson"`** et émet un avertissement le disant (le bas de tableau rapporte la dispersion) ; à équidispersion (≈ 1) la mise à l'échelle est sans effet et le résultat correspond à un simple `glm(family = poisson)` — une comparaison avec un `glm` de Poisson ajusté à la main ne réserve donc jamais de surprise.
+Un **ratio de moyennes** (`RoM`) de 1,5 signifie « 50 % d'heures de télévision de plus par jour ». Les modèles de Poisson non pondérés utilisent automatiquement des erreurs-types proportionnelles à la dispersion observée (quasi-Poisson), si bien que les comptages surdispersés obtiennent des intervalles honnêtes, plus larges. Concrètement : avec une variable à expliquer surdispersée, `family = "poisson"` renvoie des intervalles et des pvalues **identiques à `family = "quasipoisson"`** et émet un avertissement le disant (le bas de tableau rapporte la dispersion) ; à équidispersion (≈ 1) la mise à l'échelle est sans effet et le résultat correspond à un simple `glm(family = poisson)` — une comparaison avec un `glm` de Poisson ajusté à la main ne réserve donc jamais de surprise.
 
-Dans le cas d'une régression de Poisson, la **contrepartie observée du coefficient exponentié du modèle** pour un prédicteur catégoriel est le **rapport de moyennes** : ici, le rapport des heures moyennes de télévision comparé à la modalité de référence.
+Dans le cas d'une régression de Poisson, la **contrepartie observée du coefficient exponentié du modèle** pour un prédicteur catégoriel est le **ratio de moyennes** : ici, le ratio des heures moyennes de télévision comparé à la modalité de référence.
 
 ```{r}
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
 ```
 
-Les heures moyennes observées de télévision par jour, et les rapports de taux de visionnage à la référence, se calculent dans un simple tableau de moyennes avec :
+Les heures moyennes observées de télévision par jour, et leurs ratios à la référence, se calculent dans un simple tableau de moyennes avec :
 
 ```{r}
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |>
-  mutate(IRR = set_display(tvhours, "ratio"))
+  mutate(RoM = set_display(tvhours, "ratio"))
 # la methode par defaut pour les intervalles de confiance
-#   est le rapport de moyennes robuste a variance inegale ;
+#   est le ratio de moyennes robuste a variance inegale ;
 #  on utilise "quasipoisson" pour correspondre a ceux calcules
 #   par la regression quasi-poisson -- une dispersion estimee sur tous les niveaux
 #   (hypothese : la variance est proportionnelle a la moyenne).
@@ -715,17 +714,17 @@ tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
         measure = "difference", display = "est_base")
 ```
 
-`measure = "ratio"` lit la même paire de façon multiplicative, comme un **rapport de victoires** (*win ratio*, victoires sur défaites). Les deux tiennent encore en une colonne, parce que les deux lisent toute la distribution prédite plutôt qu'une seule de ses tranches — et les deux sont robustes là où le rapport de cotes cumulé ne l'est pas : ils bougent à peine quand l'hypothèse de cotes proportionnelles est violée, et, à la différence d'un rapport de cotes, ils ne dérivent pas sous l'ajustement quand il n'y a rien à ajuster. Le bas de tableau nomme l'échelle du bas vers le haut, puisqu'un tableau à une colonne montre le nom de la variable à expliquer et aucune de ses catégories.
+`measure = "ratio"` lit la même paire de façon multiplicative, comme un **ratio de victoires** (*win ratio*, victoires sur défaites). Les deux tiennent encore en une colonne, parce que les deux lisent toute la distribution prédite plutôt qu'une seule de ses tranches — et les deux sont robustes là où le rapport de cotes cumulé ne l'est pas : ils bougent à peine quand l'hypothèse de cotes proportionnelles est violée, et, à la différence d'un rapport de cotes, ils ne dérivent pas sous l'ajustement quand il n'y a rien à ajuster. Le bas de tableau nomme l'échelle du bas vers le haut, puisqu'un tableau à une colonne montre le nom de la variable à expliquer et aucune de ses catégories.
 
 Pour un nombre **par catégorie de la variable à expliquer** — un effet en points de pourcentage sur chaque tranche de revenu — c'est une question à laquelle l'ordre n'aide pas, et `family = "multinomial"` y répond sans supposer les cotes proportionnelles.
 
-Une variable à expliquer nominale, à trois modalités non ordonnées ou plus, est estimée comme un seul modèle logistique **multinomial**, donnant une colonne de rapport de cotes par catégorie de la variable à expliquer contre sa catégorie de référence (aussi appelés rapports de risques relatifs) :
+Une variable à expliquer nominale, à trois modalités non ordonnées ou plus, est estimée comme un seul modèle logistique **multinomial**, donnant une colonne de rapport de cotes par catégorie de la variable à expliquer contre sa catégorie de référence :
 
 ```{r}
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
 ```
 
-Les rapports de risques relatifs peuvent être assez difficiles à lire, parce qu'ils sont relatifs à **deux** modalités de référence : non seulement celle choisie pour le prédicteur, mais aussi celle choisie pour la variable à expliquer. C'est particulièrement difficile quand il est ardu de trouver une bonne modalité de référence correspondant à la situation la plus commune (comme « married » pour le statut matrimonial).
+Ces rapports de cotes peuvent être assez difficiles à lire, parce qu'ils sont relatifs à **deux** modalités de référence : non seulement celle choisie pour le prédicteur, mais aussi celle choisie pour la variable à expliquer. C'est particulièrement difficile quand il est ardu de trouver une bonne modalité de référence correspondant à la situation la plus commune (comme « married » pour le statut matrimonial).
 
 La plupart du temps, demander des points de pourcentage est plus facile à interpréter, parce que cela fait disparaître la seconde modalité de référence et modélise directement, pour chaque modalité de la variable à expliquer, la différence de pourcentages de chaque modalité de prédicteur comparée à sa référence (une quantité moins abstraite qu'un rapport de cotes). C'est `measure = "difference"`, exactement comme sur une variable binaire, et les colonnes `mRD` obtenues sont des effets marginaux moyens :
 
@@ -865,7 +864,7 @@ d'une propriété de la mesure, et le tableau tranche de lui-même :
 | `measure = "difference"` — toute variable à expliquer | **oui** |
 | `measure = "ratio"`, ou `link = "ratio"` (risques relatifs) | **oui** |
 | `measure = "odds_ratio", effect = "marginal"` (binaire ou score sommé) | **oui** |
-| rapports de taux d'incidence de Poisson, différence de moyennes linéaire | **oui** |
+| ratios de moyennes de Poisson, différence de moyennes linéaire | **oui** |
 | rapports de cotes **conditionnels** — binomial, multinomial, ordinal cumulé | non (non collapsible) |
 | une `formula =` composée | non |
 | une variable à 3 modalités ou plus *pondérée* | elle ne se lit que sur ses coefficients |
@@ -874,8 +873,8 @@ Là où il n'y a pas de test, `color_signif` est ignoré pour ce canal et les co
 descriptivement : le tableau ne feint jamais une significativité qu'il n'a pas.
 
 L'hypothèse nulle est l'égalité de l'effet modélisé et de l'effet observé, sur l'échelle propre de
-l'effet : le log du rapport pour un risque relatif, un rapport de cotes ou un rapport de taux
-d'incidence ; la différence simple pour une différence de moyennes ou un effet marginal en points.
+l'effet : le log du ratio pour un risque relatif, un rapport de cotes ou un ratio de
+moyennes ; la différence simple pour une différence de moyennes ou un effet marginal en points.
 C'est l'échelle autour de laquelle la couleur se replie déjà, de sorte que le test et la couleur ne
 peuvent pas diverger.
 
@@ -1086,8 +1085,8 @@ Les deux groupes sont des échantillons disjoints, donc les deux estimations son
 l'erreur-type de leur différence vaut `sqrt(SE_A² + SE_B²)` — le test classique de la différence entre
 deux estimations indépendantes (Altman & Bland 2003). Les deux erreurs-types sont relues dans les
 intervalles de confiance que le tableau affiche déjà : le test et les intervalles imprimés ne peuvent
-donc pas se contredire. L'écart est mesuré sur l'échelle propre de l'effet — le log du rapport pour un
-rapport de cotes, un risque relatif ou un rapport de taux, la différence simple pour un bêta ou un
+donc pas se contredire. L'écart est mesuré sur l'échelle propre de l'effet — le log du ratio pour un
+rapport de cotes, un risque relatif ou un ratio de moyennes, la différence simple pour un bêta ou un
 effet marginal — et comparé à un seuil normal (z), légèrement conservateur sur petits effectifs.
 
 Les trois politiques `color_signif` lisent ensuite ce même intervalle exactement comme en partie 4 —
@@ -1330,7 +1329,7 @@ Un trait pointillé sans crochet signifie que l'écart n'a pas pu être testé �
 - [Interpréter un modèle de régression](tabxplor-reading-a-regression-fr.html) — la même matière enseignée comme une seule analyse suivie, avec les habitudes de lecture qui vont avec.
 - [Introduction à tabxplor](tabxplor-fr.html) — les tableaux croisés et les repères de couleur.
 - [Données pondérées et plans de sondage](tabxplor-weights-fr.html) — pondération et plans de sondage, pour les deux producteurs.
-- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de régression** dans le module [jamovi](https://www.jamovi.org/) — installer *tabxplor* depuis la bibliothèque de modules de jamovi (voir [Introduction à tabxplor](tabxplor-fr.html)).
+- `tab_reg()` est aussi disponible **sans écrire de code R**, comme une analyse **Modèles de régression** dans le module [jamovi](https://www.jamovi.org/) — un fichier à installer soi-même : [la marche à suivre](../index.html#the-jamovi-module) (voir aussi [Introduction à tabxplor](tabxplor-fr.html)).
 - `?tab_reg` pour chaque argument (groupés par usage), et `?tab_reg` &rarr; *Details* pour les choix de modélisation.
 - **Hors périmètre**, et à estimer avec leurs propres packages : les modèles de survie / de Cox, les modèles mixtes (multiniveaux) et l'agrégation sur des données multi-imputées.
 - Sur la comparaison d'un coefficient brut et d'un coefficient ajusté, la référence canonique est Clogg, Petkova & Haritou (1995, *AJS* 100(5)), avec le commentaire d'Allison dans le même numéro — c'est ce que calcule `color = "adjustment"`, généralisé ici aux GLM, aux plans de sondage et aux effets marginaux. Pour les modèles logit emboîtés, la décomposition KHB (Karlson, Holm & Breen 2012) sépare la part du changement qui relève de la confusion de celle qui relève du changement d'échelle.

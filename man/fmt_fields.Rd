@@ -92,8 +92,7 @@ table. To reach a field these do not name, use \verb{x$<field>} or \code{\link[v
 (at \code{fmt} level or \code{tab} level)
 
 \item \code{get_row_kind()}: get the "row_kind" field: what kind of row each cell sits in
-(one of \code{"data"}, \code{"total"}, \code{"n"}, \code{"pct"}, \code{"pvalue"},
-\code{"gof"}, \code{"blank"}).
+(see the \emph{Row kinds} section).
 
 \item \code{set_row_kind()}: set the "row_kind" field
 
@@ -122,6 +121,20 @@ all of them in the whole tibble.
 purely descriptive copy of a column loses its stars: the stored p-value is their only source.
 
 }}
+\section{Row kinds}{
+
+The \code{row_kind} field says what kind of row a cell sits in.
+\describe{
+\item{\code{"data"}}{a real body row.}
+\item{\code{"total"}}{a total row (the only kind is_totrow() asks about).}
+\item{\code{"n"}}{the base-count row.}
+\item{\code{"pct"}}{the add_pct percentage row.}
+\item{\code{"pvalue"}}{an appended test row: a crosstab's chi2 or F, a regression's per-term test.}
+\item{\code{"gof"}}{a regression goodness-of-fit / model-summary footer row.}
+\item{\code{"blank"}}{a spacer row between footer blocks.}
+}
+}
+
 \seealso{
 \code{\link[=fmt]{fmt()}} for what every field means and how to build a cell; \link{fmt_attributes} for the
 per-column facts; \code{vignette("tabxplor-programming")}.

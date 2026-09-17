@@ -134,7 +134,7 @@ new_inference <- function(wt = character(), design_spec = NULL,
 svy_design_formula <- function(x) {
   if (is.null(x)) return(NULL)
   if (rlang::is_formula(x)) return(x)
-  stats::reformulate(as.character(x))
+  stats::reformulate(tx_backtick(x))
 }
 
 # The early return on a prebuilt design is LOAD-BEARING: it keeps `.svy_weights` out of reg_fit()'s
@@ -192,15 +192,15 @@ svy_omnibus_one <- function(sub, rv, cv, is_num, wt, basis, des_rows, design) {
 
   if (is_num) {
     res <- tryCatch({
-      fit <- survey::svyglm(stats::reformulate(rv, response = cv), design = des)
-      rt  <- survey::regTermTest(fit, stats::reformulate(rv), method = "Wald")
+      fit <- survey::svyglm(stats::reformulate(tx_backtick(rv), response = tx_backtick(cv)), design = des)
+      rt  <- survey::regTermTest(fit, stats::reformulate(tx_backtick(rv)), method = "Wald")
       list(test = disc, statistic = as.double(rt$Ftest), df1 = as.double(rt$df),
            df2 = as.double(rt$ddf), pvalue = as.double(rt$p), n = n_obs, deff = NA_real_)
     }, error = function(e) NULL)
     return(res %||% na_row())
   }
   res <- tryCatch({
-    ch <- survey::svychisq(stats::reformulate(c(rv, cv)), design = des, statistic = "F")
+    ch <- survey::svychisq(stats::reformulate(tx_backtick(c(rv, cv))), design = des, statistic = "F")
     # svychisq's `ndf` is Satterthwaite's d0, not (r-1)(c-1), so the Pearson df is recomputed here for
     # delta-bar = X2_Pearson / (F * df_Pearson), Rao-Scott's mean generalized design effect.
     dfp <- (nlevels(d[[rv]]) - 1) * (nlevels(d[[cv]]) - 1)

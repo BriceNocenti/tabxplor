@@ -633,3 +633,27 @@ testthat::test_that("$rr reads $ratio, as the method's own comment promises", {
   testthat::expect_identical(f$rr, f$ratio)
   testthat::expect_identical(f$rr, get_ratio(f))
 })
+
+
+# === SECTION: the console reads the shared anchor rule ============================================
+# Phase 11. pillar_shaft() used to spell the anchor rule a second time, so a summary row greyed out
+# in the console while the exports were being taught not to. Both now read fmt_row_look().
+
+testthat::test_that("the console does not set back a summary row", {
+  testthat::local_reproducible_output(crayon = TRUE)   # testthat's own switch; withr's loses
+  withr::local_options(cli.num_colors = 256)          # ...which caps at 8, where the greys go flat
+  m <- tabxplor:::tab_materialize_extras(
+    tab(fx_gss(), race, marital, pct = "col", color = "diff", add_pct = TRUE),
+    backend = "text", pvalue = TRUE)
+  kinds <- tabxplor:::fmt_row_kind(m)
+  # a column that actually GRADES something: pillar::style_subtle alone can be a no-op here, so a
+  # wholly uncoloured column would prove nothing either way.
+  fmts  <- names(which(vapply(m, tabxplor::is_fmt, logical(1))))
+  graded_col <- Find(function(nm) any(tabxplor:::fmt_color_channels(m[[nm]])$text_slot > 0L), fmts)
+  txt   <- as.character(format(pillar::pillar_shaft(m[[graded_col]]), width = 30))
+  ansi  <- grepl("\033[", txt, fixed = TRUE)
+  testthat::skip_if_not(any(ansi), "no ANSI in this console")
+  # an ungraded row is painted with nothing: not greyed, not bolded
+  testthat::expect_false(any(ansi[!tabxplor:::row_kind_graded(kinds)]))
+  testthat::expect_true(any(ansi[kinds == "data"]))
+})

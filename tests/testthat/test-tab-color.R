@@ -260,7 +260,7 @@ testthat::test_that("a column with no stored method names no method (Phase 19b, 
 })
 
 
-testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says OR", {
+testthat::test_that("tab_reg: a mean difference shows SD, a count ratio says RoM, OR says OR", {
   b <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "gaussian"))
   lb <- leg_en(b)
   # the acronym is DATA: printed exactly as the header spells it, never capitalised as prose
@@ -276,11 +276,11 @@ testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says 
 
   i <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "poisson"))
   li <- leg_en(i)
-  testthat::expect_match(li, "IRR \u2265")
+  testthat::expect_match(li, "RoM \u2265")
   testthat::expect_no_match(li, "OR \u2265")
-  # Phase 14c: ci_type "or" is the multiplicative SHAPE (OR / IRR / cumulative OR alike); naming it
-  # unconditionally called a Poisson rate ratio an odds ratio.
-  testthat::expect_match(li, "Wald interval on the log rate-ratio")
+  # ci_type "or" is the multiplicative SHAPE (OR / RoM / cumulative OR alike); naming it
+  # unconditionally called a Poisson ratio of means an odds ratio.
+  testthat::expect_match(li, "Wald interval on the log ratio of means")
   testthat::expect_no_match(li, "odds-ratio")
 
   d2 <- dplyr::mutate(gss, married = as.integer(marital == "Married"))
@@ -317,20 +317,22 @@ testthat::test_that("French catalog translates the prose when the .mo is availab
 
 
 # Phase 22g-ii: WEIGHT IN A LEGEND COMES FROM THE PALETTE AND FROM NOTHING ELSE. The column-name
-# prefix used to be bold in every medium, putting more emphasis on the legend than the table's own
-# bold cells carry; the break-words keep theirs, because it IS the face of the cells they describe.
-test_that("a legend's column names are plain; its coloured break-words keep the palette's face", {
+# THE ONE thing in a legend whose weight is not the palette's: the VARIABLE NAMES a line opens with.
+# They are a label saying whom the sentence is about, so a reader picks out the line they need before
+# reading any of them -- while the break-words keep the palette's own face, because it IS the face of
+# the cells they describe.
+test_that("a legend's column names are bold; its break-words keep the palette's face", {
   d  <- suppressWarnings(fx_reg_fmt())
   # a crude/model pair: two column blocks, so the legend names the columns it describes
   t  <- suppressMessages(tab_reg(d, "married", c("race", "relig"), family = "binomial",
                                  measure = "difference"))
   md <- paste(tab_md(t, print = FALSE), collapse = "\n")
   ln <- grep("\u2014 RD \u2265", strsplit(md, "\n")[[1]], value = TRUE)[[1]]
-  testthat::expect_match(ln, "^Obs_RD, Model_mRD \u2014 ")      # the names ARE there...
-  testthat::expect_false(grepl("**", sub(" \u2014 .*", "", ln), fixed = TRUE))   # ...and plain
-  testthat::expect_match(ln, "**", fixed = TRUE)               # the break-words still carry theirs
-  # and the token model no longer has a hand-set flag to disagree with the palette
-  testthat::expect_false("b" %in% names(tabxplor:::.lg_tok("x")))
+  testthat::expect_match(ln, "^\\*\\*Obs_RD, Model_mRD\\*\\* \u2014 ")   # the names, in bold...
+  testthat::expect_match(ln, "[+5]{.p1}", fixed = TRUE)        # ...and the break-words keep theirs
+  # the flag is on the TOKEN, so it is the assembler that says "this is a label", never the palette
+  testthat::expect_true("b" %in% names(tabxplor:::.lg_tok("x")))
+  testthat::expect_false(tabxplor:::.lg_tok("x")$b)
 })
 
 
@@ -377,4 +379,56 @@ testthat::test_that("a homogeneous column is untouched by the mixed gate", {
   t <- tab(fx_gss(), race, marital, pct = "col", color = "difference")
   testthat::expect_no_message(fmt_color_channels(t[[2]]))
   testthat::expect_identical(get_scale(t[[2]]), "level_pct")
+})
+
+
+# === SECTION: a test cell is a WARNING, not a data effect =========================================
+# A non-significant test row reads deep red whatever the table is coloured by -- significance does
+# not depend on which geometry the column reports -- and always in INK, never as a fill.
+
+testthat::test_that("a non-significant test row is red under every measure, and never filled", {
+  set.seed(1)
+  d <- fx_gss()[1:600, ] |>
+    dplyr::mutate(noise = factor(sample(c("a", "b"), 600, replace = TRUE)))
+  red <- tabxplor:::tx_chrome_hex("light")   # the m4 rung is the palette's, not the chrome's
+  for (cm in list("diff", "ratio", "or", "contrib", c("diff", "ratio"), c("ratio", "diff"))) {
+    t  <- tab(d, marital, noise, pct = "row", color = cm, test = TRUE, tot = "both")
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    testthat::expect_length(pv, 1L)
+    nm <- names(rd$ann)[[1]]
+    ch <- tabxplor:::fmt_color_channels(rd$tab[[nm]])
+    testthat::expect_identical(ch$text_slot[pv], max(tabxplor:::fmt_color_plan(
+      rd$tab[[nm]], "text", color = tabxplor::get_color(rd$tab[[nm]]))$under_slots))
+    testthat::expect_identical(ch$bg_slot[pv], 0L)              # never a fill
+    testthat::expect_identical(rd$ann[[nm]]$back[pv], "none")
+  }
+})
+
+testthat::test_that("a significant test row stays uncoloured, whatever the measure", {
+  for (cm in c("diff", "or")) {
+    t  <- tab(fx_gss(), marital, race, pct = "row", color = cm, test = TRUE, tot = "both")
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    nm <- names(rd$ann)[[1]]
+    testthat::expect_lt(tabxplor::get_pvalue(rd$tab[[nm]])[pv], 0.05)
+    testthat::expect_identical(tabxplor:::fmt_color_channels(rd$tab[[nm]])$text_slot[pv], 0L)
+  }
+})
+
+testthat::test_that("a model-fit p-value reads the same on a logistic and a linear model", {
+  set.seed(1)
+  d <- fx_gss()[1:1500, ] |> dplyr::mutate(
+    married = factor(dplyr::if_else(marital == "Married", "yes", "no")),
+    noise   = factor(sample(letters[1:3], 1500, replace = TRUE)),
+    num     = stats::rnorm(1500))
+  ink <- vapply(list(quote(married), quote(num)), function(y) {
+    t  <- suppressMessages(tab_reg(d, !!y, noise, stats = "global"))
+    rd <- tabxplor:::tab_export_prep(t, backend = "kable")$tables[[1]]
+    pv <- which(tabxplor:::tab_row_roles(rd$tab) == "pvalue")
+    nm <- names(rd$ann)[[length(rd$ann)]]
+    testthat::expect_gt(tabxplor::get_pvalue(rd$tab[[nm]])[pv][[1]], 0.05)
+    rd$ann[[nm]]$font[pv][[1]]
+  }, character(1))
+  testthat::expect_identical(ink[[1]], ink[[2]])   # the link chose the colour, before this rule
 })

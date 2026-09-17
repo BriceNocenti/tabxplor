@@ -570,7 +570,54 @@ jmvtabregResults <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
             self$add(jmvcore::Html$new(
                 options=options,
                 name="html_table",
-                title="Table"))
+                title="Table",
+                refs=list(
+                    "tabxplor",
+                    "survey",
+                    "MASS",
+                    "nnet",
+                    "VGAM",
+                    "svyVGAM",
+                    "marginaleffects",
+                    "brant",
+                    "brant-test",
+                    "wilson",
+                    "katz",
+                    "woolf"),
+                clearWith=list(
+                    "outcome",
+                    "predictors",
+                    "tab_vars",
+                    "wt",
+                    "family",
+                    "link",
+                    "outcome_level",
+                    "trials",
+                    "effect",
+                    "measure",
+                    "empirical",
+                    "models",
+                    "na",
+                    "run_compare",
+                    "levels_order",
+                    "levels_collapse",
+                    "crosses",
+                    "ref_levels",
+                    "shape",
+                    "multiplier",
+                    "conf_level",
+                    "ci_method",
+                    "stars",
+                    "color",
+                    "color_signif",
+                    "display",
+                    "n",
+                    "digits",
+                    "cleannames",
+                    "subtext",
+                    "tab_theme",
+                    "wrap_rows",
+                    "wrap_cols")))
             self$add(jmvcore::Image$new(
                 options=options,
                 name="cache_state",
@@ -683,19 +730,19 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #'   or profile-likelihood intervals (unweighted binomial / poisson only; needs
 #'   MASS). A profile interval is an output of the likelihood at one confidence
 #'   level, so it cannot be cached: every change refits the models.
-#' @param stars Show per-cell significance stars (the colours read the
+#' @param stars Show per-cell significance stars (the colors read the
 #'   confidence interval either way).
-#' @param color WHAT the effect cells are coloured by. The colour LADDER
-#'   always comes from what the  column estimates (an odds ratio is read on the
+#' @param color WHAT the effect cells are colored by. The color LADDER always
+#'   comes from what the  column estimates (an odds ratio is read on the
 #'   odds-ratio scale, a beta on the  standardized-difference one), so what is
 #'   left to choose is what the estimate is compared  TO.  \itemize{   \item
 #'   \code{"measure"}: the effect's own size (compared to no effect).   \item
-#'   \code{"no"}: no colours.   \item \code{"adjustment"}: how far the ADJUSTED
+#'   \code{"no"}: no colors.   \item \code{"adjustment"}: how far the ADJUSTED
 #'   effect moved from the crude one --   needs \code{empirical}.   \item
 #'   \code{"between_groups"}: how far each group's effect is from the first
 #'   group's   -- needs \code{tab_vars}.  }
-#' @param color_signif How significance interacts with the colours: observed
-#'   size + grey out non-significant cells, colour only the guaranteed
+#' @param color_signif How significance interacts with the colors: observed
+#'   size + grey out non-significant cells, color only the guaranteed
 #'   (error-adjusted) effect, ignore significance.
 #' @param display The estimate-cell LAYOUT (never the estimand: a display may
 #'   fold in another quantity of the SAME fit, it can never change the fit). The
@@ -714,9 +761,9 @@ jmvtabregBase <- if (requireNamespace("jmvcore", quietly=TRUE)) R6::R6Class(
 #' @param cleannames Strip numeric prefixes from factor level labels.
 #' @param subtext A free note printed below the table.
 #' @param tab_theme How the table is painted, in the results panel and in
-#'   every export.  \code{"light"} is the colour palette; \code{"print_ready"}
+#'   every export.  \code{"light"} is the color palette; \code{"print_ready"}
 #'   says the same thing  typographically --- bold, italics, underlines and
-#'   marks instead of blue and red ---  for a page that has no colour. See
+#'   marks instead of blue and red ---  for a page that has no color. See
 #'   \code{\link{tab_css}}.
 #' @param wrap_rows .
 #' @param wrap_cols .

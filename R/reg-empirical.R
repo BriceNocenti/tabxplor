@@ -536,8 +536,8 @@ REG_EMPIRICAL <- local({
     "gaussian",         "diff",          "diff",  "raw_diff",         NA_character_, "ols",          "welch",           "identity", NULL,          NULL,
     # poisson also declares an ADDITIVE shape (a poisson marginal effect is a difference of expected
     # COUNTS): `welch`'s ROBUST interval is the target in both bases, unlike gaussian's `ols`.
-    "poisson",          "irr",           "IRR",   "mean_ratio",       "1",           "quasipoisson", "robust",          "log",      NULL,          NULL,
-    "poisson",          "irr_log",       "IRR",   "log_coef",         NA_character_, "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "poisson",          "mr",            "RoM",   "mean_ratio",       "1",           "quasipoisson", "robust",          "log",      NULL,          NULL,
+    "poisson",          "mr_log",        "RoM",   "log_coef",         NA_character_, "quasipoisson", "robust",          "log",      NULL,          NULL,
     "poisson",          "diff",          "diff",  "raw_diff",         NA_character_, "welch",        "welch",           "identity", NULL,          NULL,
     # grouped_binomial (`trials =`): still saturated, Woolf 2x2 on the SUMMED counts; its LEVEL is the
     # mean SCORE, hence the two `score_*` scales. Its own `rr`/`rr_log` are the two groups' mean
@@ -564,7 +564,7 @@ REG_EMPIRICAL <- local({
     "ordinal",          "win_ratio_log", "WR",    "log_coef",         NA_character_, "wald_log",     NULL,              "log",      NULL,          NULL,
   )
   coef        <- c(binomial = "or",   rr = "rr",   mr = "mr", gaussian = "diff",
-                   poisson  = "irr",  grouped_binomial = "or", multinomial = "or", ordinal = "cumor")
+                   poisson  = "mr",   grouped_binomial = "or", multinomial = "or", ordinal = "cumor")
   method_diff <- c(binomial = "wald", rr = "wald", grouped_binomial = "wald", multinomial = "wald")
 
   blocks <- unique(grid$block)
@@ -880,7 +880,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
                      vec = pe$vec, shape = shape), cat1))
   }
 
-  # ---- the moment families: a mean difference / a ratio of means / a rate ratio -------------------
+  # ---- the moment families: a mean difference / a ratio of means --------------------------------
   moment <- function(sh, v, ci) {
     fields <- c(stats::setNames(list(v), EST_SCALES[[sh$scale]]$est_field),
                 list(n = nv, tot_n = nv, ci_inf = ci$inf, ci_sup = ci$sup, pvalue = ci$pvalue))
@@ -889,7 +889,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
               vec = v, shape = sh), cat1)
   }
 
-  # ---- ONE moment arm: a mean difference, a ratio of means, a rate ratio, and their logged twins.
+  # ---- ONE moment arm: a mean difference, a ratio of means (a count too), and their logged twins.
   # The declared shape's own scale picks the ENGINE, not the family.
   if (crude_key %in% c("gaussian", "mr", "poisson", "grouped_binomial")) {
     logged <- identical(shape$scale, "log_coef")   # a link-scale shape is always the log of a RATIO
@@ -917,7 +917,7 @@ reg_empirical_columns <- function(skeleton, emp, fac_preds, crude_key, family, e
 
 # reg_same_estimand(): is the crude shape the SAME QUANTITY as the model column beside it? Two
 # declared facts, because neither alone is enough: the SCALE (an additive count AME must never be
-# compared to a crude rate ratio) and the declared measure WORD (every logged measure shares the one
+# compared to a crude ratio of means) and the declared measure WORD (every logged measure shares the one
 # `log_coef` scale, so scale alone cannot tell log(OR) from log(RR)). Both are base words -- the
 # contrast marker is composed at render, and a crude column is never marked.
 # ⚠ `scale` is passed, not read off a column: the note in reg_color_notes() asks this question before

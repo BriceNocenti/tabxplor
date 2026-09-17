@@ -377,7 +377,16 @@ tab <- function(data, row_vars, col_vars, tab_vars, wt, ...,
   # purrr::map() returns a bare one -- the re-class below is what puts the class back.
   result <- set_caption(result, caption)
 
-  if (isTRUE(getOption("tabxplor.output_kable"))) return(tab_html(result))
+  # SUPERSEDED by options(tabxplor.print = "html"), which renders the same html when the table is
+  # PRINTED and leaves the returned value a table one can pipe. Still honoured, said once.
+  if (isTRUE(getOption("tabxplor.output_kable"))) {
+    tx_inform_once(
+      "opt_output_kable",
+      c("{.code options(tabxplor.output_kable = TRUE)} makes {.fn tab} return an html table.",
+        "i" = paste('Use {.code options(tabxplor.print = "html")}: the same html,',
+                    "and the value stays a table.")))
+    return(tab_html(result))
+  }
 
   as_tabxplor_tabs(result)
 }
@@ -638,7 +647,7 @@ ctx_update <- function(ctx, updates) {
 #' @noRd
 CTX_SETTINGS_LOCALS <- c(
   # settings$rows, minus its key (na_num is added by tab_prepare_pop)
-  "color", "comparison", "or_ci", "chi2", "ref", "ref2", "comp", "ci", "ci_scale",
+  "color", "comparison", "or_ci", "chi2", "want_ctr", "ref", "ref2", "comp", "ci", "ci_scale",
   "totaltab", "totrow", "na_num",
   # settings$cols (lv1 added by tab_prepare_pop)
   "lvs", "lv1", "digits", "col_vars_num", "col_vars_text",
@@ -1152,6 +1161,7 @@ tab_setup <- function(ctx) {
   .settings     <- tab_resolve_settings(color = color, ci = ci, chi2 = chi2,
                                          ref = ref, pct_vect = pct_vect,
                                          display_measure = display_comparison(display),
+                                         display_arms = display_arms(display),
                                          col_vars_text = col_vars_text, totrow = totrow,
                                          color_signif = color_signif,
                                          color_ratio_ci = color_ratio_ci, stars = stars,
@@ -1170,6 +1180,7 @@ tab_setup <- function(ctx) {
   color_signif  <- .settings$color_signif
   stars         <- .settings$stars
   totrow        <- .settings$totrow
+  want_ctr      <- .settings$want_ctr     # the display prints {ctr}: compute it whatever colours
   cache_keys    <- .settings$cache_keys
 
   # THE SETTINGS SPINE: a star schema built ONCE here, three typed tibbles at their natural grain --
@@ -1180,7 +1191,7 @@ tab_setup <- function(ctx) {
   settings <- list(
     rows = tibble::tibble(
       row_var = rv_chr, color = color, comparison = comparison, or_ci = or_ci, chi2 = chi2,
-      ref = ref, ref2 = ref2,
+      want_ctr = want_ctr, ref = ref, ref2 = ref2,
       comp = comp, ci = ci, ci_scale = ci_scale, totaltab = totaltab, totrow = totrow
     ),
     cols = tibble::tibble(
@@ -1509,7 +1520,10 @@ tab_transform <- function(ctx) {
   tabs_text <- NULL
   tests     <- chi2   # logical placeholder; assemble's is.logical() fallback handles a numeric-only tab
   if (sum(col_vars_text) != 0) {
-    want_ctr  <- identical(measure_builds(color), "contrib")
+    # the COLOUR builds contributions (and then paints them), or the DISPLAY prints them (and the
+    # colour stays whatever it is): two reasons to compute, one of which must not touch `color`.
+    color_ctr <- identical(measure_builds(color), "contrib")
+    want_ctr  <- color_ctr || isTRUE(want_ctr[1])
     test_leaf <- if (!isTRUE(chi2)) "no"
                  else if (!is.null(cached_test) && !want_ctr) "no"
                  else if (want_ctr) "ctr" else "p"
@@ -1518,7 +1532,7 @@ tab_transform <- function(ctx) {
            pct_vect[col_vars_text], ref_vect[col_vars_text], ref2_vect[col_vars_text],
            lv1[col_vars_text]),
       function(.col_var, .digits, .na, .pct, .ref, .ref2, .lv1) {
-        color_leaf <- if (want_ctr) "no" else color
+        color_leaf <- if (color_ctr) "no" else color
         r_pl <- plain_resolve(.pct, .ref, .ref2, .na, totaltab_name, total_names,
                               c("row", "col"), comp, color_leaf, .digits, totaltab, tv_syms,
                               comparison = comparison)
@@ -1529,7 +1543,8 @@ tab_transform <- function(ctx) {
           tot = r_pl$tot, total_names = r_pl$total_names, subtext = "", digits = r_pl$digits,
           num = FALSE, df = FALSE, stars = stars,
           comparison = comparison, or_ci = or_ci, dichotomise = isTRUE(.lv1),
-          ci = ci, ci_scale = ci_scale[1], test = test_leaf, deff = robust_tests,
+          ci = ci, ci_scale = ci_scale[1], test = test_leaf, ctr_color = color_ctr,
+          deff = robust_tests,
           color_signif = color_signif, .fine = fine_for_pair(.fine, row_var, .col_var),
           .by_table = .by_table, inference = inference
         )
@@ -1672,6 +1687,8 @@ tab_assemble_tables <- function(ctx) {
   } else {
     tab <- new_tab(tab, subtext = subtext, test = tests, meta = meta)
   }
+  # the footer template names what THIS table can say, so it is written on the FINISHED table.
+  attr(tab, "subtext") <- footer_default_template(tab, subtext)
 
   ctx_update(ctx, list(tabs = tab, tests = tests))
 }
@@ -2209,13 +2226,15 @@ tab_row_roles <- function(tab) {
 # The ROBUST render-time variable detector: it degrades instead of letting a consumer crash.
 # DESIGN: row_var / tab_vars are placed from dplyr::group_vars(), which survives rename / select /
 #   relocate, so a factor moved AFTER the fmt columns is not miswritten.
+# `plain = TRUE`: the input was never a tabxplor table, so rendering it plain is what was asked --
+# the exporters say nothing. A table that HAS fmt columns and still degrades is told why.
 tab_render_vars <- function(tabs) {
   if (!is.data.frame(tabs))
-    return(list(degrade = TRUE, reason = "the object is not a data frame"))
+    return(list(degrade = TRUE, plain = TRUE, reason = "the object is not a data frame"))
 
   fmt_mask <- purrr::map_lgl(tabs, is_fmt)
   if (!any(fmt_mask))
-    return(list(degrade = TRUE,
+    return(list(degrade = TRUE, plain = TRUE,
                 reason = "the table has no tabxplor_fmt columns (not a tabxplor table)"))
 
   fct_names <- names(tabs)[purrr::map_lgl(tabs, is.factor)]
@@ -2249,7 +2268,9 @@ tab_render_vars <- function(tabs) {
 
 
 #' @keywords internal
-tab_degrade_inform <- function(reason) {
+tab_degrade_inform <- function(vars) {
+  if (isTRUE(vars$plain)) return(invisible(NULL))
+  reason <- vars$reason
   cli::cli_inform(c("!" = "Colours and formatting skipped ({reason}): the plain table is shown."))
 }
 

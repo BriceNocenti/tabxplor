@@ -1,0 +1,132 @@
+---
+
+# The works a Crosstables or a Regressions result rests on, cited in jamovi's own References list.
+# One entry per name an analysis names in its `refs:`; the two analyses cite what they actually run
+# (the fitting backends they may reach, and the interval / residual methods the footer names).
+# ⚠ Software entries are the packages' own (DESCRIPTION title and authors); method entries carry
+# author, year, title and journal only -- what the package's own reference lists already state
+# (dev/inference.md, dev/regression.md) and nothing invented around it.
+
+tabxplor:
+    type: software
+    author: Nocenti, B.
+    year: 2026
+    title: "tabxplor: User-Friendly Tables with Color Helpers for Data Exploration"
+    publisher: "[R package]"
+    url: https://cran.r-project.org/package=tabxplor
+
+survey:
+    type: software
+    author: Lumley, T.
+    year: 2026
+    title: "survey: Analysis of Complex Survey Samples"
+    publisher: "[R package]"
+    url: https://cran.r-project.org/package=survey
+
+MASS:
+    type: book
+    author: Venables, W. N., & Ripley, B. D.
+    year: 2002
+    title: Modern Applied Statistics with S
+    publisher: Springer
+    url: https://www.stats.ox.ac.uk/pub/MASS4/
+
+# nnet (multinom) ships with no citation of its own: it is the MASS book's, under its own name so a
+# regression table can cite the fitter it really ran.
+nnet:
+    type: book
+    author: Venables, W. N., & Ripley, B. D.
+    year: 2002
+    title: Modern Applied Statistics with S
+    publisher: Springer
+    url: https://cran.r-project.org/package=nnet
+
+marginaleffects:
+    type: software
+    author: Arel-Bundock, V.
+    year: 2026
+    title: "marginaleffects: Predictions, Comparisons, Slopes, Marginal Means, and Hypothesis Tests"
+    publisher: "[R package]"
+    url: https://cran.r-project.org/package=marginaleffects
+
+VGAM:
+    type: book
+    author: Yee, T. W.
+    year: 2015
+    title: Vector Generalized Linear and Additive Models
+    publisher: Springer
+    url: https://cran.r-project.org/package=VGAM
+
+svyVGAM:
+    type: software
+    author: Lumley, T.
+    year: 2026
+    title: "svyVGAM: Design-Based Inference in Vector Generalised Linear Models"
+    publisher: "[R package]"
+    url: https://cran.r-project.org/package=svyVGAM
+
+brant:
+    type: software
+    author: Schlegel, B., & Steenbergen, M.
+    year: 2026
+    title: "brant: Test for Parallel Regression Assumption"
+    publisher: "[R package]"
+    url: https://cran.r-project.org/package=brant
+
+wilson:
+    type: article
+    author: Wilson, E. B.
+    year: 1927
+    title: Probable inference, the law of succession, and statistical inference
+    publisher: Journal of the American Statistical Association
+
+newcombe:
+    type: article
+    author: Newcombe, R. G.
+    year: 1998
+    title: "Interval estimation for the difference between independent proportions: comparison of eleven methods"
+    publisher: Statistics in Medicine
+
+katz:
+    type: article
+    author: Katz, D., Baptista, J., Azen, S. P., & Pike, M. C.
+    year: 1978
+    title: Obtaining confidence intervals for the risk ratio in cohort studies
+    publisher: Biometrics
+
+woolf:
+    type: article
+    author: Woolf, B.
+    year: 1955
+    title: On estimating the relation between blood group and disease
+    publisher: Annals of Human Genetics
+
+welch:
+    type: article
+    author: Welch, B. L.
+    year: 1947
+    title: "The generalization of 'Student's' problem when several different population variances are involved"
+    publisher: Biometrika
+
+haberman:
+    type: article
+    author: Haberman, S. J.
+    year: 1973
+    title: The analysis of residuals in cross-classified tables
+    publisher: Biometrics
+
+rao-scott:
+    type: article
+    author: Rao, J. N. K., & Scott, A. J.
+    year: 1984
+    title: On chi-squared tests for multiway contingency tables with cell proportions estimated from survey data
+    publisher: The Annals of Statistics
+
+brant-test:
+    type: article
+    author: Brant, R.
+    year: 1990
+    title: Assessing proportionality in the proportional odds model for ordinal logistic regression
+    publisher: Biometrics
+
+...

@@ -32,7 +32,8 @@ if the width is too small for the entire tibble.}
 \item{min_row_var}{Minimum number of characters for the row variable. Default to 30.}
 
 \item{get_text}{Set to \code{TRUE} to get the text as a character vector
-instead of a printed output.}
+instead of a printed output -- the lines of whatever medium
+\code{getOption("tabxplor.print")} names.}
 }
 \value{
 A printed table.

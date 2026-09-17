@@ -8,7 +8,7 @@ gss <- fx_gss()
 testthat::test_that("row_kind is a real field, and is_totrow() is derived from it", {
   t <- tab(gss, marital, race, pct = "row")
   k <- tabxplor:::get_row_kind(t$Black)
-  testthat::expect_true(all(k %in% tabxplor:::ROW_KINDS))
+  testthat::expect_true(all(k %in% names(tabxplor:::ROW_KINDS)))
   testthat::expect_identical(k == "total", tabxplor:::is_totrow(t$Black))
   testthat::expect_identical(t$Black$in_totrow, tabxplor:::is_totrow(t$Black))  # the $ read alias
 })
@@ -174,4 +174,37 @@ testthat::test_that("tab(.levels_collapse=) is tab() on pre-collapsed data, and 
     tab(pre, marital, race, pct = "row", other_if_less_than = 2000L))
   testthat::expect_true("Not married" %in% levels(
     tab(gss, marital, race, pct = "row", other_if_less_than = 2000L, .levels_collapse = sp)$marital))
+})
+
+
+# --- the grid: a kind says how its rows READ ----------------------------------------------------
+
+testthat::test_that("ROW_KINDS is a grid, and its order is still the tie-break", {
+  # the order IS fmt_row_kind()'s "first non-data wins" tie-break, so it is part of the contract.
+  testthat::expect_identical(names(tabxplor:::ROW_KINDS),
+                             c("data", "total", "n", "pct", "pvalue", "gof", "blank"))
+  testthat::expect_true(all(purrr::map_lgl(
+    tabxplor:::ROW_KINDS, ~ is.logical(.x$graded) && length(.x$graded) == 1L &&
+      is.character(.x$doc) && nzchar(.x$doc))))
+})
+
+testthat::test_that("row_kind_graded() reads the grid, and folds NA and the unknown to `data`", {
+  testthat::expect_identical(
+    tabxplor:::row_kind_graded(names(tabxplor:::ROW_KINDS)),
+    c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE))
+  # NA-filled cells are what dplyr::bind_rows() leaves behind, exactly as is_totrow() folds them.
+  testthat::expect_identical(tabxplor:::row_kind_graded(c(NA_character_, "nope")), c(TRUE, TRUE))
+  testthat::expect_length(tabxplor:::row_kind_graded(character(0)), 0L)
+})
+
+testthat::test_that("fmt_row_look() is the anchor rule: a reference cell, or an ungraded row", {
+  t <- tab(gss, marital, race, pct = "row", color = "diff")
+  lk <- tabxplor:::fmt_row_look(t$Black)
+  testthat::expect_true(all(lk$graded))                       # data + total are graded
+  testthat::expect_identical(lk$anchor, tabxplor:::get_reference(t$Black, mode = "all_totals") |
+                                          tabxplor:::is_refrow(t$Black))
+  # an ungraded row is an anchor whatever the reference says
+  col <- tabxplor:::set_row_kind(t$Black, c(rep("data", length(t$Black) - 1L), "n"))
+  testthat::expect_false(tabxplor:::fmt_row_look(col)$graded[[length(col)]])
+  testthat::expect_true(tabxplor:::fmt_row_look(col)$anchor[[length(col)]])
 })

@@ -1673,7 +1673,7 @@ var renderModelCard = function(ui, frag, card, i, pool, keys) {
 
 var renderCardsBlock = function(ui, frag, pool, keys) {
     var h = document.createElement("div"); h.style.cssText = TABX.sectionHead;
-    h.textContent = _("Models comparison: choose predictors subsets");
+    h.textContent = _("Model comparison: choose predictor subsets");
     frag.appendChild(h);
 
     var cards = modelsGet(ui);

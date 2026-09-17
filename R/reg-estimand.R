@@ -98,7 +98,7 @@ REG_LOG_BASE <- c(raw_coefficient = "", raw_coef = "", raw_coeff = "",
 #' @noRd
 REG_MEASURE_SPELLINGS <- {
   v <- c(stats::setNames(REG_MEASURES_VALUES, REG_MEASURES_VALUES),
-         measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG)),
+         measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_REG, MEASURE_ACRONYMS_RETIRED)),
          stats::setNames(rep("raw_coefficient", length(REG_LOG_BASE)), names(REG_LOG_BASE)))
   v[!duplicated(names(v))]
 }
@@ -272,8 +272,9 @@ REG_LEVEL_MEASURES <- list(
                odds_ratio = c(scale = "odds_ratio", word = "OR")),
   mean  = list(difference = c(scale = "raw_diff",   word = "diff"),
                ratio      = c(scale = "mean_ratio", word = "RoM")),
+  # a COUNT has no exposure offset here, so exp(coef) is a ratio of mean counts: RoM, like a mean.
   count = list(difference = c(scale = "raw_diff",   word = "diff"),
-               ratio      = c(scale = "mean_ratio", word = "IRR")),
+               ratio      = c(scale = "mean_ratio", word = "RoM")),
   # DESIGN: Somers' D first -- it is stable in K (measured: 0.212 at K=4, 0.227 at K=20 for a
   # cumulative OR of 2) where the win ratio drifts (1.79 -> 1.63), so it is what `auto` falls back to.
   rank  = list(difference = c(scale = "points",     word = "D"),
@@ -341,7 +342,6 @@ REG_WORDS <- list(
   cumOR = list(long = function() gettext("cumulative odds ratio"), noncollapsible = TRUE),
   RR    = list(long = function() gettext("risk ratio"),            noncollapsible = FALSE),
   RD    = list(long = function() gettext("risk difference"),       noncollapsible = FALSE),
-  IRR   = list(long = function() gettext("incidence-rate ratio"),  noncollapsible = FALSE),
   RoM   = list(long = function() gettext("ratio of means"),        noncollapsible = FALSE),
   diff  = list(long = function() gettext("mean difference"),       noncollapsible = FALSE),
   # DESIGN: both COLLAPSIBLE, and measured rather than assumed: with a covariate independent of the
@@ -369,7 +369,7 @@ REG_CONTRASTS <- list(
 stopifnot("every contrast declares its marker" =
             setequal(names(REG_CONTRASTS), REG_CONTRAST_VALUES))
 
-# reg_own_word() -- the acronym a family's OWN measure is named by ("OR", "IRR", "cumOR"), DERIVED
+# reg_own_word() -- the acronym a family's OWN measure is named by ("OR", "RoM", "cumOR"), DERIVED
 # from the three facts the family already declares: `level`, the first entry of `fits` (its own
 # link), and any `words` override. Read by fmt_coef_label(), so a new family names its coefficient
 # with no row of its own. NA on the internal link keys, which declare no `fits`.
@@ -753,7 +753,7 @@ reg_measure_cell <- function(family, measure) {
 }
 
 # REG_FAMILY_MULT_WORD -- the MULTIPLICATIVE effect word of a fit key: what exp(coef) is CALLED for
-# this link (OR / RR / IRR / RoM / cumOR; NA where the link's coefficient is additive).
+# this link (OR / RR / RoM / cumOR; NA where the link's coefficient is additive).
 #
 # ⚠ keyed on the FIT, not on the family that declares it: a binomial outcome fits BOTH the logit
 # ("OR") and the modified Poisson ("RR"), so "the binomial family's word" is ambiguous where "the fit
@@ -1321,7 +1321,7 @@ reg_normalize_color <- function(color) {
 #' @noRd
 reg_color_auto_measure <- function(est) {
   # THE measure the column's own scale declares (`label_meas`): a coarser "is it multiplicative?"
-  # reading would hand a rate-ratio column the odds-ratio measure and an empty `or` field.
+  # reading would hand a ratio-of-means column the odds-ratio measure and an empty `or` field.
   EST_SCALES[[est$scale]]$label_meas
 }
 

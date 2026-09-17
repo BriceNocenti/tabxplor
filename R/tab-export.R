@@ -58,10 +58,11 @@ tab_export <- function(x, format = c("html", "md", "xl", "forest"), path = NULL,
   fwd <- function(f, ...) do.call(f, c(list(x), rlang::list2(...), dots))
   switch(
     format,
+    # the `tab.cap` chunk-option fallback is the EXPORTER's, stated there once: tab_html() and
+    # tab_md() both read it, so a NULL caption reaches them and they answer it.
     html = {
-      cap <- caption %||% tx_knitr_opt("tab.cap")
       k <- fwd(tab_html, theme = theme,
-               color = color, color_legend = color_legend, lang = lang, caption = cap,
+               color = color, color_legend = color_legend, lang = lang, caption = caption,
                transpose = transpose, var_names = var_names)
       if (!is.null(path)) writeLines(as.character(k), path)
       k

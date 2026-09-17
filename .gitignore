@@ -47,3 +47,6 @@ dev/Positron_Windows_settings.json
 
 /.quarto/
 **/*.quarto_ipynb
+
+# reverse-dependency check logs (dev/revdep_ggfacto.R)
+dev/revdep-ggfacto-log/

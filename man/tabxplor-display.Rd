@@ -8,9 +8,11 @@ Every function that builds a table takes a \code{display} argument, and \code{\l
 afterwards. This page is its vocabulary: the fields a cell may show, and the named layouts that
 arrange them.
 
-Choosing a display never triggers a computation and never changes a number --- every field is
-already stored in the cell (see \link{fmt}), so \code{set_display()} on a finished table gives exactly what
-asking for it in the call would have.
+Asking for a layout \strong{in the call} computes what it prints: one naming a confidence interval or
+a contribution to the chi-squared turns that on, so \code{display = "base_ci"} needs no \verb{ci =} beside
+it. Every other field is already stored in the cell (see \link{fmt}), so \code{\link[=set_display]{set_display()}} on a finished
+table changes no number --- it only says which of them is shown, and names the argument that
+would have filled a field the table does not carry.
 }
 \details{
 Three ways to ask, from the shortest:
@@ -39,25 +41,26 @@ field empty in the whole column is dropped, and a note says which argument would
 
 The fields a \code{\{\}} template may name, and \code{display} may name on their own.
 \itemize{
-\item \code{pct} --- the percentage.
+\item \code{pct} --- the percentage. Needs a factor col_var and percentages: pct = "row" / "col" / "all".
 \item \code{n} --- the count.
-\item \code{wn} --- the weighted count.
+\item \code{wn} --- the weighted count. Needs weights (\code{wt =}).
 \item \code{mean} --- the mean. Needs a numeric col_var.
 \item \code{est} --- the estimate, whatever this column estimates --- an odds ratio, a risk difference, a coefficient, a percentage. The one token that means the same thing on every table.
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction. Needs a column that has a level beside its estimate.
-\item \code{diff} --- the difference from the reference. Needs a \code{ref} to compare to, and pct = "row" / "col".
-\item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means). Needs a \code{ref} to compare to, and pct = "row" / "col".
-\item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
-\item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width. Needs ci = "ref"  (or ci = "cell" for each cell's own interval).
-\item \code{or} --- the odds ratio. Needs pct = "row" / "col"  (an odds ratio needs a percentage base).
-\item \code{ctr} --- the cell's contribution to the chi-squared. Needs test = TRUE  (the contributions come from the chi-squared).
+\item \code{diff} --- the difference from the reference. Needs a \code{ref} to compare to and something to compare: pct = "row" / "col", or a numeric col_var.
+\item \code{ratio} --- the ratio to the reference (relative risk, or a ratio of means). Needs a \code{ref} to compare to and something to compare: pct = "row" / "col", or a numeric col_var.
+\item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
+\item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
+\item \code{or} --- the odds ratio. Needs a factor col_var and a percentage base: pct = "row" / "col".
+\item \code{odds} --- the odds --- \code{pct / (1 - pct)}, the quantity an odds ratio is a ratio of. Printed on the odds ratio's own ladder, so a cell below 1 reads its inverse ("1/2.60") unless \code{options(tabxplor.ratio_print = "raw")} asks for the plain number. Void where the percentage is 1 and the odds infinite. Needs a factor col_var and a percentage base: pct = "row" / "col".
+\item \code{ctr} --- the cell's contribution to the chi-squared. Needs a factor col_var.
 \item \code{var} --- the variance. Needs a numeric col_var.
 \item \code{sd} --- the standard deviation, in the variable's own unit. Needs a numeric col_var.
 \item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean. Needs a numeric col_var whose mean is positive.
-\item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs test = TRUE  (the residual comes from the chi-squared).
-\item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE)  (an observed effect to compare the model to).
+\item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only. Needs a factor col_var.
+\item \code{obs} --- the OBSERVED (crude) effect a modelled one is compared to. \code{tab_reg()} tables only. Needs tab_reg(empirical = TRUE) (an observed effect to compare the model to).
 \item \code{coef} --- the estimate on the model's LINK scale --- the coefficient a linear or log-link model fitted. The same number as \code{est} where the column is already additive, its logarithm where the column shows a ratio. Needs a \code{tab_reg()} column (a crosstab estimates no coefficient).
-\item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE)  (a model effect and its observed counterpart).
+\item \code{gap} --- how far adjustment moved the effect: the gap between the modelled estimate and its observed counterpart, on the estimate's own scale. What \code{color = "adjustment"} grades --- readable in print and Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE) (an observed effect to compare the model to).
 }
 }
 

@@ -60,6 +60,9 @@ cat(tab_css(theme = "auto"))
 install.packages("tabxplor", dependencies = TRUE)
 ```
 
+```{r jamovi-install, child = "pkgdown/_jamovi-install.Rmd"}
+```
+
 ## A quick look
 
 A simple cross-table with row percentages: shades of blue mean the cell is over-represented compared to the total row, shades of yellow to red mean it is under-represented.

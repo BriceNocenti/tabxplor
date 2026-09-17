@@ -198,6 +198,16 @@ palette_8bit <- list(
 #           ⚠ THREE RENDERERS MUST HONOUR IT, and each states it in its own idiom: the exports
 #           (fmt_get_color_code), the footer legend, and the CONSOLE CELLS -- which paint the fill as
 #           an ANSI background, so without it the cell keeps the terminal's own light foreground.
+#   accent: the ink of something the table DRAWS rather than writes -- today the data bar of a column
+#           carrying no colour measure (a coloured one takes its own slot ink, so the bar agrees with
+#           the shade beside it). The over-ramp's rung 3, read from the ramps rather than written
+#           here, so set_color_palette() moves it too; the page's own ink on paper, where a bar is
+#           drawn in the one colour there is.
+#   track : the GROUND that accent is drawn on -- the data bar's groove, which says how far a full
+#           bar would reach and is what makes a short one readable. ⚠ ALPHA, and that is the whole
+#           point: a groove is a shadow on whatever ground the page has, so one declaration darkens a
+#           white page and lightens a dark one, and it survives a row hover reading through. Html
+#           only: an Excel dataBar has a groove of its own.
 #   mark  : a publication palette's effect-size MARKS, which sit where the stars sit but are not an
 #           aside: they REPLACE the colour, so they carry the deviation itself and must read as
 #           strongly as the number. Pure black under every print palette (a superscript glyph at
@@ -209,6 +219,10 @@ palette_8bit <- list(
 # writes `background:transparent` for the colour themes, so in an .Rmd, a .qmd or on the site the
 # table follows the PAGE and this hex is never seen; it is the interactive Viewer's ground, and the
 # reference the dark ramps are measured against. The ramps hold from L 0.20 to 0.30 (dev/dark_palette.md).
+# The accent, read from the LIVE palette store (rung 3 of the over ramp, `get_color_style()`'s own
+# vector), so set_color_palette() moves the bar with the cells.
+tx_accent_hex <- function(theme) get_color_style("color_code", type = "text", theme = theme)[[3L]]
+
 tx_chrome_hex <- function(theme = "light") {
   pal <- print_palette_of(tx_palette_theme(theme))
   # On paper the chrome is fixed -- black ink, white ground, no hover -- and the only thing a
@@ -216,16 +230,18 @@ tx_chrome_hex <- function(theme = "light") {
   # for an aside. It owns those two because they must sit beside ITS ink ladder (a palette whose first
   # rung is pure black can use the ordinary grey; one whose first rung is already grey cannot).
   if (!is.null(pal)) return(list(text = "#000000", grey = pal$grey, grey2 = pal$grey2,
-                                 mark = "#000000", on_fill = NA_character_,
+                                 mark = "#000000", on_fill = NA_character_, accent = "#000000",
+                                 track = "rgba(0,0,0,.05)",
                                  bg = "#ffffff", border = "#000000", hover = "transparent"))
   switch(
     tx_palette_theme(theme),
     dark = list(text = "#f1efe0", grey = "#919085", grey2 = "#CDCBBC",
-                mark = "#f1efe0", on_fill = "#21252b",
+                mark = "#f1efe0", on_fill = "#21252b", accent = tx_accent_hex("dark"),
+                track = "rgba(255,255,255,.07)",
                 # former base dark theme texts color: text = "#f0efe5", grey = "#919087", grey2 = "#CECDC3" ; even before: # text = "#CECDC3", grey = "#707070", grey2 = "#bebebe",
                 bg = "#21252b", border = "#CDCBBC", hover = "rgba(255,242,204,.10)"),
     list(text = "#000000", grey = "#949494", grey2 = "#444444", mark = "#444444",
-         on_fill = NA_character_,
+         on_fill = NA_character_, accent = tx_accent_hex("light"), track = "rgba(0,0,0,.07)",
          bg = "#ffffff", border = "#000000", hover = "#FFFCE5")
   )
 }
@@ -369,8 +385,9 @@ PRINT_PALETTES <- list(
 # crosstab takes the MARKS -- nothing typographic competes with the numbers, and the glyphs survive a
 # plain-text copy. A regression takes the EMPHASIS ladder, its cells already carrying their own
 # direction symbol, which frees the typography to spend everything on magnitude.
-# WARNING: the two members write DIFFERENT `.p1..m4` rules and a stylesheet is table-independent by
-# contract, so a batch resolves to ONE of them and `fallback` serves a caller with no table in hand.
+# WARNING: the two members write DIFFERENT `.p1..m4` rules, so ONE call resolves to one of them (the
+# table then wears its `tx-<palette>` class, which every sheet's scoped layer reads -- R/tab-css.R),
+# and `fallback` serves a caller with no table in hand.
 # It is the EMPHASIS member on purpose: marks are cell TEXT and survive a missing stylesheet.
 PRINT_READY <- c(crosstab = "print_marks", regression = "print_emphasis",
                  fallback = "print_minimalistic")

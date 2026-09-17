@@ -73,7 +73,7 @@ tooltip_ctx <- function(x, .ref = NULL, .base_n = NULL) {
 
   list(scl = scl, disp = disp, role = role, vkind = scl$var_kind,
        stat_row = vctrs::field(x, "row_kind") %in% c("pvalue", "gof", "blank"),
-       data_row = vctrs::field(x, "row_kind") %in% c("data", "total"),
+       data_row = row_kind_graded(vctrs::field(x, "row_kind")),   # a GRADED row (ROW_KINDS)
        pct_type = get_pct_type(x), is_effect = identical(scl$kind, "effect"),
        digits = get_digits(x), note = NULL,
        comparable = !((totcol | totrows) & !is.na(pct) & pct == 1),

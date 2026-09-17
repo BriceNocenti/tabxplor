@@ -330,3 +330,29 @@ testthat::test_that("tab_cache_keys emits the tier 0-2 skeleton", {
   testthat::expect_identical(keys$tier1_common$other_if_less_than, 5)
   testthat::expect_identical(keys$tier2$comp, "tab")
 })
+
+
+# ---- jamovi's RESULTS language, read through its own public API --------------------------------
+
+testthat::test_that("the results language is read from the module's own catalogue, and falls back to en", {
+  testthat::skip_if_not_installed("jmvcore")
+  stub <- function(f) list(options = list(translate = f))
+
+  # a catalogue that translates the sentinel gives its code ...
+  testthat::expect_identical(
+    tabxplor:::jmv_results_lang(stub(function(text, n = 1) if (grepl("^en \\[", text)) "fr" else text)),
+    "fr")
+  # ... one that does not (no catalogue for jamovi's language) gives the msgid itself, i.e. "en" --
+  # exactly what the panel's own messages fall back to, so the two can never disagree
+  testthat::expect_identical(tabxplor:::jmv_results_lang(stub(function(text, n = 1) text)), "en")
+  testthat::expect_identical(tabxplor:::jmv_results_lang(stub(function(...) stop("no"))), "en")
+
+  # the scope reaches BOTH halves: what the footer machinery reads, and what the build's gettext()
+  # writes (the Total labels, the test rows, a regression title)
+  seen <- tabxplor:::jmv_with_lang(
+    stub(function(text, n = 1) if (grepl("^en \\[", text)) "fr" else text),
+    function() list(opt = getOption("tabxplor.lang"), lang = Sys.getenv("LANGUAGE")))
+  testthat::expect_identical(seen$opt, "fr")
+  testthat::expect_identical(seen$lang, "fr")
+  testthat::expect_false(identical(getOption("tabxplor.lang"), "fr"))   # restored
+})

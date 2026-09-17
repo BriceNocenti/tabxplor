@@ -151,8 +151,9 @@ TAB_ARGS <- list(
             "  \\code{\"diff\"}), or a \\strong{\\{\\} template} of your own",
             "  (\\code{\"\\{pct\\} (n=\\{n\\})\"}). The whole vocabulary is in \\link{tabxplor-display};",
             "  \\code{\\link{set_display}} changes it on a table already built.",
-            "  A layout showing an interval prints the one the table computed, so pair it with a",
-            "  \\code{ci = } value or a \\code{color} that needs one.")),
+            "  A layout that names a confidence interval or a contribution to the chi-squared",
+            "  COMPUTES it, so \\code{display = \"base_ci\"} needs no \\code{ci = } beside it; an",
+            "  explicit \\code{ci = \"no\"} still stands.")),
   totaltab = list(
     producers = c("tab", "tab_plain", "tab_num", "tab_counts"), default = "line",
     values = c("line", "table", "no", ""), size = 1L,
@@ -591,14 +592,19 @@ EXPORT_ARGS <- list(
             "are the spanning row above their level columns. Level headers always keep their name.")),
   wrap_rows = list(
     producers = c("tab_html", "tab_md", "tab_xl"),
-    doc = "By default, rownames are wrapped when larger than 30 characters.",
+    doc = "Row labels are wrapped past this width (35 characters by default).",
     doc_for = list(
       tab_md = c("Max width for row labels before truncation. `NULL` (default) never truncates",
                  "(lossless -- the column grows); set a number to cap the label width. A markdown pipe",
                  "cell cannot hold a raw newline, so md \"wrapping\" means \"do not truncate\"."))),
   wrap_cols = list(
     producers = c("tab_html", "tab_xl"),
-    doc = "By default, colnames are wrapped when larger than 12 characters."),
+    doc = c("Column headers are wrapped past this width (15 characters by default), at the seams a",
+            "compound name is built from (`_`, `.`, `*`, a camelCase boundary). A col_var's spanning",
+            "name is measured against the width its own columns leave it first: past that it wraps,",
+            "and past what wrapping can do it is shown from the prefix it shares with the block before",
+            "it (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`), and held to this width in the last resort ---",
+            "never while there is room for the whole name.")),
   whitespace_only = list(
     producers = c("tab_html"),
     doc = "Set to `FALSE` to wrap also on non whitespace characters."),

@@ -83,7 +83,18 @@ z16_footers <- c(
   n       = "Weighted by %s; confidence intervals and tests use the unweighted sample size.",
   weights = "Weighted by %s; confidence intervals and tests account for the weighting.",
   partial = paste("Design-based (survey) estimates; this table's design variance could not be",
-                  "computed, so its intervals account for the weighting only."))
+                  "computed, so its intervals account for the weighting only."),
+  # v2.0.1 phase 4: the SHORT half of each, printed where the table shows no inference at all
+  short_n   = "Weighted by %s.",
+  short_svy = "Design-based (survey): weighted estimates.")
+
+test_that("the short weight footer translates", {
+  d <- fr_data(); d$w <- 1 + (seq_len(nrow(d)) %% 3)
+  t <- tab(d, race, y, pct = "row", wt = w)          # no ci, no test, no stars, no gated colour
+  expect_equal(tabxplor:::tab_weight_line(t, lang = "en"), "Weighted by w.")
+  skip_if_no_gettext()
+  expect_equal(tabxplor:::tab_weight_line(t, lang = "fr"), "Pond\u00e9r\u00e9 par w.")
+})
 
 
 
@@ -148,4 +159,23 @@ test_that("the shape table translates to French", {
   expect_match(fr, "variable expliqu\u00e9e")
   expect_match(fr, "pr\u00e9dicteur num\\.")
   expect_no_match(fr, "numeric predictor")
+})
+
+
+test_that("French names every non-odds ratio \"ratio\"", {
+  skip_if_no_gettext()
+  t  <- tab(forcats::gss_cat, marital, race, pct = "row", color = "ratio")
+  fr <- paste(tab_footer_text(t, lang = "fr"), collapse = " ")
+  expect_match(fr, "Ratio (risque relatif)", fixed = TRUE)
+  expect_no_match(fr, "rapport", fixed = TRUE)
+  # the catalogue is a source file: read where it exists (a dev checkout), not under R CMD check
+  po_file <- testthat::test_path("..", "..", "po", "R-fr.po")
+  if (file.exists(po_file)) {
+    po <- readLines(po_file, encoding = "UTF-8", warn = FALSE)
+    live <- grep("^msgstr|^\"", po, value = TRUE)
+    left <- grep("\\brapports?\\b", live, value = TRUE, perl = TRUE)
+    left <- grep("rapports? de cotes|rapport de vraisemblance|par rapport|rapport \"$", left,
+                 value = TRUE, invert = TRUE)
+    expect_length(left, 0L)
+  }
 })

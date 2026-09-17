@@ -6,6 +6,7 @@ version: '1.0.0'
 jas: '1.2'
 weightsSupport: 'full'
 
+
 options:
     - name: data
       type: Data
@@ -14,7 +15,7 @@ options:
            A data.frame.
 
     - name: outcome
-      title: "<b>outcome = <i>(dependent variable[s])</i></b>"
+      title: "<b>outcome = <i>(dependent variables)</i></b>"
       type: Variables
       permitted: [numeric, factor]
       default: NULL
@@ -163,7 +164,7 @@ options:
           name:  auto
         - title: "difference <i>(RD, diff)</i>"
           name:  difference
-        - title: "ratio <i>(RR, IRR, RoM)</i>"
+        - title: "ratio <i>(RR, RoM)</i>"
           name:  ratio
         - title: "odds_ratio <i>(OR)</i>"
           name:  odds_ratio
@@ -383,7 +384,7 @@ options:
       default: true
       description:
           R: >
-           Show per-cell significance stars (the colours read the confidence interval
+           Show per-cell significance stars (the colors read the confidence interval
            either way).
 
     - name: color
@@ -401,13 +402,13 @@ options:
       default: measure
       description:
           R: >
-           WHAT the effect cells are coloured by. The colour LADDER always comes from what the
+           WHAT the effect cells are colored by. The color LADDER always comes from what the
             column estimates (an odds ratio is read on the odds-ratio scale, a beta on the
             standardized-difference one), so what is left to choose is what the estimate is compared
             TO.
             \itemize{
              \item \code{"measure"}: the effect's own size (compared to no effect).
-             \item \code{"no"}: no colours.
+             \item \code{"no"}: no colors.
              \item \code{"adjustment"}: how far the ADJUSTED effect moved from the crude one --
              needs \code{empirical}.
              \item \code{"between_groups"}: how far each group's effect is from the first group's
@@ -427,8 +428,8 @@ options:
       default: grey_non_signif
       description:
           R: >
-           How significance interacts with the colours: observed size + grey out non-significant
-           cells, colour only the guaranteed (error-adjusted) effect, ignore significance.
+           How significance interacts with the colors: observed size + grey out non-significant
+           cells, color only the guaranteed (error-adjusted) effect, ignore significance.
 
 # ==================== Missing values and display ====================
     - name: display
@@ -544,9 +545,9 @@ options:
       description:
           R: >
            How the table is painted, in the results panel and in every export.
-            \code{"light"} is the colour palette; \code{"print_ready"} says the same thing
+            \code{"light"} is the color palette; \code{"print_ready"} says the same thing
             typographically --- bold, italics, underlines and marks instead of blue and red ---
-            for a page that has no colour. See \code{\link{tab_css}}.
+            for a page that has no color. See \code{\link{tab_css}}.
 
     - name: wrap_rows
       title: ""          # the .u.yaml Label above it names the argument; a title here double-labels
@@ -607,7 +608,7 @@ options:
     # collides with it ("symbol already has a regular binding") and the analysis cannot be built at
     # all -- the same trap that made `levels` become `lvs`. It sits beside `xl_replace` instead.
     - name: xl_check
-      title: "assumption checks plots in Excel"
+      title: "assumption-check plots in Excel"
       type: Bool
       default: false
       description:

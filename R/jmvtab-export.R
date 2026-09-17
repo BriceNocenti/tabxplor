@@ -13,6 +13,11 @@
 #   - ⚠ In jamovi's bundled R, path.expand("~") resolves to Documents rather than the real home --
 #     expand through the OS home (USERPROFILE / HOME) instead.
 #   - `fs` is Suggests: every use carries a base-R fallback, so export never hard-depends on it.
+#   - ⚠ THE RESULTS LANGUAGE IS READ BY TRANSLATING. jamovi keeps it private, so jmv_results_lang()
+#     asks the module's own catalogue for one sentinel msgid whose translation IS the code, and
+#     jmv_with_lang() wraps each `.run()` in it -- the table's own labels and its footer are then
+#     built in the language the panel speaks. No catalogue for it means "en", the panel's own
+#     fallback, so the two halves of a result cannot end up in two languages.
 #   - ⚠ A SHARED HELPER MAY ONLY READ AN OPTION BOTH PANELS DECLARE, and the failure is not a NULL:
 #     jmvcore's `$.Options` STOPS on an unknown name. Anything panel-specific goes through jmv_opt().
 #   - ⚠ THE RESULTS PANEL SIZES ITSELF FROM THE Html ELEMENT, which jamovi pins at width:500px -- so
@@ -300,16 +305,69 @@ jmvtab_export <- function(tabs, format = c("excel", "html", "md"), path, replace
 
 # === Shared jamovi backend helpers ==========================================================
 
+# DESIGN: the `wt` box WINS over jamovi's own row weights -- a variable named in the analysis is a
+# more specific answer than a setting made on the spreadsheet. `overridden` is what makes that
+# audible instead of silent: the two weightings would otherwise differ with nothing said.
 #' @noRd
 jmv_backend_weights <- function(data, opt_wt) {
-  wt <- character()
+  wt   <- character()
+  jmvw <- !is.null(attr(data, "jmv-weights"))
   if (!is.null(opt_wt) && length(opt_wt)) {
     wt <- opt_wt
-  } else if (!is.null(attr(data, "jmv-weights"))) {
+  } else if (jmvw) {
     data[[".COUNTS"]] <- jmvcore::toNumeric(attr(data, "jmv-weights"))
     wt <- ".COUNTS"
   }
-  list(data = data, wt = wt)
+  list(data = data, wt = wt, overridden = jmvw && length(wt) && !identical(wt, ".COUNTS"))
+}
+
+# ... and says it, once, above the table. ⚠ Guarded twice: `Notice` reaches back only so far (the
+# module declares minApp 2.4.0), and `insert()` is jamovi's, not this package's -- a harness without
+# either must still run the analysis.
+#' @noRd
+jmv_backend_weights_notice <- function(self, wr) {
+  if (!isTRUE(wr$overridden)) return(invisible(FALSE))
+  if (!exists("Notice", asNamespace("jmvcore"))) return(invisible(FALSE))
+  msg <- jmvcore::.("Weighted by the `wt` variable. jamovi's own row weights are not used.")
+  ok <- try({
+    n <- jmvcore::Notice$new(options = self$options, name = "weights_notice",
+                             type = jmvcore::NoticeType$WARNING, content = msg)
+    self$results$insert(1, n)
+  }, silent = TRUE)
+  invisible(!inherits(ok, "try-error"))
+}
+
+# THE RESULTS LANGUAGE, read through jamovi's own public API. jamovi sends it as a private option
+# (`Options$.lang`, no accessor) and exposes it only by TRANSLATING -- `translate()` resolves a
+# string against the module's own inst/i18n/<code>.json. So the language is read the way every other
+# string is: ONE sentinel msgid whose translation IS the code (`.("en [language code]")`, the
+# compiler's own `text [context]` form, extracted from R files like any other `.()`).
+# ⚠ A language tabxplor ships no catalogue for answers "en" -- which is exactly what the panel's own
+# messages fall back to, so the panel and the table can never end up in two different languages.
+#' @noRd
+jmv_results_lang <- function(self) {
+  # ⚠ jmvcore's `.()`, not `self$options$translate()` directly: the compiler EXTRACTS `.("...")` from
+  # R files, and a msgid it never saw would have no line to translate. `.()` reads `self` out of its
+  # caller's frame, which is this function's own argument.
+  code <- tryCatch(jmvcore::.("en [language code]"), error = function(e) NULL)
+  if (!is.character(code) || length(code) != 1L || is.na(code)) return("en")
+  # ⚠ ANYTHING that is not a language code is "en". An untranslated sentinel comes back as the msgid
+  # itself -- with the `[context]` still on it, wherever a caller does not strip it -- and a code
+  # tabxplor cannot honour would otherwise be pushed into `LANGUAGE` for the whole run.
+  code <- tolower(sub(" \\[.*\\]$", "", code))
+  if (!grepl("^[a-z]{2,3}([_-][a-z0-9]+)?$", code)) return("en")
+  code
+}
+
+# Run one analysis under that language: `tabxplor.lang` for what the footer machinery reads, and the
+# gettext scope with_legend_lang() already owns for everything the BUILD writes (the Total labels,
+# the test rows, a regression's title). One wrapper around each `.run()`, so no string can escape it.
+#' @noRd
+jmv_with_lang <- function(self, f) {
+  code <- jmv_results_lang(self)
+  old  <- options(tabxplor.lang = code)
+  on.exit(options(old), add = TRUE)
+  with_legend_lang(code, function(lg) f())
 }
 
 # This is the route: every panel-specific option read from a shared jmv_backend_* helper goes
@@ -358,8 +416,7 @@ jmv_backend_render_html <- function(self, tabs) {
     wrap_rows = self$options$wrap_rows,
     wrap_cols = self$options$wrap_cols,
     theme     = jmv_backend_theme(self)
-  ) |>
-    jmv_results_scrollbox()
+  )
 }
 
 
@@ -367,8 +424,14 @@ jmv_backend_render_html <- function(self, tabs) {
 # WARNING: jamovi sizes an analysis from its results iframe's reported width, but jamovi's own
 # stylesheet pins an Html result at `width:500px`, so the table's real width never reached the host.
 # Un-pinning to `width:max-content` restores that intent and lets the box hug the table in one pass;
-# there is deliberately no display cap (the panel scrolls instead), and prose must NOT drive the
-# width -- hence `tx-note` on every non-table fragment. Full CSS chain: dev/jamovi_module.md s7.
+# and prose must NOT drive the width -- hence `tx-note` on every non-table fragment. Full CSS chain:
+# dev/jamovi_module.md s7.
+#
+# THE SCROLL BOX ITSELF IS NOT JAMOVI'S. tab_html() wraps every table in a `.tx-scrollbox` and
+# tab_css() gives it its shape, for jamovi as for a document, a pkgdown site and the Viewer. What is
+# jamovi's, and all that is left here, is the CAP: a document box stops at the space it has
+# (`max-width:100%`), and jamovi has no such space to read -- the panel is sized FROM the table.
+# Nothing else may be restated below, or the two would drift.
 
 # Runaway guard only: no table is meant to reach it.
 JMV_RESULTS_MAX_WIDTH <- 4000L
@@ -378,22 +441,10 @@ jmv_results_style <- function(max_width = JMV_RESULTS_MAX_WIDTH) {
   paste0(
     "<style>",
     ".jmv-results-html{width:max-content;}",
-    ".tx-scrollbox{display:block;width:max-content;max-width:", max_width,
-    "px;overflow-x:auto;margin-bottom:", TX_TAIL_SPACE, ";}",
-    # ⚠ THE AIR MOVES OUT ONTO THE BOX: `overflow-x:auto` makes the scrollbox a formatting context,
-    # so the table's own trailing margin would sit INSIDE it -- above the horizontal scrollbar
-    # instead of below the whole thing. Only the LAST table gives it up; the ones stacked above keep
-    # theirs, which is what still separates them.
-    ".tx-scrollbox > .tabxplor-tab:last-child{margin-bottom:0;}",
+    ".tx-scrollbox{max-width:", max_width, "px;}",
     ".tx-note{max-width:520px;}",
-    "@media print{.tx-scrollbox{max-width:none;overflow-x:visible;}}",
     "</style>"
   )
-}
-
-#' @noRd
-jmv_results_scrollbox <- function(html) {
-  paste0('<div class="tx-scrollbox">', as.character(html), '</div>')
 }
 
 # The shape every non-table fragment takes: `tx-note` keeps its prose from sizing the panel.

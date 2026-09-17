@@ -584,8 +584,12 @@ jmv_tab3_tuple <- function(opts, ci_resolved, arming, geom) {
   # need different interval geometry: percentage-point bounds vs Katz log-RR). `comparison` is stored
   # rather than the raw `display` string, since the armed carrier is built before tab_apply_display()
   # runs -- keying the string would force a rebuild on every display toggle instead of a re-paint.
+  # ⚠ ... but what the display ARMS is not a re-paint: a layout printing an interval or the
+  # chi-squared contributions makes the build compute them (DISPLAY_TOKENS$arms), so the armed facts
+  # -- not the layout -- belong in the key. Two layouts arming the same thing still share a carrier.
   list(arming = arming, geom = geom,
        comparison = display_comparison(opts$display),
+       arms = display_arms(opts$display),
        ref = opts$ref, ref2 = opts$ref2,
        comp = opts$comp, ci = ci_resolved, conf_level = opts$conf_level,
        ci_method = jmv_ci_method(opts), stars = opts$stars)
@@ -605,7 +609,7 @@ jmv_tab3_measure <- function(color) {
 # this branch, because it never changes the tuple.
 #' @noRd
 jmv_tab3_rerefable <- function(old_tuple, new_tuple) {
-  keys    <- c("arming", "comparison", "comp", "ci", "conf_level", "stars")
+  keys    <- c("arming", "comparison", "arms", "comp", "ci", "conf_level", "stars")
   recomp  <- c("ref", "ref2", "geom", "ci_method")
   identical(old_tuple[keys], new_tuple[keys]) &&
     !identical(old_tuple[recomp], new_tuple[recomp]) &&   # ... and at least one of them DID change
@@ -839,7 +843,7 @@ jmvtab_build <- function(data, opts, store) {
   old_lv <- options(lifecycle_verbosity = "quiet")
   r_ci   <- tryCatch(
     resolve_leaf_ci(opts$ci, jmv_tab3_measure(color), color_signif, opts$stars,
-                    if (length(opts$ref)) opts$ref else "auto"),
+                    if (length(opts$ref)) opts$ref else "auto", display = opts$display),
     finally = options(old_lv))
   ci <- r_ci$ci
 

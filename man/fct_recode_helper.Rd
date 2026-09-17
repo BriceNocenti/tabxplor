@@ -2,7 +2,7 @@
 % Please edit documentation in R/utils.R
 \name{fct_recode_helper}
 \alias{fct_recode_helper}
-\title{fct_recode helper to recode multiple variables}
+\title{Write the code to recode several factors}
 \usage{
 fct_recode_helper(
   data,
@@ -18,11 +18,12 @@ fct_recode_helper(
 \arguments{
 \item{data}{The data frame.}
 
-\item{.cols}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.}
+\item{.cols}{<\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode. Default: every
+non-numeric column.}
 
 \item{name_in}{The input data frame's name (default: the expression given as \code{data}).}
 
-\item{name_out}{The output data frame's name, if different from \code{name_in}.}
+\item{name_out}{The output data frame's name, if different from \code{name_in} (used by \code{style = "base"}).}
 
 \item{freq}{Print each level's frequency and count as a comment; defaults to \code{TRUE} when 5 or
 fewer variables are given.}
@@ -36,14 +37,18 @@ fewer variables are given.}
 }
 \value{
 With \code{cat = TRUE} (default), the text printed to console (or written to a temp R file for
-more than 5 variables), returned invisibly. With \code{cat = FALSE}, a \code{tibble} of the recode text is
-returned instead. A column carrying a \code{label} attribute is used as its comment title.
+more than 5 variables), returned invisibly. With \code{cat = FALSE}, a \code{tibble} of the recode text.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}}
+Recoding a factor with \code{\link[forcats:fct_recode]{forcats::fct_recode()}} means typing every level name exactly, and a typo
+is silently ignored. \code{fct_recode_helper()} writes that code for you: it prints a ready-to-paste
+\code{mutate()} call with one \code{fct_recode()} per variable, each level already written as
+\code{"level" = "level"}. You then only edit the new names on the left, and delete the lines you keep.
 
-Printed a ready-to-paste \code{mutate()} call recoding a set of factor columns via
-\code{\link[forcats:fct_recode]{forcats::fct_recode()}} -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
-Removed in 2.1.0; copy it into your own project if you rely on it.
+With a few variables, each level carries its frequency and count as a comment, which is what tells
+you which small levels to merge. A column with a \code{label} attribute (data imported by \pkg{haven})
+gets that label as a comment title.
 }
-\keyword{internal}
+\examples{
+fct_recode_helper(forcats::gss_cat, c(marital, race))
+}

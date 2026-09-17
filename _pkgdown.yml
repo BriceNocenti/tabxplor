@@ -17,7 +17,7 @@ template:
 home:
   links:
   - text: Use it without code, in jamovi
-    href: https://www.jamovi.org/
+    href: https://bricenocenti.github.io/tabxplor/#the-jamovi-module
 
 # One English site. The French translations of the vignettes live in Articles ("En français") --
 # no second FR site build, no language toggle. `intro` is dropped from the left side so the
@@ -76,8 +76,9 @@ reference:
 - title: Point-and-click interface (jamovi)
   desc: >
     The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/) -- everything
-    the package does, driven by menus. Install jamovi, open the modules menu (the `+` at the
-    top-right), choose *jamovi library*, and install **tabxplor**.
+    the package does, driven by menus. The module is not in jamovi's library: it is a file
+    you sideload, one per system and per jamovi line --
+    [how to install it](../index.html#the-jamovi-module).
   contents:
   - jmvtab
   - jmvtabreg
@@ -96,7 +97,22 @@ reference:
   - tab_html
   - tab_md
   - tab_xl
+  - tab_pipe
   - tab_css
+
+- title: What is written under a table
+  desc: >
+    The footer is one region and its text is a template the table carries: everything tabxplor
+    generates is a `<placeholder>`, everything you write is a line, and the order of the lines is the
+    order of the footer.
+  contents:
+  - tabxplor-footer
+  - set_subtext
+  - set_legend_words
+  - tab_footer_text
+  - tab_note
+  - set_footer_tabs
+  - set_bars
 
 - title: Charts
   desc: (Both need **ggplot2**.)
@@ -107,6 +123,7 @@ reference:
 - title: Data-prep and text helpers
   desc: Small utilities for preparing data or laying out a table.
   contents:
+  - fct_recode_helper
   - score_from_lv1
   - shape_numeric_var
   - tab_wrap_text

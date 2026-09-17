@@ -92,7 +92,7 @@ sits from its reference, the measure which of the ways of expressing it you read
 one per column type. Otherwise:
 \itemize{
 \item \code{"difference"} (\code{"RD"}, \code{"diff"}): the cell's difference from its reference (percentage points for factors, Glass's \eqn{\Delta} for means).
-\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}): relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"ratio"} (\code{"RR"}, \code{"RoM"}): relative risk (factors) or mean ratio (numerics) vs the reference.
 \item \code{"odds_ratio"} (\code{"OR"}): the odds ratio, on percentage tables, coloured on its own symmetric scale.
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 }
@@ -249,8 +249,9 @@ keeps each cell's plain value. Three ways to ask: a \strong{named layout}
 \code{"diff"}), or a \strong{\{\} template} of your own
 (\code{"\{pct\} (n=\{n\})"}). The whole vocabulary is in \link{tabxplor-display};
 \code{\link{set_display}} changes it on a table already built.
-A layout showing an interval prints the one the table computed, so pair it with a
-\code{ci = } value or a \code{color} that needs one.}
+A layout that names a confidence interval or a contribution to the chi-squared
+COMPUTES it, so \code{display = "base_ci"} needs no \code{ci = } beside it; an
+explicit \code{ci = "no"} still stands.}
 
 \item{color_breaks}{A per-table override of the colour thresholds, in the form
 \code{\link{set_color_breaks}} accepts; unset scales keep the global ones.}

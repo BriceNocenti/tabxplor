@@ -31,7 +31,9 @@ statistically solid, to spot the structure of your data immediately.
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 .tabxplor-tab{margin-bottom:1.2em;}
-.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+.tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}
+.tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}
+.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}
 .tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
@@ -75,6 +77,11 @@ statistically solid, to spot the structure of your data immediately.
 .popover-body,.popover-content{padding:6px;white-space:pre;}
 .tabxplor-tab{color:#000000;background:transparent;}
 .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}
+.tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+.tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+.tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+.tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+.tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 .g1,.tabxplor-tab .g1{color:#949494;}
 .g2,.tabxplor-tab .g2{color:#444444;}
@@ -105,6 +112,11 @@ statistically solid, to spot the structure of your data immediately.
   .tabxplor-tab{color:#f1efe0;background:transparent;}
   .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,:is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),.tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
   .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
   .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
   .g1,.tabxplor-tab .g1{color:#919085;}
   .g2,.tabxplor-tab .g2{color:#CDCBBC;}
@@ -134,6 +146,11 @@ statistically solid, to spot the structure of your data immediately.
 }
 body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab{color:#000000;background:transparent;}
 body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td{background-color:transparent;border-color:#000000;}
+body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1{color:#949494;}
 body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2{color:#444444;}
@@ -161,8 +178,13 @@ body.quarto-light .u2,body.quarto-light .tabxplor-tab .u2,[data-bs-theme=light] 
 body.quarto-light .u3,body.quarto-light .tabxplor-tab .u3,[data-bs-theme=light] .u3,[data-bs-theme=light] .tabxplor-tab .u3,[data-theme=light] .u3,[data-theme=light] .tabxplor-tab .u3{background-color:#FCBDA5;}
 body.quarto-light .u4,body.quarto-light .tabxplor-tab .u4,[data-bs-theme=light] .u4,[data-bs-theme=light] .tabxplor-tab .u4,[data-theme=light] .u4,[data-theme=light] .tabxplor-tab .u4{background-color:#FEAC9F;}
 body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#f1efe0;background:transparent;}
-body.quarto-dark .tabxplor-tab td:not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4) .tx-pill,body.quarto-dark :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4) .tx-pill,[data-bs-theme=dark] :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4) .tx-pill,[data-theme=dark] :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4) .tx-pill,html.dark :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill){color:#21252b;}
+body.quarto-dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,body.quarto-dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-bs-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,html.dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
 body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
 body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#919085;}
 body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#CDCBBC;}
@@ -189,10 +211,119 @@ body.quarto-dark .u1,body.quarto-dark .tabxplor-tab .u1,[data-bs-theme=dark] .u1
 body.quarto-dark .u2,body.quarto-dark .tabxplor-tab .u2,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .tabxplor-tab .u2,[data-theme=dark] .u2,[data-theme=dark] .tabxplor-tab .u2,html.dark .u2,html.dark .tabxplor-tab .u2{background-color:#F6D0B2;}
 body.quarto-dark .u3,body.quarto-dark .tabxplor-tab .u3,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .tabxplor-tab .u3,[data-theme=dark] .u3,[data-theme=dark] .tabxplor-tab .u3,html.dark .u3,html.dark .tabxplor-tab .u3{background-color:#FABDA8;}
 body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4,[data-bs-theme=dark] .tabxplor-tab .u4,[data-theme=dark] .u4,[data-theme=dark] .tabxplor-tab .u4,html.dark .u4,html.dark .tabxplor-tab .u4{background-color:#FCAAA3;}
+:root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_marks .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}
 @media print {
   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tx-scrollbox{max-width:none;overflow:visible;}
   .tabxplor-tab{color:#000000;background:#ffffff;}
   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   .tabxplor-tab tbody tr:hover{background:transparent;}
   .g1,.tabxplor-tab .g1{color:#949494;}
   .g2,.tabxplor-tab .g2{color:#444444;}
@@ -222,6 +353,11 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
   .u4,.tabxplor-tab .u4{background-color:#B8B8B8;}
   body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab,body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#000000;background:#ffffff;}
   body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td,body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar,body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover,body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:transparent;}
   body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1,body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#949494;}
   body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2,body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#444444;}
@@ -258,6 +394,56 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
 install.packages("tabxplor", dependencies = TRUE)
 ```
 
+<!-- PURPOSE: the jamovi module's install procedure, written once.
+     ROLE: a child document included by BOTH home sources, `README.Rmd` (GitHub and CRAN) and
+       `pkgdown/index.Rmd` (the site), because a procedure written twice drifts. `dev/build_readmes.R`
+       knits both with `knit_root_dir = root`, so both resolve `child =` against the package root --
+       write the path from there, not from the parent's directory.
+     KEY CONSTRAINTS:
+       - The links are `releases/latest/download/<name>`, which never goes stale because the asset
+         names carry the jamovi line and the system but not the package version. They 404, and
+         `R CMD check --as-cran` NOTEs README.md, until a release carrying the files is PUBLISHED.
+       - The asset names are the workflow's (`.github/workflows/jmo.yaml`); changing one here alone
+         breaks every link. They carry the jamovi LINE, which moves: when jamovi's current channel
+         becomes 29, these seven names change and the links frozen in a released README die. That is
+         what the releases-page line at the end is for -- it is the one URL no line change can break.
+       - It lives in `pkgdown/` and not in `dev/`, which is stripped from the release branch: this
+         way `README.Rmd` still knits on `master`. `^pkgdown$` keeps it out of the tarball, and
+         pkgdown renders only root markdown, so it never becomes a page.
+     See: dev/jamovi_library_vs_sideloading.md section 3 (why one file per line and system). -->
+
+### The jamovi module
+
+The point-and-click interface is a jamovi module, installed by
+**sideloading** a file. Install
+[jamovi](https://www.jamovi.org/download.html) first – the **solid**
+release its download page recommends – then take the file for your
+computer:
+
+|  | jamovi 2.7 (*solid*) | jamovi 28 (*current*) |
+|:---|:---|:---|
+| Windows | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_win-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_win-x64.jmo) |
+| Mac, Apple silicon | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-arm64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-arm64.jmo) |
+| Mac, Intel | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-x64.jmo) |
+| Linux | – | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_linux-x64.jmo) |
+
+Your jamovi line is the number in its *About* box: `2.7.x` is *solid*,
+`28.x` is *current*. On a Mac, Apple menu `>>` *About This Mac*: *Chip:
+Apple M…* is Apple silicon, *Processor: Intel* is Intel.
+
+Then, in jamovi: `Modules` (the **`+`**, top right) `>>` *Manage
+installed modules* `>>` *Sideload* `>>` the arrow in the middle `>>` the
+file you downloaded. It adds a **Crosstables** and a **Regressions**
+analysis, whose options carry the names of the arguments documented
+here.
+
+*Two symptoms worth knowing: if jamovi says the module needs an update,
+or that it “is either missing or incompatible”, the file is for another
+jamovi line; if an analysis errors about a package that cannot be
+loaded, it is for another system. The full, current list of files is
+always on the [releases
+page](https://github.com/BriceNocenti/tabxplor/releases/latest).*
+
 ## A quick look
 
 A simple cross-table with row percentages: shades of blue mean the cell
@@ -269,6 +455,8 @@ gss <- gss_cat_data_formatting() # cleaned-up version of forcats::gss_cat
 
 tab(gss, race, party3, pct = "row", color = "difference")
 ```
+
+<div class="tx-scrollbox">
 
 <table class="tabxplor-tab" data-quarto-disable-processing="true">
 
@@ -521,6 +709,8 @@ style="font-weight:bold;">-30</span> points.
 
 </table>
 
+</div>
+
 Several column variables can be crossed at once for series of Yes/No
 survey questions. With `color_signif = "grey_non_signif"`, cells that
 are not significantly different from the total are greyed out, so every
@@ -534,6 +724,8 @@ tab(facto_tea, SPC, all_of(tea_when_vars), pct = "row",
     levels = "first", na = "drop", 
     color = "difference", ref = "first", color_signif = "grey_non_signif")
 ```
+
+<div class="tx-scrollbox">
 
 <table class="tabxplor-tab" data-quarto-disable-processing="true">
 
@@ -1049,6 +1241,8 @@ points).
 
 </table>
 
+</div>
+
 The same visual language extends to regression models: `tab_reg()`
 detects a binary outcome and fits a logistic regression, coloring odds
 ratios by strength and greying the non-significant ones, with a default
@@ -1061,9 +1255,11 @@ tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 
 <div class="tabxplor-caption">
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and rincome
 
 </div>
+
+<div class="tx-scrollbox">
 
 <table class="tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 
@@ -1077,7 +1273,7 @@ Logistic regression: married by race, age +1 more
 
 <th class="tx-span" colspan="2">
 
-married: 01-Married
+married: 01-Married
 </th>
 
 </tr>
@@ -1230,7 +1426,7 @@ Other
 
 <td class="tx-r tx-num g1">
 
-<span class="tx-sec">(49%) </span>1/1.11<span class="tx-sec">\*  </span>
+<span class="tx-sec">(49%) </span>1/1.11<span class="tx-sec">   </span>
 </td>
 
 <td class="tx-r tx-num tx-br g1">
@@ -1315,12 +1511,12 @@ style="font-weight:normal;">   </span>
 <td class="tx-r tx-num p1 tx-b">
 
 <span class="tx-sec"
-style="font-weight:normal;">(41%) </span>  1.21<span class="tx-sec" style="font-weight:normal;">\*\* </span>
+style="font-weight:normal;">(41%) </span>  1.21<span class="tx-sec" style="font-weight:normal;">\*  </span>
 </td>
 
 <td class="tx-r tx-num tx-br g1">
 
-  1.15<span class="tx-sec">\*   (42%)</span>
+  1.15<span class="tx-sec">    (42%)</span>
 </td>
 
 </tr>
@@ -1568,7 +1764,7 @@ BIC
 
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1"
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1"
 style="font-weight:bold;">1.2</span>; <span class="p2"
 style="font-weight:bold;">1.5</span>; <span class="p3"
 style="font-weight:bold;">2</span>; <span class="p4"
@@ -1580,9 +1776,9 @@ style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1.2).<br>\*\*\*:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant); \*\*: at the 95% level; \*:
-at the 90% level; no star: not significant.
+significantly different from the reference category (in bold) at the
+99.9% confidence level (from 1 for the Constant); \*\*: at the 99%
+level; \*: at the 95% level; no star: not significant.
 
 </div>
 
@@ -1593,6 +1789,10 @@ at the 90% level; no star: not significant.
 </tfoot>
 
 </table>
+
+</div>
+
+<div class="tx-scrollbox">
 
 <table class="tabxplor-tab tx-shape" data-quarto-disable-processing="true">
 
@@ -1657,6 +1857,8 @@ age
 </tbody>
 
 </table>
+
+</div>
 
 Or as a black and white table ready for publication:
 

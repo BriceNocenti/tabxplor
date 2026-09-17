@@ -168,7 +168,9 @@ jmvtab_reg_staged <- function(models, predictors, cross_keys = character(0)) {
 }
 
 #' @noRd
-jmvtab_reg_compare_sig <- function(opts) jmv_hash(opts)
+# ⚠ the LANGUAGE is part of it: what this signature guards is a rendered comparison TABLE, whose
+# words are jamovi's results language (jmv_with_lang()), while `opts` holds only the model.
+jmvtab_reg_compare_sig <- function(opts) jmv_hash(c(opts, list(.lang = tx_option("lang"))))
 
 #' @noRd
 JMVREG_RENDERS <- new.env(parent = emptyenv())

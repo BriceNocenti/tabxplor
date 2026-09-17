@@ -7,6 +7,14 @@
 #   - The dplyr_row_slice/dplyr_col_modify/dplyr_reconstruct trio is the core mechanism.
 #     Each calls lv1_group_vars() to decide: downgrade to tabxplor_tab or keep grouped.
 #   - Color palettes (6 sets) and break logic live here, shared with fmt_class.R and tab_xl.R.
+#   - options(tabxplor.print) names a MEDIUM, and every print / knit_print method reads it through
+#     the ONE router below (TX_PRINT_MEDIA / tx_auto_render). A medium renders an object that knows
+#     how to present itself, so no method carries a per-medium branch.
+#   - A table may carry SUBORDINATE tables (meta$footer_tabs, set_footer_tabs()). They are not a
+#     fifth renderer: tx_with_footer_tabs() hands the exporters the LIST the table means, so the
+#     `list_method = TRUE` path already in place renders them under it in every medium. In the
+#     console they print as a PIPE TABLE (tab_pipe()), the shape a regression's shape table already
+#     takes there: one grid is the table, what travels under it is a note.
 #   - tab_compact() stacks several row_vars ROW_VAR-MAJOR: two row_vars are two tables over the same
 #     population, the tab_vars are the sub-populations inside each. ⚠ the relocate, the group_by and
 #     the row order must state the SAME order -- tab_label_order() (R/tab-export-prep.R) derives
@@ -20,34 +28,13 @@
 #' @param tabs A table, stored into a \code{\link[tibble]{tibble}} data.frame.
 #' It is generally made with \code{\link{tab}}, \code{\link{tab_reg}}
 #' or \code{\link{tab_plain}}.
-#' @param subtext A character vector to print legend lines under the table.
+#' @param subtext The footer's text, as a template: one element per line, every
+#' \code{<placeholder>} \pkg{tabxplor} generates and every line you write, in the order they print.
+#' See \code{\link{set_subtext}}.
 #' @param test A tidy tibble storing whole-table test results (Chi2 for factor columns,
 #' ANOVA F for mean columns), filled by \code{\link{tab_chi2}}.
 #' @param chi2 `r lifecycle::badge("deprecated")` Soft-deprecated alias of \code{test}.
-#' @param meta The table's metadata, as a single named list gathering (all optional, \code{NULL}
-#' when unset):
-#' \itemize{
-#'   \item \code{render_extras} -- display-only intent for the base count and the \code{add_pct}
-#'   companion, \code{list(n =, add_pct =)}, materialised at print/export time from this attribute
-#'   rather than baked into the table.
-#'   \item \code{spec} -- the table's identity, \code{list(kind =, vars =, call =)}: its \code{kind}
-#'   (\code{"crosstab"} or \code{"regression"}); \code{vars}, what no column can carry
-#'   (\code{list(wt =, caption =, outcomes =, var_labels =)} -- see \code{\link{set_caption}}), the rest of the
-#'   variable model being derived from the declared index columns and from the columns' own
-#'   \code{col_var}; and \code{call}, the producer's own recipe (a regression's model record --
-#'   family, outcome, predictors, reference level, and the \code{fit_spec}
-#'   \code{\link{reg_check_plots}} refits from).
-#'   \item \code{empirical_tips} -- multinomial crude-companion tooltip data (a \code{tibble} keyed by
-#'   column, predictor and level), set by \code{tab_reg(empirical = TRUE)}.
-#'   \item \code{assumptions} -- one record PER OUTCOME, keyed by it, each holding the observed curve
-#'   of every continuous predictor (weighted quantile bins of the outcome on the family's link
-#'   scale, one block per \code{tab_vars} group), set by \code{\link{tab_reg}}: the data behind the
-#'   sparkline -- drawn in a continuous predictor's \code{n} cell, or in the shape table below the
-#'   footer -- and behind \code{\link{reg_check_plots}}'s linearity panel.
-#'   \item \code{color_breaks} -- a per-table override of the colour break scales (see
-#'   \code{\link{set_color_breaks}}), merged over the global option at render time.
-#' }
-#' \code{meta} sub-fields left \code{NULL} are dropped, so a table given nothing carries no attribute.
+#' @eval tab_meta_rd()
 #' @param ... Needed to implement subclasses.
 #' @param class Needed to implement subclasses.
 #'
@@ -108,6 +95,53 @@ is_tab <- function(x) {
   inherits(x, "tabxplor_tab")
 }
 
+#' The lines printed under a table
+#'
+#' @description
+#' A table's footer text, as a **template**: everything \pkg{tabxplor} generates is a
+#' \code{<placeholder>} and everything you write is a line, so the order of the lines is the order of
+#' the footer. Re-order them and it re-orders; drop \code{<legend>} and no colour legend is
+#' generated, in the console too.
+#'
+#' A \code{subtext} naming **no** placeholder is simply appended to the template --- which is what a
+#' note has always done, so \code{tab(subtext = "Field: GSS 2000")} is unchanged. Writing one
+#' placeholder on a line of its own takes the layout over: only what you name is printed.
+#' An unknown \code{<...>} is not a placeholder and passes through verbatim (\code{\\<} escapes a
+#' literal \code{<}).
+#'
+#' The template a producer writes names only what **this** table can say: no \code{<weight>} on an
+#' unweighted table, no \code{<model>} outside a regression. What you read back is therefore what
+#' prints, and the way to drop a line is to delete it.
+#'
+#' A line opening on a short label and a colon (\code{"Field: GSS 2000"}) has that label set in bold
+#' in every medium; \code{options(tabxplor.subtext_bold_label = FALSE)} prints it as written.
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param subtext A character vector, one element per line, or \code{NULL} to restore the default
+#'   template. (There is no per-table way to print nothing at all: the exporters' \code{subtext =
+#'   FALSE} is the one-off.)
+#' @return \code{x}, with its footer template set (\code{set_subtext}) ; the template, as a
+#'   character vector (\code{get_subtext}).
+#' @seealso [tab_footer_text()] to see what the template prints, [set_legend_words()] to re-word the
+#'   generated legend, [set_footer_tabs()] for a table or a note under the whole block.
+#' @export
+#' @examples
+#' t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")
+#' get_subtext(t)
+#'
+#' # your own sentence, with tabxplor's own pieces inside it
+#' t <- set_subtext(t, c("<measure> (<ref>): <breaks>", "<stars>"))
+#' cat(tab_footer_text(t), sep = "\n")
+set_subtext <- function(x, subtext) {
+  # the same normalisation the producers apply, so what get_subtext() reads back is what prints: a
+  # note added here keeps the template visible instead of replacing it at render time.
+  attr(x, "subtext") <- footer_default_template(
+    x, if (is.null(subtext)) character(0) else as.character(subtext))
+  x
+}
+
+#' @rdname set_subtext
+#' @export
 get_subtext <- purrr::attr_getter("subtext")
 
 #' Read a table's statistical tests
@@ -141,8 +175,8 @@ set_test <- function(x, test) {
   x
 }
 
-# `meta` -- ONE named list gathering every table-level attribute (spec / render_extras / empirical_tips
-# / assumptions / color_breaks). NULL when absent.
+# `meta` -- ONE named list gathering every table-level attribute but `subtext` and `test`. The
+# fields, their merge rules and their glosses are declared once, in TAB_ATTRS. NULL when absent.
 get_meta <- function(x) attr(x, "meta", exact = TRUE)
 
 # Write ONE meta sub-field. Assigning NULL removes the field, and an emptied meta drops the whole
@@ -195,6 +229,269 @@ set_caption <- function(x, caption) {
 #' @rdname set_caption
 #' @export
 get_caption <- function(x) get_spec(x)[["vars"]][["caption"]]
+
+#' Attach subordinate tables under a table
+#'
+#' @description
+#' Records one or more \code{tabxplor_tab}s that BELONG to \code{x} and are rendered under it by
+#' every medium --- the console, \code{\link{tab_md}}, \code{\link{tab_html}} and
+#' \code{\link{tab_xl}} --- exactly as if they had been passed in one list, and which travel with
+#' \code{x} through a dplyr pipeline (they are kept in \code{x}'s \code{meta$footer_tabs}).
+#'
+#' The use is a fact that belongs to the table without being a row of it: the eigenvalues of the axes
+#' beside a factorial-analysis summary, a sample description beside the result it describes.
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param tabs A \code{tabxplor_tab}, a list of them, or \code{NULL} to remove whatever is attached.
+#'   A named element is captioned with its name (\code{\link{set_caption}}) unless it carries a
+#'   caption already.
+#' @return \code{x}, with its subordinate tables set (\code{set_footer_tabs}) ; the list of them, or
+#'   \code{NULL} when none (\code{get_footer_tabs}).
+#' @seealso [new_tab()] for the whole `meta` record.
+#' @export
+#' @examples
+#' main <- tab(forcats::gss_cat, race, marital, pct = "row")
+#' side <- tab(forcats::gss_cat, race)
+#' main <- set_footer_tabs(main, list("Base" = side))
+#' get_footer_tabs(main)
+set_footer_tabs <- function(x, tabs) {
+  if (is.data.frame(tabs)) tabs <- list(tabs)
+  if (!is.null(tabs)) {
+    if (!is.list(tabs) || !all(vapply(tabs, is.data.frame, logical(1))))
+      cli::cli_abort("{.arg tabs} must be a table, or a list of tables.")
+    tabs <- tabs[!vapply(tabs, is.null, logical(1))]
+    # a NAME is the subordinate table's caption -- the mechanism that already exists, rather than a
+    # second way of titling a table. An element that carries one of its own keeps it.
+    nms <- names(tabs) %||% rep("", length(tabs))
+    for (i in seq_along(tabs))
+      if (nzchar(nms[[i]]) && is.null(get_caption(tabs[[i]])))
+        tabs[[i]] <- set_caption(tabs[[i]], nms[[i]])
+  }
+  set_meta_field(x, "footer_tabs", if (length(tabs)) tabs else NULL)
+}
+
+#' @rdname set_footer_tabs
+#' @export
+get_footer_tabs <- function(x) get_meta(x)[["footer_tabs"]]
+
+#' Re-state what the colour legend calls a measure
+#'
+#' @description
+#' The generated legend names a measure with the discipline's own words --- \code{color = "contrib"}
+#' says *contribution to Chi2*. A table may legitimately grade the same ladder on another quantity: a
+#' factorial axis has no chi-squared, and its cells' contribution is to the **variance of the axis**.
+#' \code{set_legend_words()} re-states the words and changes nothing else, so the swatches, the
+#' ladder, both registers, the publication palettes, the plot guide and every medium keep working ---
+#' the console included, which no exporter argument can reach.
+#'
+#' Prefer it to writing a legend of your own: replacing the sentence (through
+#' \code{\link{set_subtext}}) costs you the terse/prose pair and the publication palettes' wording.
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param ... One argument per measure (\code{difference}, \code{ratio}, \code{odds_ratio},
+#'   \code{contrib}, \code{adjustment}, \code{between_groups}), each either a single string (the
+#'   measure's short word) or a named list of the fields below. \code{NULL} removes an override.
+#' @details
+#' The fields a table may re-state --- naming only, never a number:
+#' \itemize{
+#'   \item \code{word} --- the short word (the console, a plot guide);
+#'   \code{word_long} --- the same named in full, for the export footers; \code{word_std} /
+#'   \code{word_long_std} their SD-scale twins.
+#'   \item \code{word_guar} --- the \code{color_signif = "guaranteed_effect"} head, a template
+#'   taking the confidence level (\code{"\%s\%\%-guaranteed contribution"}).
+#'   \item \code{subject} --- the noun for what is graded, when it is not the cell itself.
+#'   \item \code{ref} --- the baseline noun (\emph{the mean contribution}), for a measure compared to
+#'   a \strong{concept} rather than to a row of the table: the terse form brackets it with its
+#'   preposition and the prose one points at it bare, both from this one field. Give
+#'   \code{ref_word} / \code{ref_phrase} instead only where those two nouns genuinely differ.
+#'   Re-stating any of them on a measure whose reference is a category or a total is refused --- there
+#'   the legend names what the table itself shows.
+#'   \item \code{unit_word} --- the unit the thresholds are counted in.
+#'   \item \code{lead_over} / \code{lead_under} --- the sentence each side of the ladder opens with,
+#'   as a template taking \code{\%1$s} the subject, \code{\%2$s} the reference and \code{\%3$s} the
+#'   null value. \strong{Only \code{\%1$s} is always there}: a line names its baseline in full on its
+#'   first side and not again on its second, so \code{\%2$s} comes back empty there --- where the
+#'   baseline is the measure's own (a mean contribution, an axis), write it into the sentence rather
+#'   than interpolate it.
+#'   \item \code{caveat} --- one sentence of honesty appended to the line.
+#' }
+#' An engine fact (\code{raw}, \code{scale}, \code{sig_source}, \code{bounds}) and a ladder glyph
+#' (\code{break_over}, \code{threshold_mult}) are refused: a table attribute must never change a
+#' number, and a column pulled out of its table must still colour identically.
+#'
+#' Written in the language of the call --- unlike the words \pkg{tabxplor} generates, which follow
+#' \code{lang =} at render.
+#' @return \code{x}, with its legend words set (\code{set_legend_words}) ; the named list of them, or
+#'   \code{NULL} (\code{get_legend_words}).
+#' @seealso [set_subtext()] for the footer template, [set_color_breaks()] for the ladder itself.
+#' @export
+#' @examples
+#' t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "contrib")
+#' cat(tab_footer_text(t), sep = "\n")
+#'
+#' t <- set_legend_words(t, contrib = "contribution to the axis variance")
+#' cat(tab_footer_text(t), sep = "\n")
+set_legend_words <- function(x, ...) {
+  w <- rlang::list2(...)
+  if (!length(w)) return(x)
+  if (is.null(names(w)) || !all(nzchar(names(w))))
+    cli::cli_abort("Each argument of {.fun set_legend_words} must name a colour measure.")
+  bad <- setdiff(names(w), names(MEASURES))
+  if (length(bad))
+    cli::cli_abort(c("{.val {bad}} {?is/are} not {?a/} colour measure{?s}.",
+                     "i" = "Available: {.val {names(MEASURES)}}."))
+  w <- purrr::imap(w, function(v, m) {
+    if (is.null(v)) return(NULL)
+    if (is.character(v) && length(v) == 1L && is.null(names(v))) v <- list(word = v)
+    if (!is.list(v))
+      cli::cli_abort("{.arg {m}} must be a single string, or a named list of legend words.")
+    off <- setdiff(names(v), MEASURE_WORD_FIELDS)
+    if (length(off))
+      cli::cli_abort(c("{.val {off}} {?is/are} not {?a/} legend word{?s} of {.val {m}}.",
+                       "x" = "A table re-states what its colours are CALLED, never how they are computed.",
+                       "i" = "Available: {.val {MEASURE_WORD_FIELDS}}."))
+    # A BASELINE word is only ever printed for a measure whose baseline is a CONCEPT (independence,
+    # the mean): everywhere else the legend names the reference from the DATA -- a level label, the
+    # Total row -- which no word can re-state. Refused rather than stored and silently ignored.
+    rw <- intersect(names(v), c("ref", "ref_word", "ref_phrase"))
+    if (length(rw) && !identical(MEASURES[[m]]$ref_kind, "indep"))
+      cli::cli_abort(c("{.val {rw}} cannot be re-stated on {.val {m}}.",
+                       "x" = "Its legend names the reference found in the table, not a word.",
+                       "i" = "Only a measure compared to a concept takes one: {.val {measure_ref_worded()}}."))
+    v
+  })
+  old <- get_legend_words(x)
+  new <- utils::modifyList(old %||% list(), w)
+  set_meta_field(x, "legend_words", if (length(new)) new else NULL)
+}
+
+#' @rdname set_legend_words
+#' @export
+get_legend_words <- function(x) get_meta(x)[["legend_words"]]
+
+#' Draw a column as data bars
+#'
+#' @description
+#' Names the columns whose cells carry a horizontal bar behind their figure --- a bar chart inside the
+#' table, at no cost in width, in html and in Excel. Total and footer rows take none.
+#'
+#' \strong{One reference per column}: every bar in a column is a share of the same ceiling, or two bars
+#' could not be compared. That ceiling is the column's own largest data cell by default, which is what
+#' spreads the bars over the width available; \code{max} states it instead, so that two tables can be
+#' read against each other.
+#'
+#' It is a display intent, like a caption: the numbers are untouched, and a medium with nowhere to put
+#' a bar (the console, a pipe table) ignores it.
+#'
+#' @param x A \code{tabxplor_tab}.
+#' @param cols Column names, or \code{NULL} to remove.
+#' @param max The ceiling a full bar means, in the column's \strong{stored} unit --- a percentage is
+#'   stored between 0 and 1, so \code{max = 1} means 100 %. \code{NULL} (the default) or \code{NA}
+#'   takes the column's largest data cell. Unnamed values are recycled over \code{cols}, a named one
+#'   applies to that column.
+#' @return \code{x}, with its bar columns set (\code{set_bars}) ; a named vector of their ceilings,
+#'   \code{NA} where the column's largest is used, or \code{NULL} (\code{get_bars}).
+#' @seealso [new_tab()] for the whole `meta` record.
+#' @export
+#' @examples
+#' t <- tab(forcats::gss_cat, race, marital, pct = "row")
+#' t <- set_bars(t, "Married")
+#' get_bars(t)
+#'
+#' # a full bar means 100 %, whatever the column holds
+#' get_bars(set_bars(t, "Married", max = 1))
+set_bars <- function(x, cols, max = NULL) {
+  if (!is.null(cols)) cols <- as.character(cols)[nzchar(as.character(cols))]
+  if (!length(cols)) return(set_meta_field(x, "bars", NULL))
+  set_meta_field(x, "bars", bars_ceilings(cols, max))
+}
+
+#' @rdname set_bars
+#' @export
+get_bars <- function(x) get_meta(x)[["bars"]]
+
+# THE reader every renderer uses: the stored field as a named ceiling vector, whatever shape it was
+# written in. A table built before the ceilings existed stored a bare vector of column NAMES -- read
+# as "no ceiling stated", so an old saved table still draws its bars.
+tab_bar_ceilings <- function(x) {
+  b <- get_bars(x)
+  if (is.null(b) || !length(b)) return(stats::setNames(double(0), character(0)))
+  if (is.numeric(b) && !is.null(names(b))) return(b)
+  bars_ceilings(as.character(b))
+}
+
+# cols + `max` -> the named ceiling vector `meta$bars` IS. The house grammar of a per-variable
+# argument: unnamed entries are the fallback, recycled; a named one applies to that column alone.
+# NA = "no ceiling stated", which prep_one_table() reads as the column's own largest data cell.
+bars_ceilings <- function(cols, max = NULL) {
+  out <- stats::setNames(rep(NA_real_, length(cols)), cols)
+  if (is.null(max) || !length(max)) return(out)
+  nmd <- names(max) %||% rep("", length(max))
+  max <- suppressWarnings(as.double(max))   # as.double() drops names -- keep them beside it
+  names(max) <- nmd
+  free <- max[!nzchar(nmd)]
+  if (length(free)) out[] <- rep_len(free, length(cols))
+  named <- max[nzchar(nmd)]
+  hit   <- intersect(names(named), cols)
+  if (length(hit)) out[hit] <- named[hit]
+  bad <- !is.na(out) & (!is.finite(out) | out <= 0)
+  if (any(bad)) cli::cli_abort(c(
+    "A data bar's ceiling must be a positive number.",
+    x = "{.val {names(out)[bad]}} got {.val {unname(out[bad])}}.",
+    i = "Leave {.arg max} out to scale on the column's own largest value."
+  ))
+  out
+}
+
+# THE one expansion: a table carrying subordinate tables is handed to the exporters as the LIST it
+# means, so `list_method = TRUE` renders them one-after-another and css, theme, subtext and the
+# first-table caption are all resolved by the machinery already in place.
+# DESIGN: an expansion rather than a fourth bespoke renderer. The shape table (reg_shape_table) took
+#   the other road and needed one hand-written emitter per medium -- justified there, since it is a
+#   note of character columns and not a table of `fmt` cells; here there is nothing to hand-write.
+# WARNING: the field is STRIPPED from the copy handed down, which is what stops a subordinate table
+#   from expanding in turn -- no recursion guard to keep in step.
+#' @keywords internal
+#' @noRd
+tx_with_footer_tabs <- function(tabs) {
+  # one table -> itself, or itself followed by its MARKED subordinates.
+  one <- function(t) {
+    if (!is_tab(t)) return(list(t))
+    ft <- get_footer_tabs(t)
+    if (!length(ft)) return(list(t))
+    # only a TABLE becomes a peer of its host: a NOTE is not a tabxplor_tab and has no render model,
+    # so it stays on the host, where footer_notes() reads it and the note emitters draw it.
+    tabs  <- Filter(is_tab, ft)
+    notes <- Filter(Negate(is_tab), ft)
+    if (!length(tabs)) return(list(t))
+    c(list(set_meta_field(t, "footer_tabs", if (length(notes)) notes else NULL)),
+      purrr::map(tabs, ~ tx_mark_subordinate(tx_strip_subordinate(.x))))
+  }
+  if (is.data.frame(tabs)) {
+    out <- one(tabs)
+    return(if (length(out) == 1L) tabs else out)
+  }
+  # ...and a LIST of peers expands member by member: each keeps its own subordinates, and a member's
+  # name (a `tabxplor_tabs`' row_var) stays on the member, its subordinates taking none of their own.
+  if (!is.list(tabs)) return(tabs)
+  nms <- names(tabs) %||% rep("", length(tabs))
+  out <- purrr::map(tabs, one)
+  if (all(lengths(out) == 1L)) return(tabs)
+  stats::setNames(purrr::list_flatten(out),
+                  unlist(purrr::map2(nms, lengths(out), ~ c(.x, rep("", .y - 1L)))))
+}
+
+# A subordinate table is marked for the length of ONE export call: it travels through
+# tab_export_prep() into `rd$subordinate`, where it decides that the table renders what it carries and
+# nothing generated (FOOTER_BLOCKS' `carried` column). Ephemeral by design -- it is set on a copy that
+# only the exporter ever sees, so it is not a table attribute and has no TAB_ATTRS row.
+#' @keywords internal
+#' @noRd
+tx_mark_subordinate <- function(x) { attr(x, "tx_subordinate") <- TRUE; x }
+
+#' @keywords internal
+#' @noRd
+tx_is_subordinate <- function(x) isTRUE(attr(x, "tx_subordinate", exact = TRUE))
 new_vars_attr <- function(wt = NA_character_, var_labels = character(0)) {
   out <- list()
   wt <- if (length(wt)) as.character(wt)[1] else NA_character_
@@ -218,6 +515,83 @@ tab_attrs <- function(from) {
        meta    = get_meta(from))
 }
 
+# === SECTION: the table attributes, declared =======================================================
+# One row per fact a TABLE carries beside its columns -- the two bare attributes and every `meta`
+# field. It is what ?new_tab's list is generated from, what tab_meta_bind() merges by, what a
+# subordinate copy is stripped by, and (through FOOTER_BLOCKS' `reads`) where ?tabxplor-footer's
+# "to change what this says, use..." column comes from.
+#   key          the attribute, or the `meta` field.
+#   where        "attr" (a tibble attribute of its own) | "meta" (a field of the one `meta` list).
+#   setter       the exported function that writes it, or NA for one only a producer writes.
+#   subordinate  does it survive onto a table travelling UNDER another (meta$footer_tabs)? FALSE for
+#                what would recurse, and for what a subordinate must not GENERATE beneath itself.
+#   bind         how two of them reconcile on a bind. NULL = "first non-NULL, x wins", right for a
+#                display-only fact. ⚠ `spec`'s is a closure, not the bare `spec_bind` symbol: this
+#                table is built at LOAD time, before R/table-spec.R is sourced.
+#   gloss        one sentence for ?new_tab, in Rd.
+#' @keywords internal
+#' @noRd
+TAB_ATTRS <- tx_grid(tibble::tribble(
+  ~key, ~where, ~setter, ~subordinate, ~bind, ~gloss,
+  "subtext", "attr", "set_subtext", TRUE, function(x, y) subtext_bind(x, y),
+  "the footer's TEXT, as a template: every \\code{<placeholder>} \\pkg{tabxplor} generates and every line you write, in the order they print (see \\code{\\link{set_subtext}} and \\code{\\link{tab_footer_text}}).",
+  "test", "attr", NA_character_, TRUE, function(x, y) vctrs::vec_rbind(x, y),
+  "a tidy tibble of whole-table tests --- a crosstab's chi2 or ANOVA, a regression's model-fit statistics and global tests (see \\code{\\link{get_test}}).",
+  "spec", "meta", "set_caption", TRUE, function(x, y) spec_bind(x, y),
+  "the table's identity, \\code{list(kind =, vars =, call =)}: its \\code{kind} (\\code{\"crosstab\"} or \\code{\"regression\"}); \\code{vars}, what no column can carry (the weight, the caption, the outcomes, the variable labels --- see \\code{\\link{set_caption}}), the rest of the variable model being derived from the declared index columns and from the columns' own \\code{col_var}; and \\code{call}, the producer's own recipe (a regression's model record --- family, outcome, predictors, reference level, and the \\code{fit_spec} \\code{\\link{reg_check_plots}} refits from).",
+  "render_extras", "meta", NA_character_, TRUE, NULL,
+  "display-only intent for the base count and the \\code{add_pct} companion, \\code{list(n =, add_pct =)}, materialised at print/export time rather than baked into the table.",
+  "empirical_tips", "meta", NA_character_, TRUE, NULL,
+  "multinomial crude-companion tooltip data (a \\code{tibble} keyed by column, predictor and level), set by \\code{tab_reg(empirical = TRUE)}.",
+  "assumptions", "meta", NA_character_, FALSE, NULL,
+  "one record PER OUTCOME, keyed by it, each holding the observed curve of every continuous predictor (weighted quantile bins of the outcome on the family's link scale, one block per \\code{tab_vars} group), set by \\code{\\link{tab_reg}}: the data behind the shape table under the footer, and behind \\code{\\link{reg_check_plots}}'s linearity panel.",
+  "color_breaks", "meta", NA_character_, TRUE, function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m },
+  "a per-table override of the colour break scales, set by \\code{tab(color_breaks =)} and merged over the global option (\\code{\\link{set_color_breaks}}) at render time.",
+  "legend_words", "meta", "set_legend_words", TRUE, NULL,
+  "what this table's colour legend CALLS each measure --- naming only, never a number (see \\code{\\link{set_legend_words}}).",
+  "footer_tabs", "meta", "set_footer_tabs", FALSE, NULL,
+  "the tables and notes rendered UNDER this one by every medium, set by \\code{\\link{set_footer_tabs}}: a \\code{tabxplor_tab} renders as a table, any other data.frame as a grey note (\\code{\\link{tab_note}}). In the console they print ABOVE the table, so the last thing printed is the object you can go on to pipe. A footer table's own are never rendered.",
+  "bars", "meta", "set_bars", TRUE, NULL,
+  "the columns drawn as data bars in html and in Excel, each named with the ceiling a full bar means (\\code{NA} = the column's own largest data cell, so that one reference serves the whole column --- \\code{\\link{set_bars}}).",
+))
+
+stopifnot(all(vapply(TAB_ATTRS, function(a)
+  all(c("where", "subordinate", "gloss") %in% names(a)) && a$where %in% c("attr", "meta"),
+  logical(1))))
+
+# every field a producer writes must have a row: the fmt_attr_rules precedent, so a new one cannot
+# reach a user undocumented, unmerged and unstripped.
+#' @keywords internal
+#' @noRd
+tab_meta_fields <- function()
+  names(TAB_ATTRS)[vapply(TAB_ATTRS, function(a) identical(a$where, "meta"), logical(1))]
+
+# the `@param meta` list of ?new_tab, generated from the grid.
+#' @keywords internal
+#' @noRd
+tab_meta_rd <- function() {
+  f <- tab_meta_fields()
+  c("@param meta The table's metadata, as a single named list gathering (all optional,",
+    "\\code{NULL} when unset):",
+    "\\itemize{",
+    vapply(f, function(k) paste0("  \\item \\code{", k, "} --- ", TAB_ATTRS[[k]]$gloss),
+           character(1), USE.NAMES = FALSE),
+    "}",
+    "\\code{meta} sub-fields left \\code{NULL} are dropped, so a table given nothing carries no",
+    "attribute.")
+}
+
+# strip from a copy travelling UNDER another table what a subordinate must not carry (the grid's
+# `subordinate` column): its own footer tables, which would recurse, and the records it would
+# otherwise GENERATE a second footer from.
+#' @keywords internal
+#' @noRd
+tx_strip_subordinate <- function(x) {
+  for (k in tab_meta_fields())
+    if (!isTRUE(TAB_ATTRS[[k]]$subordinate)) x <- set_meta_field(x, k, NULL)
+  x
+}
+
 #' @keywords internal
 tab_restore <- function(out, from, attrs = tab_attrs(from)) {
   if (lv1_group_vars(out)) {
@@ -227,18 +601,6 @@ tab_restore <- function(out, from, attrs = tab_attrs(from)) {
   }
 }
 
-# THE per-sub-field merge rules of `meta`. Any field NOT listed takes the default "first non-NULL, x
-# wins" (right for a display-only fact). Declaring the rest here keeps the merge loop exhaustive.
-#' @keywords internal
-#' @noRd
-meta_bind_rules <- list(
-  color_breaks = function(x, y) { m <- y %||% list(); for (s in names(x)) m[[s]] <- x[[s]]; m },
-  # the table identity reconciles SLOT BY SLOT (kind / vars / call), so a bind can't drop one side's
-  # recipe just because the other declared its kind first. A closure, not the bare `spec_bind` symbol:
-  # this table is built at LOAD time before R/table-spec.R is sourced, so defer the reference.
-  spec = function(x, y) spec_bind(x, y)
-)
-
 #' @keywords internal
 tab_meta_bind <- function(mx, my) {
   if (is.null(mx) && is.null(my)) return(NULL)
@@ -246,7 +608,7 @@ tab_meta_bind <- function(mx, my) {
   if (is.null(my)) my <- list()
   out <- list()
   for (nm in union(names(mx), names(my))) {
-    rule <- meta_bind_rules[[nm]]
+    rule <- TAB_ATTRS[[nm]]$bind          # NULL = "first non-NULL, x wins" (see TAB_ATTRS)
     out[[nm]] <- if (is.null(rule)) mx[[nm]] %||% my[[nm]] else rule(mx[[nm]], my[[nm]])
   }
   out <- out[!vapply(out, is.null, logical(1))]
@@ -268,12 +630,14 @@ tab_meta_merge <- function(metas, ...) {
   if (length(out)) out else NULL
 }
 
+# ...and the same for the two BARE attributes, read out of the same grid column, so `bind` is true of
+# every TAB_ATTRS row and not only of the `meta` fields.
 #' @keywords internal
 tab_bind_attrs <- function(x, other) {
-  subtext <- unique(vctrs::vec_c(get_subtext(x), get_subtext(other)))
-  if (length(subtext) > 1) subtext <- subtext[subtext != ""]
-  list(subtext = subtext,
-       test    = vctrs::vec_rbind(get_test(x), get_test(other)),
+  bind1 <- function(k, a, b) { rule <- TAB_ATTRS[[k]]$bind
+                               if (is.null(rule)) a %||% b else rule(a, b) }
+  list(subtext = bind1("subtext", get_subtext(x), get_subtext(other)),
+       test    = bind1("test",    get_test(x),    get_test(other)),
        meta    = tab_meta_bind(get_meta(x), get_meta(other)))
 }
 
@@ -390,10 +754,49 @@ new_test_tibble <- local({
 
 #Methods to print class tabxplor_tab -----------------------------------------------------
 
-# THE one predicate for "does options(tabxplor.print) ask for an html render?". "html" is the taught
-# value; "kable" is the pre-2.0.0 synonym, kept working. Anything else prints to the console.
-tx_print_html <- function() {
-  getOption("tabxplor.print") %in% c("html", "kable")
+# DESIGN: options(tabxplor.print) NAMES A MEDIUM, and a medium is a renderer plus an object that
+#   knows how to present itself -- tab_html() returns a `tabxplor_kable`, tab_md() a `tabxplor_md`,
+#   each with its own print() (the Viewer, a cat()) and knit_print() (asis_output). That is why the
+#   six methods below carry no per-medium branch: they hand the rendered object over and it does the
+#   rest. Adding a medium is one arm here plus those two S3 methods -- never a branch in six places.
+# The option value that names each: "kable" is the pre-2.0.0 name of "html". `xl` and `forest` are
+# absent on purpose -- one writes a file, the other is a Suggests-only chart; neither is what a bare
+# table means.
+TX_PRINT_MEDIA <- c(console = "console", html = "html", kable = "html", md = "md")
+
+# Read through tx_option(), so an unset option IS the declared default: seeding it is then a
+# convenience, not a requirement (a package reaching tabxplor only through `tabxplor::` never loads
+# its namespace, and once left the first print() of a tab() erroring).
+#' @keywords internal
+#' @noRd
+tx_print_medium <- function() {
+  v <- tx_option("print")
+  if (!rlang::is_string(v)) return("console")
+  if (v %in% names(TX_PRINT_MEDIA)) return(unname(TX_PRINT_MEDIA[[v]]))
+  tx_inform_once(paste0("print_medium_", v),
+                 c("{.code options(tabxplor.print)} is {.val {v}}, which names no medium.",
+                   "i" = "One of {.val {unique(names(TX_PRINT_MEDIA))}}. Printing to the console."),
+                 .envir = environment())
+  "console"
+}
+
+# THE one place an auto-print is diverted away from the console: the RENDERED OBJECT, or NULL when
+# the console is what was asked for. Each exporter is called BARE, so `theme`, `css`, `lang` and the
+# rest come from their own options exactly as they do in an explicit call.
+#' @keywords internal
+#' @noRd
+tx_auto_render <- function(x) {
+  switch(tx_print_medium(),
+         html = tab_html(x),
+         md   = tab_md(x, print = FALSE),
+         NULL)
+}
+
+# The text a diverted print would have emitted, for `get_text = TRUE`.
+#' @keywords internal
+#' @noRd
+tx_render_lines <- function(x) {
+  strsplit(paste(as.character(x), collapse = "\n"), "\n", fixed = TRUE)[[1L]]
 }
 
 #' Printing method for class tabxplor_tab
@@ -406,7 +809,8 @@ tx_print_html <- function() {
 #' @param max_footer_lines Maximum number of footer lines.
 #' @param min_row_var Minimum number of characters for the row variable. Default to 30.
 #' @param get_text Set to `TRUE` to get the text as a character vector
-#' instead of a printed output.
+#' instead of a printed output -- the lines of whatever medium
+#' \code{getOption("tabxplor.print")} names.
 #' @export
 #' @return A printed table.
 #' @method print tabxplor_tab
@@ -414,18 +818,16 @@ tx_print_html <- function() {
 print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = NULL,
                                max_footer_lines = NULL, min_row_var = 30, get_text = FALSE) {
   .cb <- push_color_breaks(x); on.exit(pop_color_breaks(.cb), add = TRUE)
-  if (tx_print_html()) {
-    x <- tab_html(x)
-    print(x)
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) {
+    if (get_text) return(tx_render_lines(rendered))
+    print(rendered)
     return(invisible(x))
   }
 
   x <- tab_materialize_extras(x, backend = "text", pvalue = FALSE, medium = "console")
 
   test_render_console(test_summary_grid(x))
-  # the observed curves, in a table of their own: the console never puts them in a cell (see
-  # tab_wants_shape_table). One blank line separates the two grids.
-  if (tab_wants_shape_table(x, "console")) shape_render_console(x)
 
   rv        <- tab_render_vars(x)
   row_var   <- if (isTRUE(rv$degrade)) character(0) else rv$row_var
@@ -457,6 +859,29 @@ print.tabxplor_tab <- function(x, width = NULL, ..., n = 100, max_extra_cols = N
       out[hdr] <- gsub(tg, strrep(" ", nchar(tg)), out[hdr], fixed = TRUE)
   }
 
+
+  # the subordinate tables (meta$footer_tabs), each as a grid of its own ABOVE this one -- the rule
+  # every pipe table follows here: THE LAST THING PRINTED IS THE R OBJECT you can go on to pipe, so a
+  # second grid below it would read as the result. In an export nothing is "the result", and they read
+  # below the footer instead. Their own footer tabs are already stripped (tx_with_footer_tabs).
+  # DESIGN: a subordinate table prints as a PIPE TABLE, not as a second pillar grid -- the shape a
+  #   regression's shape table already takes here. One grid is the table; what travels with it is a
+  #   note, and the two must not look like peers. tab_pipe() is tab_md() with three arguments fixed,
+  #   so the console and the markdown export cannot drift.
+  # ...and the NOTES it carries (a character grid, the regression's observed curves), above them --
+  # the same rule, and the console is the one medium that shows a note beside a table of the same kind.
+  aside <- tryCatch(cli::make_ansi_style(tx_chrome_hex(tx_theme_option("console"))$grey2),
+                    error = function(e) identity)
+  ft <- Filter(is_tab, get_footer_tabs(x) %||% list())
+  above <- c(unlist(purrr::map(footer_notes(x, "console"), ~ c(note_console(.x), ""))),
+             unlist(purrr::map(ft, function(t) {
+               t <- tx_strip_subordinate(t)   # a footer table's own are never rendered
+               # MARKED and asked for its footer, so the `carried` rule decides here as it does in an
+               # export: a subordinate prints the lines IT carries and nothing generated. Unmarked, it
+               # would have printed nothing at all in the console alone.
+               c(aside(tab_pipe(tx_mark_subordinate(t), subtext = TRUE)), "")
+             })))
+  if (length(above)) out <- c(above, out)
 
   if (get_text) {
     out
@@ -506,8 +931,9 @@ as_tabxplor_tabs <- function(x) {
 #' @export
 #' @keywords internal
 print.tabxplor_tabs <- function(x, ...) {
-  if (tx_print_html()) {
-    print(tab_html(x))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) {
+    print(rendered)
     return(invisible(x))
   }
   for (i in seq_along(x)) {
@@ -523,29 +949,36 @@ print.tabxplor_tabs <- function(x, ...) {
 #' @export
 c.tabxplor_tabs <- function(...) new_tabxplor_tabs(NextMethod())
 
+# Without these, knitr's default auto-print escapes print()'s markup, so options(tabxplor.print =)
+# could not render a bare `tab(...)` chunk as a real table. `NextMethod()` is the console: knitr's
+# own default, which prints the object and captures the grid.
+# ⚠ The list class was html UNCONDITIONALLY until 2.0.1 -- it alone ignored the option.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tabs <- function(x, ...) {
-  knitr::knit_print(tab_html(x), ...)
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
+  NextMethod()
 }
 
-# Without this, knitr's default auto-print escapes print()'s html, so options(tabxplor.print = "html")
-# could not render a bare `tab(...)` chunk as a real table. Honours the option.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_tab <- function(x, ...) {
-  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
   NextMethod()
 }
 
 # The grouped class vector does not contain "tabxplor_tab" (separate S3 world) -> own registration.
 #' @exportS3Method knitr::knit_print
 knit_print.tabxplor_grouped_tab <- function(x, ...) {
-  if (tx_print_html()) return(knitr::knit_print(tab_html(x), ...))
+  rendered <- tx_auto_render(x)
+  if (!is.null(rendered)) return(knitr::knit_print(rendered, ...))
   NextMethod()
 }
 
-# The three above all hand a `tabxplor_kable` back to knit_print(), so this is where every knitted
-# table lands. knitr's own knit_print.knitr_kable would emit the markup and nothing else; the `meta`
-# is what carries jQuery, bootstrap and the tooltip binding into the DOCUMENT (tx_html_deps()).
+# The three above hand a `tabxplor_kable` (or a `tabxplor_md`, R/tab_md.R) back to knit_print(), so
+# this is where every knitted html table lands. knitr's own knit_print.knitr_kable would emit the
+# markup and nothing else; the `meta` is what carries jQuery, bootstrap and the tooltip binding into
+# the DOCUMENT (tx_html_deps()).
 # ⚠ NULL meta is fine: knitr accepts it, and the cells' title= attributes are a plain browser
 # tooltip on their own.
 #' @exportS3Method knitr::knit_print
@@ -607,9 +1040,14 @@ tbl_sum.tabxplor_grouped_tab <- function(x, ...) {
 #' @keywords internal
 tbl_format_footer.tabxplor_tab <- function(x, setup, ...) {
   default_footer <- NextMethod()
+  # ⚠ the CONSOLE palette reaches the BUILDER, not only the renderer: a publication palette names its
+  # two directions in words and prints marks instead of stars, both decided while the tokens are
+  # built. Left at the default "light", the console printed a legend describing another theme's cells.
+  th      <- tx_theme_option("console")
   streams <- suppressWarnings(tab_footer_streams(
-    x, style = "terse", subtext = get_subtext(x) |> purrr::discard(\(s) s == "")))
-  c(default_footer, render_footer(streams, medium = "console"))
+    x, style = "terse", theme = tx_palette_theme(th),
+    subtext = get_subtext(x) |> purrr::discard(\(s) s == "")))
+  c(default_footer, render_footer(streams, medium = "console", theme = th))
 }
 
 
@@ -681,6 +1119,12 @@ tbl_format_body.tabxplor_tab <- function(x, setup, ...) {
 #' with `caption{}`in rmarkdown.
 # @param unbreakable_spaces Set to `FALSE` to keep normal spaces in text (auto-break).
 #' @param get_data Get the transformed data instead of the html table.
+#' @param cells The write side of `get_data`: the same data.frame, with the cells you want to
+#' replace edited. A value still equal to the one the table renders means "keep", so handing the
+#' frame straight back changes nothing; anything else is written verbatim into that cell, markup
+#' and all. The cell keeps its classes and its tooltip, and loses the decorations that belonged to
+#' the text it replaced (the bold split, the background pill, the sparkline). Pass a list of one
+#' data.frame per table when several are rendered at once.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0:
 #'  `color_type`, `html_24_bit`, `engine`, `html_font`, `full_width`, `position`. The table is
 #'  rendered by one dependency-free `<table>` engine whose every look is a CSS class you can restyle
@@ -707,6 +1151,7 @@ tab_html <- function(tabs,
                      transpose = FALSE,
                      var_names = NULL,
                      get_data = FALSE,
+                     cells = NULL,
                      wrap_rows = 35, wrap_cols = 15,
                      whitespace_only = TRUE,
                      css = NULL,
@@ -716,6 +1161,7 @@ tab_html <- function(tabs,
   # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
   # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
   caption <- caption %||% tx_knitr_opt("tab.cap")
+  cells_parts <- tx_cells_arg(cells, get_data)
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
   o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
                            transpose = transpose, var_names = var_names, allow_auto = TRUE,
@@ -729,34 +1175,54 @@ tab_html <- function(tabs,
   css      <- if (is.null(css))      isTRUE(tx_option("tab_kable_css")) else isTRUE(css)
 
   # `list_method = TRUE`: a non-mergeable list is rendered table-after-table instead of erroring.
+  # subordinate tables (meta$footer_tabs) enter as the list they mean -- tx_with_footer_tabs().
+  tabs_x    <- tx_with_footer_tabs(tabs)
+  tabs_list <- if (is.data.frame(tabs_x) || !is.list(tabs_x)) list(tabs_x) else tabs_x
   prep <- tab_export_prep(
-    tabs, backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
+    tabs_x,
+    backend = "kable", list_method = TRUE, compute = compute, transpose = o$transpose,
     wrap = list(rows = wrap_rows, cols = wrap_cols, exdent = 2,
                 whitespace_only = whitespace_only, unbreakable_spaces = TRUE, brk = "<br>"),
-    theme = theme, var_names = o$var_names,
+    theme = theme, var_names = o$var_names, lang = lang,
     color_legend = color_legend, what = "tab_html()"
   )
 
-  parts <- purrr::map(prep$tables, function(rd) {
+  if (!is.null(cells_parts)) {
+    if (length(cells_parts) != length(prep$tables)) {
+      cli::cli_abort(c("{.arg cells} must carry one data.frame per rendered table.",
+                       "x" = "It carries {length(cells_parts)}, the render has {length(prep$tables)}."))
+    }
+    for (i in seq_along(cells_parts))
+      tx_cells_check(cells_parts[[i]], prep$tables[[i]]$tab, i, length(cells_parts))
+  }
+
+  # WARNING: the POSITION, never imap()'s `i` -- tx_with_footer_tabs() may return a NAMED list, and
+  # `i` would then be the name (the trap tab_md() already documents).
+  parts <- purrr::map(seq_along(prep$tables), function(i) {
+    rd      <- prep$tables[[i]]
     subtext <- character(0)
     if (!isTRUE(rd$vars$degrade)) {
-      src         <- if (is.null(rd$color_src)) rd$tab else rd$color_src
-      want_legend <- color_legend && length(rd$roles$color_cols) != 0
-      subtext <- rd_footer(src, "html", theme = theme[1], want_legend = want_legend,
-                           subtext = rd$subtext, lang = lang, classes = TRUE)
+      src     <- if (is.null(rd$color_src)) rd$tab else rd$color_src
+      subtext <- rd_blocks(src, "html", theme = theme[1], want_legend = isTRUE(rd$want_legend),
+                           subtext = rd$subtext, lang = lang, classes = TRUE,
+                           host = !isTRUE(rd$subordinate))
     }
-    cap <- rd_caption(rd, caption)
+    # the user's caption names the FIRST table; a subordinate keeps the one its name gave it.
+    cap <- rd_caption(rd, if (i == 1L) caption else NULL)
     render_kable_html(rd, prep$meta, subtext = subtext, caption = cap,
-                      tooltips = tooltips, popover = popover, get_data = get_data)
+                      tooltips = tooltips, popover = popover, get_data = get_data,
+                      cells = if (is.null(cells_parts)) NULL else cells_parts[[i]])
   })
 
   if (get_data) return(if (length(parts) == 1L) parts[[1]] else parts)
 
-  # the observed curves, in a table of their own: html keeps them in the base-count cell wherever
-  # that works and takes this route only where it cannot (see tab_wants_shape_table).
+  # the NOTES each table carries -- the ones set_footer_tabs() gave it, and the regression's observed
+  # curves where the base-count cell cannot hold them -- UNDER THE TABLE THEY BELONG TO.
   # tab_kable_join() already stacks the parts with a blank line between them.
-  if (is_tab(tabs) && tab_wants_shape_table(tabs, "kable"))
-    parts <- c(parts, list(shape_html_table(tabs)))
+  parts <- unlist(purrr::map(seq_along(parts), function(i) {
+    c(list(parts[[i]]),
+      purrr::compact(lapply(footer_notes(tabs_list[[i]], "kable", syntax = "html"), note_html)))
+  }), recursive = FALSE)
 
   # The cells carry slot CLASSES, so the theme lives entirely here. The stylesheet is table-independent
   # (see tab_css()), built once per call -- or not at all when a document emitted tab_css() itself.
@@ -879,7 +1345,10 @@ tab_compact <- function(tabs) { # pvalue_lines = FALSE
   merge_tab_vars <- tab_get_vars(tabs[[1]])$tab_vars
 
 
-  subtext <- get_subtext(tabs[[1]])
+  # the UNION, in the region's order: `test` below is unioned over every member, so what SPEAKS about
+  # it must be too -- a member-1 template lacking <interaction> would suppress a line the merged tests
+  # genuinely carry.
+  subtext <- purrr::reduce(purrr::map(tabs, get_subtext), subtext_bind)
   # Captured HERE while `tabs` is still the LIST: tab_stack_tables() below rebinds it to a plain tibble
   # carrying no table attributes, so this is where a `meta` sub-field could be lost (hence tab_meta_merge).
   metas_in <- purrr::map(tabs, get_meta)
@@ -1393,7 +1862,7 @@ reg_footer_lines <- function(tabs) {
   rlc     <- setdiff(nonfmt, group_chr)
   row_lab_col <- if (length(rlc) >= 1L) rlc[length(rlc)] else nonfmt[length(nonfmt)]
 
-  plan <- reg_footer_plan(reg)
+  plan <- reg_test_rows_plan(reg)
   K    <- if (is.null(plan)) 0L else nrow(plan)
   if (K == 0) return(tabs)
   reg$.term     <- test_key_col(reg, "var")
@@ -1504,45 +1973,42 @@ tab_wrap_text <- function(tabs, wrap_rows = 35L, wrap_cols = 15L, exdent = 1,
   tabs <- tabs |>
     dplyr::rename_with(
       # a column name is a NAME, not prose: tx_wrap_name() knows the seams a compound one is built
-      # from (`_`, `.`, camelCase), which stri_wrap() -- whitespace only -- could never find. Values
-      # below stay on the prose wrapper; only the variable-NAME column is re-wrapped, by the exporter
-      # prep, which alone knows the width its block leaves it.
+      # from (`_`, `.`, camelCase), which stri_wrap() -- whitespace only -- could never find.
       ~ tx_wrap_name(., wrap_cols, exdent = 0L, brk = brk)
-    ) |>
-    dplyr::mutate(
-      dplyr::across(
-        where(is.factor),
-        ~ forcats::fct_relabel(
-          ., ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
-                                           whitespace_only = whitespace_only), fixed = TRUE)
-        )
-      ),
-      dplyr::across(
-        where(is.character),
-        ~ gsub("\n", brk, tx_str_wrap(., width = wrap_rows, exdent = exdent,
-                                      whitespace_only = whitespace_only), fixed = TRUE)
-      )
     )
+  if (unbreakable_spaces)
+    tabs <- dplyr::rename_with(tabs, ~ gsub(" ", unbrk, ., perl = TRUE))
+
+  tx_wrap_labels(tabs, wrap_rows = wrap_rows, exdent = exdent,
+                 whitespace_only = whitespace_only,
+                 unbreakable_spaces = unbreakable_spaces, brk = brk)
+}
+
+
+# The VALUES half of tab_wrap_text(): row labels wrapped as prose, column NAMES untouched. This is
+# what the exporter prep runs -- a rendered header is a LABEL in the render model, not a rename, so
+# nothing keyed by a column name can go stale (see R/tab-export-prep.R's header).
+tx_wrap_labels <- function(tabs, wrap_rows = 35L, exdent = 1, whitespace_only = TRUE,
+                           unbreakable_spaces = TRUE, brk = "\n") {
+  wrap1 <- function(x) gsub("\n", brk, tx_str_wrap(x, width = wrap_rows, exdent = exdent,
+                                                   whitespace_only = whitespace_only),
+                            fixed = TRUE)
+  tabs <- dplyr::mutate(
+    tabs,
+    dplyr::across(where(is.factor)   , ~ forcats::fct_relabel(., wrap1)),
+    dplyr::across(where(is.character), wrap1)
+  )
 
   if (unbreakable_spaces) {
-    tabs <- tabs |>
-      dplyr::rename_with(
-        ~ gsub(" ", unbrk, ., perl = TRUE)
-      ) |>
-      dplyr::mutate(
-        dplyr::across(
-          where(is.factor),
-          ~ forcats::fct_relabel(., ~ gsub(" ", unbrk, ., perl = TRUE) )
-        ),
-        dplyr::across(
-        where(is.character),
-        ~ gsub(" ", unbrk, ., perl = TRUE)
-      ),
-
-      )
+    unbrk1 <- function(x) gsub(" ", unbrk, x, perl = TRUE)
+    tabs <- dplyr::mutate(
+      tabs,
+      dplyr::across(where(is.factor)   , ~ forcats::fct_relabel(., unbrk1)),
+      dplyr::across(where(is.character), unbrk1)
+    )
   }
 
-  return(tabs)
+  tabs
 }
 
 
@@ -2697,7 +3163,7 @@ mk_color_scale <- function(name, values) {
 #   sides      "mirror" (the two sides carry the same thresholds) or "asymmetric". A multiplicative
 #              ladder MIRRORS unless the quantity it grades is BOUNDED ABOVE: a percentage ratio is
 #              capped at 1/base, so a cell can sit far below its reference and never far above it,
-#              while a mean ratio, a rate ratio and a ratio of two estimates have no ceiling.
+#              while a ratio of means (a count too) and a ratio of two estimates have no ceiling.
 #   bg_keep    how many LOUD rungs this ladder keeps when carried on the BACKGROUND channel (NA = all).
 #              A fill is a secondary, at-a-glance voice: on `color = c("difference", "ratio")` the
 #              ratio's faint rungs only restate what the text channel already says.
@@ -2839,7 +3305,7 @@ tx_check_color_scales()
 #' \code{\link{tab_reg}}-only scales of \code{color = "adjustment"} / \code{"between_groups"} --
 #' how far a modelled effect sits from the observed one (or from the reference group's). Which one a
 #' column reads follows the estimate's own scale: \code{adj_ratio} for a multiplicative effect (odds /
-#' risk / rate ratio), \code{adj_diff} for a probability-scale marginal effect (in percentage points),
+#' risk ratio or ratio of means), \code{adj_diff} for a probability-scale marginal effect (in percentage points),
 #' and \code{adj_diff_std} for an additive effect in the outcome's own units (a gaussian beta, a count
 #' marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 #' whatever unit the outcome is recorded in. An empty/\code{NULL} scale
@@ -2848,7 +3314,7 @@ tx_check_color_scales()
 #' Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
 #' quantity it grades is bounded above: a percentage ratio is capped at \code{1 / base}, so a cell can
 #' sit far below its reference and never far above it, and \code{pct_ratio} is stricter below
-#' (\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a mean ratio, a rate ratio
+#' (\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a ratio of means
 #' and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
 #' on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
 #' \code{color = TRUE} the text grades every deviation and the background flags the ones whose

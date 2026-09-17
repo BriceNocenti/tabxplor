@@ -3,7 +3,7 @@
 #   helper with no home of its own -- the base-R wrapping / padding / truncating primitives, the
 #   NAME wrapper beside them, the retired-export-argument catcher, the two message helpers
 #   (tx_inform_once() / tx_need_pkg()), and the three exported user helpers (score_from_lv1(),
-#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
+#   gss_cat_data_formatting(), and fct_recode_helper()).
 # KEY CONSTRAINTS:
 #   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
 #     .onLoad() only seeds them, through tx_seed_options().
@@ -127,10 +127,13 @@ tx_str_wrap <- function(string, width = 80, exdent = 0, whitespace_only = TRUE) 
 #   before  `*` (the interaction operator: `age` / `*tvhours` says which side the operator belongs
 #           to) and a lowercase -> uppercase camelCase seam.
 # `-` and `/` are deliberately NOT opportunities: they are far more often a range ("25-34") or a date
-# than a compound-name seam, and breaking those reads as a typo.
+# than a compound-name seam, and breaking those reads as a typo. A `.` between digits is out for the
+# same reason -- there it is a decimal point.
 #' @keywords internal
 tx_name_atoms <- function(s) {
-  s <- gsub("([_. ])", "\\1\u0001", s, perl = TRUE)
+  s <- gsub("([_ ])", "\\1\u0001", s, perl = TRUE)
+  # a `.` BETWEEN DIGITS is a decimal point, not a seam -- "9.9%" broken there reads as two numbers
+  s <- gsub("(?<=\\.)(?![0-9])", "\u0001", s, perl = TRUE)
   s <- gsub("(?=[*])|(?<=[a-z0-9])(?=[A-Z])", "\u0001", s, perl = TRUE)
   a <- strsplit(s, "\u0001", fixed = TRUE)[[1L]]
   a[nzchar(a)]
@@ -174,6 +177,52 @@ tx_wrap_name <- function(string, width = 12L, exdent = 1L, hard = TRUE, brk = "\
            paste(paste0(strrep("\u00a0", ex), lines[-1L]), collapse = brk))
   }
   vapply(string, one, character(1), USE.NAMES = FALSE)
+}
+
+# How wide, and how tall, a WRAPPED string is -- at the breaks every medium writes. One definition,
+# read by the header budget below and by Excel's own width pass.
+#' @keywords internal
+tx_line_width <- function(x) {
+  x <- as.character(x); x[is.na(x)] <- ""
+  vapply(strsplit(x, "<br>|[\n\r]", perl = TRUE), function(p) max(0L, nchar(p)), integer(1))
+}
+
+#' @keywords internal
+tx_n_lines <- function(x) {
+  x <- as.character(x); x[is.na(x)] <- ""
+  lengths(strsplit(paste0(x, ""), "<br>|[\n\r]", perl = TRUE))
+}
+
+# A RUN OF NAMES THAT SHARE A PREFIX SAYS IT ONCE. Walking the names a reader meets in order, one
+# whose common prefix with the name before it is the prefix already in force is shown from that
+# prefix on -- "MUS_CONCERT_CLASSIQUE", then "_ROCK", "_JAZZ" -- and the FULL name returns whenever
+# that common prefix changes, whether it lengthens, shortens or disappears, so the reader always has
+# the current prefix in view. Segments are tx_name_atoms()', which carry their own separator, so a
+# cut never falls mid-word.
+# ⚠ The elided form is AMBIGUOUS on its own -- "_ROCK" does not say WHERE the previous name was cut --
+#   which is why the caller reaches for it only when the full name would not have fitted, and why the
+#   elision is refused unless the shared prefix ends at a separator (a camelCase cut leaves no mark).
+tx_elide_prefix <- function(labels) {
+  out <- labels
+  at  <- which(!is.na(labels) & nzchar(labels))
+  if (length(at) < 2L) return(out)
+  atoms <- lapply(labels[at], tx_name_atoms)
+  pfx   <- character(0)                                  # the prefix currently in force
+  for (i in seq_along(at)[-1L]) {
+    a <- atoms[[i - 1L]]; b <- atoms[[i]]
+    k <- 0L
+    while (k < min(length(a), length(b)) && identical(a[[k + 1L]], b[[k + 1L]])) k <- k + 1L
+    q <- if (k > 0L && k < length(b)) b[seq_len(k)] else character(0)
+    if (!length(q))              { pfx <- character(0); next }
+    if (!length(pfx))              pfx <- q
+    else if (!identical(pfx, q)) { pfx <- q; next }
+    ps <- paste0(pfx, collapse = "")
+    # a 1-2 character prefix saves nothing and reads as noise; a prefix not ending at a separator
+    # would leave the elision unmarked ("musConcertRock" -> "Rock").
+    if (nchar(ps) < 3L || !grepl("[_. ]$", ps)) next
+    out[at[[i]]] <- substring(labels[at[[i]]], nchar(ps))
+  }
+  out
 }
 
 # str_trunc(): truncate to `width` with a trailing ellipsis (right side only, the sole use).
@@ -395,19 +444,23 @@ score_from_lv1 <- function (data, name, vars_list) {
 tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamespace("tabxplor"))
 
 
-#' fct_recode helper to recode multiple variables
+#' Write the code to recode several factors
 #'
 #' @description
-#' `r lifecycle::badge("deprecated")`
+#' Recoding a factor with [forcats::fct_recode()] means typing every level name exactly, and a typo
+#' is silently ignored. `fct_recode_helper()` writes that code for you: it prints a ready-to-paste
+#' `mutate()` call with one `fct_recode()` per variable, each level already written as
+#' `"level" = "level"`. You then only edit the new names on the left, and delete the lines you keep.
 #'
-#' Printed a ready-to-paste `mutate()` call recoding a set of factor columns via
-#' [forcats::fct_recode()] -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
-#' Removed in 2.1.0; copy it into your own project if you rely on it.
+#' With a few variables, each level carries its frequency and count as a comment, which is what tells
+#' you which small levels to merge. A column with a `label` attribute (data imported by \pkg{haven})
+#' gets that label as a comment title.
 #'
 #' @param data The data frame.
-#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
+#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode. Default: every
+#'   non-numeric column.
 #' @param name_in The input data frame's name (default: the expression given as `data`).
-#' @param name_out The output data frame's name, if different from `name_in`.
+#' @param name_out The output data frame's name, if different from `name_in` (used by `style = "base"`).
 #' @param style `"mutate"` (default) writes a `dplyr::mutate()` call; `"base"` writes `data$var <-`.
 #' @param reminder Print a `"new" = "old"` syntax reminder. Default `TRUE`.
 #' @param freq Print each level's frequency and count as a comment; defaults to `TRUE` when 5 or
@@ -416,15 +469,13 @@ tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamesp
 #'   `FALSE` returns a data frame of the recode text instead.
 #'
 #' @return With `cat = TRUE` (default), the text printed to console (or written to a temp R file for
-#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text is
-#'   returned instead. A column carrying a `label` attribute is used as its comment title.
-#' @keywords internal
+#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text.
 #' @export
+#' @examples
+#' fct_recode_helper(forcats::gss_cat, c(marital, race))
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
                               freq = NULL,
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
-  lifecycle::deprecate_soft("2.0.0", "fct_recode_helper()",
-                            details = "It writes forcats code and has nothing to do with tables.")
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))
@@ -668,9 +719,16 @@ where <- function (fn)
 # knitr is Suggests: the three chunk options tabxplor reads are only ever set DURING a render, and a
 # render is exactly when knitr is loaded. `knitr.in.progress` is knitr's own flag for that, so the
 # gate answers "am I being knitted?" and the requireNamespace() below can never be the slow path.
+
+# THE one answer to "am I being knitted?" -- read by tab_md()'s `print` default (a cat() would land
+# in a verbatim block), by print.tabxplor_kable() (a knitted table must not open the Viewer), and by
+# the chunk-option reader below.
+#' @keywords internal
+tx_knitting <- function() isTRUE(getOption("knitr.in.progress"))
+
 #' @keywords internal
 tx_knitr_opt <- function(name, which = c("current", "knit")) {
-  if (!isTRUE(getOption("knitr.in.progress"))) return(NULL)
+  if (!tx_knitting()) return(NULL)
   if (!requireNamespace("knitr", quietly = TRUE)) return(NULL)
   switch(match.arg(which),
          current = knitr::opts_current$get(name),
@@ -706,6 +764,13 @@ tx_html_escape <- function(text, attribute = FALSE) {
   Encoding(text) <- "UTF-8"
   text
 }
+
+# DESIGN: a formula is R CODE and a variable name is DATA -- "Age group" or "Income (EUR)" is a
+# parse error or, worse, a function call, unless quoted. Every formula built from names goes through
+# this one rule.
+#' @keywords internal
+#' @noRd
+tx_backtick <- function(x) paste0("`", gsub("`", "\\`", as.character(x), fixed = TRUE), "`")
 
 
 # Escaped characters ------------------------------------------------------------------------------
@@ -750,4 +815,49 @@ wtd_sd <- function(x, w = NULL) {
   xw <- x[ok]; ww <- w[ok]
   m  <- sum(ww * xw) / sum(ww)
   sqrt(sum(ww * (xw - m)^2) / sum(ww))          # the ML weighted variance, as tab()'s numeric side uses
+}
+
+
+# `tab_html(cells = )`: one data.frame, or one per rendered table. Normalised here so the engine
+# only ever sees a single frame. `get_data` returns what `cells` writes, so asking for both is a
+# mistake worth naming rather than silently resolving.
+#' @keywords internal
+#' @noRd
+tx_cells_arg <- function(cells, get_data) {
+  if (is.null(cells)) return(NULL)
+  if (isTRUE(get_data)) {
+    cli::cli_abort(c("{.arg cells} and {.arg get_data} are the two directions of one door.",
+                     "i" = "Read with {.code get_data = TRUE}, write with {.arg cells}."))
+  }
+  parts <- if (is.data.frame(cells)) list(cells) else cells
+  ok <- is.list(parts) &&
+    all(vapply(parts, function(z) is.null(z) || is.data.frame(z), logical(1)))
+  if (!ok) {
+    cli::cli_abort(c("{.arg cells} must be a data.frame, or a list of one per rendered table.",
+                     "x" = "It is {.cls {class(cells)[[1]]}}."))
+  }
+  parts
+}
+
+# The shape half of `tab_html(cells = )`, run against the table as prepped so the message names
+# the argument rather than the purrr frame that would wrap it inside the engine.
+#' @keywords internal
+#' @noRd
+tx_cells_check <- function(x, tab, i, n_parts) {
+  if (is.null(x)) return(invisible(NULL))
+  where <- if (n_parts > 1L) paste0(" (table ", i, ")") else ""
+  if (!is.data.frame(x)) {
+    cli::cli_abort(c("{.arg cells}{where} must be a data.frame.",
+                     "i" = "Edit the one {.code tab_html(get_data = TRUE)} returns."))
+  }
+  if (nrow(x) != nrow(tab)) {
+    cli::cli_abort(c("{.arg cells}{where} must have one row per table row.",
+                     "x" = "It has {nrow(x)}, the table has {nrow(tab)}."))
+  }
+  unknown <- setdiff(names(x), names(tab))
+  if (length(unknown)) {
+    cli::cli_abort(c("{.arg cells}{where} names {length(unknown)} column{?s} the table does not have.",
+                     "x" = "{.val {unknown}}"))
+  }
+  invisible(NULL)
 }

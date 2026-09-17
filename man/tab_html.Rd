@@ -17,6 +17,7 @@ tab_html(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -36,6 +37,7 @@ tab_kable(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -101,9 +103,21 @@ are the spanning row above their level columns. Level headers always keep their 
 
 \item{get_data}{Get the transformed data instead of the html table.}
 
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
+\item{cells}{The write side of \code{get_data}: the same data.frame, with the cells you want to
+replace edited. A value still equal to the one the table renders means "keep", so handing the
+frame straight back changes nothing; anything else is written verbatim into that cell, markup
+and all. The cell keeps its classes and its tooltip, and loses the decorations that belonged to
+the text it replaced (the bold split, the background pill, the sparkline). Pass a list of one
+data.frame per table when several are rendered at once.}
 
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
+\item{wrap_rows}{Row labels are wrapped past this width (35 characters by default).}
+
+\item{wrap_cols}{Column headers are wrapped past this width (15 characters by default), at the seams a
+compound name is built from (\verb{_}, \code{.}, \code{*}, a camelCase boundary). A col_var's spanning
+name is measured against the width its own columns leave it first: past that it wraps,
+and past what wrapping can do it is shown from the prefix it shares with the block before
+it (\code{MUS_CONCERT_CLASSIQUE}, then \verb{_ROCK}), and held to this width in the last resort ---
+never while there is room for the whole name.}
 
 \item{whitespace_only}{Set to \code{FALSE} to wrap also on non whitespace characters.}
 

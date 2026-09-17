@@ -6,12 +6,69 @@ jrs:   '1.1'
 # TWO live items, and that is the whole results model: tabxplor renders ONE html table (the colour,
 # the footer and the test summary are all inside it -- see R/tab-render-html.R), so there is no
 # Table / Image element to declare. Phase 15c also removed the width-forcing `plot` Image: the
-# scroll box (tab_render_scrollbox: width:max-content; max-width; overflow-x:auto) owns the width.
+# scroll box tab_html() wraps each table in (`.tx-scrollbox`, R/tab-css.R) owns the width;
+# jmv_results_style() adds only its pixel cap.
 items:
 
     - name: html_table
       title: Table
       type: Html
+      # The works this table rests on, shown in jamovi's own References list; the entries are
+      # in jamovi/00refs.yaml. ⚠ HERE and not in the .a.yaml: a `refs:` belongs to a RESULT
+      # ELEMENT, and the analysis schema is additionalProperties: false.
+      refs:
+        - tabxplor
+        - survey
+        - rao-scott
+        - wilson
+        - newcombe
+        - katz
+        - woolf
+        - welch
+        - haberman
+    # `clearWith` = the options that make this table say something else, so an edit to one blanks it
+    # until the run repaints it. The DEFAULT is "*" -- every option, the export path and the file name
+    # included -- which made a table blink for an edit that cannot change a number. The list is
+    # therefore every option of the analysis EXCEPT the export block (dev/tests: the two sets are
+    # checked against jmvtab{,reg}.a.yaml, so a new option cannot be forgotten here).
+      clearWith:
+        - row_vars
+        - col_vars
+        - tab_vars
+        - wt
+        - pct
+        - color
+        - color_signif
+        - test
+        - anova
+        - na
+        - lvs
+        - cleannames
+        - ref_levels
+        - levels_order
+        - levels_collapse
+        - shape
+        - ref
+        - ref2
+        - comp
+        - ci
+        - conf_level
+        - stars
+        - design_effect
+        - ci_method_cell
+        - ci_method_diff
+        - ci_method_mean_diff
+        - ci_method_mean_ratio
+        - tab_theme
+        - totaltab
+        - wrap_rows
+        - wrap_cols
+        - display
+        - "n"   # quoted: YAML 1.1 reads a bare `n` as the boolean FALSE
+        - add_pct
+        - subtext
+        - digits
+        - n_min
 
     # Phase 7e: hidden state carrier for the multi-tier live cache. Only Image elements persist a
     # `$state` across the engine reset, so this Image hosts the (gzip-RDS'd) store. It renders

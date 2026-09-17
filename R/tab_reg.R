@@ -561,14 +561,21 @@ reg_model_lines <- function(x, lang = NULL) {
   })
 }
 
+# Does this table carry an aggregated effect-modification test? ONE reader, so the `interaction` row's
+# `default` predicate and the builder below cannot disagree about what "there is one" means.
+#' @keywords internal
+reg_has_interaction <- function(x) {
+  tt <- tryCatch(get_test(x), error = function(e) NULL)
+  !is.null(tt) && nrow(tt) > 0 && any(tt$test %in% reg_interaction_types())
+}
+
 # The AGGREGATED effect-modification test, one footer LINE per model. A pooled test belongs to no
 # single model column, which is the only thing the footer-ROW machinery can key on.
 #' @keywords internal
 reg_interaction_lines <- function(x, lang = NULL) {
-  tt <- get_test(x)
-  if (is.null(tt) || nrow(tt) == 0) return(character(0))
-  it <- tt[tt$test %in% reg_interaction_types(), , drop = FALSE]
-  if (nrow(it) == 0) return(character(0))
+  if (!reg_has_interaction(x)) return(character(0))
+  it   <- get_test(x)
+  it   <- it[it$test %in% reg_interaction_types(), , drop = FALSE]
   meta <- reg_call(x)
   sv   <- if (is.null(meta)) NA_character_ else meta$tab_vars
   with_legend_lang(lang, function(lg) {
@@ -588,7 +595,7 @@ reg_interaction_lines <- function(x, lang = NULL) {
   })
 }
 
-reg_title <- function(meta, max = 2, lang = NULL) {
+reg_title <- function(meta, max = 3, lang = NULL) {
   if (is.null(meta)) return(NA_character_)
   fams <- meta$families; if (is.null(fams)) fams <- meta$family
   mixed <- length(unique(fams)) > 1L
@@ -596,18 +603,26 @@ reg_title <- function(meta, max = 2, lang = NULL) {
     fam <- reg_family_display_name(meta$family)
     Fam <- if (mixed) gettext("Regression models")
            else paste0(toupper(substr(fam, 1, 1)), substr(fam, 2, nchar(fam)))
-    dep <- tab_title_names(meta$outcome, max)
+    dep <- tab_title_names(meta$outcome, max, noun = gettext("outcomes"), join = "and")
     tabbed <- if (!is.null(meta$tab_vars)) paste0(" ", gettextf("(tabbed by %s)", meta$tab_vars)) else ""
-    by_of  <- function(preds) if (nzchar(preds)) paste0(" ", gettextf("by %s", preds)) else ""
-    if (mixed) return(enc2utf8(paste0(Fam, ": ", dep, by_of(tab_title_names(meta$predictors, max)), tabbed)))
+    # "cinema by qualif, sexe and age" lists them; "cinema, by 4 predictors" counts them, and takes a
+    # comma -- a count is an aside about the model, not the continuation of its name.
+    by_of  <- function(preds, counted = FALSE)
+      if (!nzchar(preds)) "" else paste0(if (counted) ", " else " ", gettextf("by %s", preds))
+    pred_noun <- gettext("predictors")
+    if (mixed) return(enc2utf8(paste0(
+      Fam, ": ", dep,
+      by_of(tab_title_names(meta$predictors, max, noun = pred_noun, join = "and"),
+            tx_name_list_counted(meta$predictors, max)), tabbed)))
     if (isTRUE(meta$comparison)) {
       pl  <- meta$positive_level[[1]]
       dref <- if (!is.na(pl)) paste0(dep, ", '", pl, "' (", meta$eff_word, ")")
               else            paste0(dep, " (", meta$eff_word, ")")
       enc2utf8(gettextf("%s (models comparison): %s", paste0(Fam, "s"), paste0(dref, tabbed)))
     } else {
-      preds <- tab_title_names(meta$predictors, max)
-      enc2utf8(paste0(Fam, ": ", dep, by_of(preds), tabbed))
+      preds <- tab_title_names(meta$predictors, max, noun = pred_noun, join = "and")
+      enc2utf8(paste0(Fam, ": ", dep,
+                      by_of(preds, tx_name_list_counted(meta$predictors, max)), tabbed))
     }
   })
 }
@@ -1142,11 +1157,11 @@ reg_tidy_polr <- function(fit) {
 reg_fit_formula <- function(outcome, predictors, add_terms = NULL, formula = NULL,
                             response = NULL, cross = NULL, offset = NULL) {
   if (!is.null(formula)) return(formula)
-  rhs <- paste0("`", predictors, "`", collapse = " + ")
-  if (!is.null(cross))    rhs <- paste0("(", rhs, ") * `", cross, "`")
+  rhs <- paste(tx_backtick(predictors), collapse = " + ")
+  if (!is.null(cross))    rhs <- paste0("(", rhs, ") * ", tx_backtick(cross))
   if (length(add_terms))  rhs <- paste(c(rhs, add_terms), collapse = " + ")
   if (!is.null(offset))   rhs <- paste0(rhs, " + ", offset)
-  stats::as.formula(paste0(response %||% paste0("`", outcome, "`"), " ~ ", rhs))
+  stats::as.formula(paste0(response %||% tx_backtick(outcome), " ~ ", rhs))
 }
 
 # The glm FAMILY OBJECT each internal link key fits with. Read by reg_fit() (what really runs) and by
@@ -2387,7 +2402,7 @@ reg_profile_row <- function(data, predictors, anchors = NULL, w = NULL) {
 
 # WHERE THE BASELINE ROW'S VALUE BELONGS, for both contrasts at once. `EST_SCALES$const_display`
 # names the quantity this column's effects OPERATE ON: an odds ratio multiplies odds, so an odds
-# column keeps the baseline odds (with its level as the cell's aside); a risk / rate ratio multiplies
+# column keeps the baseline odds (with its level as the cell's aside); a risk ratio or a ratio of means multiplies
 # the level and a difference adds to it, so those show the LEVEL itself; a coefficient adds on the
 # link scale. The number never changes -- only the field it sits in and the token that renders it --
 # which is what stops the row wearing a comparison sign or a "x" glyph it has no reference for.
@@ -2587,7 +2602,7 @@ reg_null_loglik <- function(fit, family) {
   }
   null <- tryCatch({
     mf   <- stats::model.frame(fit)
-    fla  <- stats::reformulate("1", response = names(mf)[1])
+    fla  <- stats::reformulate("1", response = tx_backtick(names(mf)[1]))
     if (inherits(fit, "multinom")) nnet::multinom(fla, data = mf, trace = FALSE)
     else if (inherits(fit, "polr")) MASS::polr(fla, data = mf, Hess = TRUE)
     else NULL
@@ -3731,7 +3746,7 @@ reg_cols_ame <- function(f, sp, ctx) {
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
   # predicted outcome, at the very profile the column's effects are read at.
   # ⚠ a LOGGED column's baseline is computed on the scale it is the log OF -- the baseline odds under
-  # a logged odds ratio, the baseline level under a logged risk / rate ratio -- and logged after, so
+  # a logged odds ratio, the baseline level under a logged risk ratio or ratio of means -- and logged after, so
   # `Constant + effect` stays coherent on the link scale.
   exp_sc <- reg_exp_scale_of(sp_est, sp$trials)
   # DESIGN: a RANK column has no baseline to place. The model's predicted outcome distribution is a
@@ -4207,8 +4222,8 @@ reg_stage_finalize <- function(ctx) {
 #' All-in-one tables for regressions, with each modelled effect beside its observed one
 #'
 #' Fits one regression model per column and returns a `tabxplor` table of the per-family effect
-#' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **incidence-rate
-#' ratios** (poisson), one **odds-ratio column per outcome category** (nominal 3+ level), a
+#' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **ratios of
+#' means** (poisson counts), one **odds-ratio column per outcome category** (nominal 3+ level), a
 #' **cumulative odds ratio** (ordinal) --- one row per predictor level, grouped by predictor, with
 #' the **observed (crude)** effect beside each adjusted one. Each cell stores its estimate, interval
 #' and p-value, so the table prints with stars, greys what is not significant, and exports like any
@@ -4223,7 +4238,7 @@ reg_stage_finalize <- function(ctx) {
 #' @details
 #' New to regressions with tabxplor? A first model needs three arguments: `data`, `outcome` and
 #' `predictors`. The model follows the outcome's type --- a two-level factor gives logistic **odds
-#' ratios**, a numeric a linear **mean difference**, a count Poisson **rate ratios**, a 3+ level
+#' ratios**, a numeric a linear **mean difference**, a count Poisson **ratios of means**, a 3+ level
 #' factor multinomial or ordinal odds ratios --- so you rarely set `family` by hand.
 #'
 #' **The estimand is a cascade**: `family` -> `link` -> `measure` -> `effect`, where `"auto"` means
@@ -4289,7 +4304,7 @@ reg_stage_finalize <- function(ctx) {
 #'   the model's own. The full word is canonical, the discipline's acronym a synonym:
 #'
 #'   * `"odds_ratio"` (`"OR"`) --- the odds of the outcome, times what.
-#'   * `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) --- how many times as likely, as frequent, as large.
+#'   * `"ratio"` (`"RR"`, `"RoM"`) --- how many times as likely, as frequent, as large.
 #'     Reach for it when the outcome is **common**, where an odds ratio is far from the risk ratio
 #'     people hear in it, and because a risk ratio stays comparable across nested models.
 #'   * `"difference"` (`"RD"`, `"diff"`) --- how much more, in the outcome's own units.
@@ -4527,7 +4542,7 @@ reg_stage_finalize <- function(ctx) {
 #' # Linear: a mean difference in dollars.
 #' tab_reg(car_salaries, "salary", c("sex", "discipline", "rank"))
 #'
-#' # A count outcome: incidence-rate ratios.
+#' # A count outcome: ratios of mean counts.
 #' tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 #'
 #' # `measure` reports another measure WITHOUT changing the model: a MARGINAL risk ratio,
@@ -4760,5 +4775,10 @@ tab_reg <- function(data, outcome, predictors = NULL, tab_vars = NULL, wt = NULL
   # The model record IS this table's `spec$call` -- "how was this table made", the slot every
   # producer has. ⚠ `conf_level` is deliberately absent from it: the level lives on every COLUMN
   # (get_conf_level() is what consumers read), so a table-wide copy could only ever disagree.
-  set_caption(set_reg_call(res, reg_call_record), caption)
+  res <- set_caption(set_reg_call(res, reg_call_record), caption)
+  # ...and ONLY NOW the footer template: it names what this table can say, and until the line above
+  # ran the table had no model record -- so <model> (and a weighted fit's <weight>, which lives in
+  # that record) would have been pruned from every regression.
+  attr(res, "subtext") <- footer_default_template(res, get_subtext(res))
+  res
 }

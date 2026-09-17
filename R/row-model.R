@@ -6,7 +6,8 @@
 #   - `role` says what the COLUMN is; `var` says which VARIABLE its labels belong to. On a merged
 #     `levels` column `var` is NA. Never infer either from a column NAME.
 #   - `row_kind` must live on the fmt FIELD, not the table: fmt_color_plan() calls is_totrow() on a
-#     lone extracted column with no table in scope (locked by test-degraded-attrs.R).
+#     lone extracted column with no table in scope (locked by test-degraded-attrs.R). How a row READS
+#     rides on the kind for the same reason -- an extracted column must ink itself identically.
 # See: CLAUDE.md § tabxplor architecture (row model); R/fmt_class.R (the row_kind field).
 #
 # TWO facts, TWO carriers:
@@ -18,16 +19,70 @@
 
 
 # --- the declared row-kind vocabulary ----------------------------------------------------------------
-# Every value `row_kind` may take, in reading order. "data" is the neutral (a real body row); the rest
-# are synthetic or summary rows a producer added:
-#   total    a total row (the only kind is_totrow() asks about)
-#   n        the base-count row
-#   pct      the add_pct percentage row
-#   pvalue   an appended test row (crosstab chi2/F, or a reg per-term test line)
-#   gof      a regression goodness-of-fit / model-summary footer row
-#   blank    a spacer row between footer blocks
-# ORDER matters: fmt_row_kind() reduces several columns' kinds to one per row by "first non-data wins".
-ROW_KINDS <- c("data", "total", "n", "pct", "pvalue", "gof", "blank")
+# Every value `row_kind` may take, and what a row of that kind IS in the table.
+#   key     the value itself. "data" is the neutral (a real body row); the rest are synthetic or
+#           summary rows a producer added. ORDER matters: fmt_row_kind() reduces several columns'
+#           kinds to one per row by "first non-data wins", so `data` is first and the rest read in
+#           order.
+#   graded  are this row's cells DEVIATIONS the colour engine grades? A graded row's uncoloured cell
+#           RECEDES to the greyed ink, because there "no colour" says "no deviation worth reading",
+#           and its reference cell comes forward, in the table's ink, bold. An ungraded row STATES a
+#           number -- a base count, a share, a test -- so an uncoloured cell there says nothing at
+#           all: it keeps the table's own ink whatever the grading did, and structure never bolds it,
+#           a colour being the only emphasis it keeps (a non-significant p-value's red).
+#           ⚠ ONE column, not an `ink` and a `bold`: they are one decision -- does this row take
+#           part in the grading?
+#           ⚠ `total` IS graded: under `ref = "first"` a Total row is a deviation from the reference
+#           row and greys out where it is not significant, and every export already names it with a
+#           rule above it. Its full-strength ink under `ref = "tot"` comes from being the REFERENCE.
+#   doc     one line, the vocabulary's own gloss; generates ?fmt_fields' row-kind list.
+#' @keywords internal
+#' @noRd
+ROW_KINDS <- tx_grid(tibble::tribble(
+  ~key,     ~graded, ~doc,
+  "data",      TRUE, "a real body row",
+  "total",     TRUE, "a total row (the only kind is_totrow() asks about)",
+  "n",        FALSE, "the base-count row",
+  "pct",      FALSE, "the add_pct percentage row",
+  "pvalue",   FALSE, "an appended test row: a crosstab's chi2 or F, a regression's per-term test",
+  "gof",      FALSE, "a regression goodness-of-fit / model-summary footer row",
+  "blank",    FALSE, "a spacer row between footer blocks",
+))
+
+
+# Is a row of this kind graded? An unknown or NA kind reads as `data`, for the reason is_totrow()
+# folds NA: dplyr::bind_rows() NA-fills a fmt column absent from one of its inputs.
+#' @keywords internal
+#' @noRd
+row_kind_graded <- function(kind) {
+  out <- vapply(ROW_KINDS, function(r) isTRUE(r$graded), logical(1))
+  unname(dplyr::coalesce(out[as.character(kind)], out[["data"]]))
+}
+
+# THE anchor rule -- read by exactly two callers, fmt_col_ann() (every exporter) and
+# pillar_shaft.tabxplor_fmt() (the console), so a cell's ink is decided in one place.
+# A cell reads at full strength when nothing about it is a grade to recede from: it is a total or
+# reference cell (`.totals`, or the per-cell in_refrow a regression's empirical column marks its
+# reference CATEGORY with), or it sits in a row that states rather than grades.
+#' @keywords internal
+#' @noRd
+fmt_row_look <- function(x, .totals = NULL) {
+  graded <- row_kind_graded(get_row_kind(x))
+  list(graded = graded,
+       anchor = (.totals %||% get_reference(x, mode = "all_totals")) | is_refrow(x) | !graded)
+}
+
+# ?fmt_fields' "Row kinds" section, from the grid: the vocabulary is listed where it is declared.
+#' @keywords internal
+#' @noRd
+row_kinds_rd <- function() {
+  c("@section Row kinds:",
+    "The \\code{row_kind} field says what kind of row a cell sits in.",
+    "\\describe{",
+    unlist(lapply(names(ROW_KINDS), function(k)
+      paste0("  \\item{\\code{\"", k, "\"}}{", ROW_KINDS[[k]]$doc, ".}"))),
+    "}")
+}
 
 
 # --- the missing-value level --------------------------------------------------------------------------

@@ -104,7 +104,7 @@ argument most readers ever set, and the one that never changes the model. \code{
 the model's own. The full word is canonical, the discipline's acronym a synonym:
 \itemize{
 \item \code{"odds_ratio"} (\code{"OR"}) --- the odds of the outcome, times what.
-\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}) --- how many times as likely, as frequent, as large.
+\item \code{"ratio"} (\code{"RR"}, \code{"RoM"}) --- how many times as likely, as frequent, as large.
 Reach for it when the outcome is \strong{common}, where an odds ratio is far from the risk ratio
 people hear in it, and because a risk ratio stays comparable across nested models.
 \item \code{"difference"} (\code{"RD"}, \code{"diff"}) --- how much more, in the outcome's own units.
@@ -339,8 +339,8 @@ A \code{tabxplor_grouped_tab} (grouped by predictor), one effect column per mode
 }
 \description{
 Fits one regression model per column and returns a \code{tabxplor} table of the per-family effect
-measure --- a linear \strong{mean difference} (gaussian), \strong{odds ratios} (binomial), \strong{incidence-rate
-ratios} (poisson), one \strong{odds-ratio column per outcome category} (nominal 3+ level), a
+measure --- a linear \strong{mean difference} (gaussian), \strong{odds ratios} (binomial), \strong{ratios of
+means} (poisson counts), one \strong{odds-ratio column per outcome category} (nominal 3+ level), a
 \strong{cumulative odds ratio} (ordinal) --- one row per predictor level, grouped by predictor, with
 the \strong{observed (crude)} effect beside each adjusted one. Each cell stores its estimate, interval
 and p-value, so the table prints with stars, greys what is not significant, and exports like any
@@ -355,7 +355,7 @@ regression} (\code{vignette("tabxplor-reading-a-regression")}); to \strong{look 
 
 New to regressions with tabxplor? A first model needs three arguments: \code{data}, \code{outcome} and
 \code{predictors}. The model follows the outcome's type --- a two-level factor gives logistic \strong{odds
-ratios}, a numeric a linear \strong{mean difference}, a count Poisson \strong{rate ratios}, a 3+ level
+ratios}, a numeric a linear \strong{mean difference}, a count Poisson \strong{ratios of means}, a 3+ level
 factor multinomial or ordinal odds ratios --- so you rarely set \code{family} by hand.
 
 \strong{The estimand is a cascade}: \code{family} -> \code{link} -> \code{measure} -> \code{effect}, where \code{"auto"} means
@@ -402,8 +402,7 @@ profile --- and \code{measure = "log"} wraps it (\code{Model_mRR}, \code{Model_r
 \item \code{cumOR} --- cumulative odds ratio (ordinal)
 \item \code{RR} --- risk ratio (binomial, multinomial)
 \item \code{RD} --- risk difference (binomial, multinomial)
-\item \code{IRR} --- incidence-rate ratio (poisson)
-\item \code{RoM} --- ratio of means (gaussian)
+\item \code{RoM} --- ratio of means (gaussian, poisson)
 \item \code{diff} --- mean difference (gaussian, poisson)
 \item \code{D} --- Somers' D (ordinal)
 \item \code{WR} --- win ratio (ordinal)
@@ -421,7 +420,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"))
 # Linear: a mean difference in dollars.
 tab_reg(car_salaries, "salary", c("sex", "discipline", "rank"))
 
-# A count outcome: incidence-rate ratios.
+# A count outcome: ratios of mean counts.
 tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 
 # `measure` reports another measure WITHOUT changing the model: a MARGINAL risk ratio,

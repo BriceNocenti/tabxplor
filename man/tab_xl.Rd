@@ -111,9 +111,14 @@ the col-percentages-with-several-row-variables use case.}
 \code{row_vars} uses to name each block (written once per block); the column-variable names
 are the spanning row above their level columns. Level headers always keep their name.}
 
-\item{wrap_rows}{By default, rownames are wrapped when larger than 30 characters.}
+\item{wrap_rows}{Row labels are wrapped past this width (35 characters by default).}
 
-\item{wrap_cols}{By default, colnames are wrapped when larger than 12 characters.}
+\item{wrap_cols}{Column headers are wrapped past this width (15 characters by default), at the seams a
+compound name is built from (\verb{_}, \code{.}, \code{*}, a camelCase boundary). A col_var's spanning
+name is measured against the width its own columns leave it first: past that it wraps,
+and past what wrapping can do it is shown from the prefix it shares with the block before
+it (\code{MUS_CONCERT_CLASSIQUE}, then \verb{_ROCK}), and held to this width in the last resort ---
+never while there is room for the whole name.}
 
 \item{ratio_cells}{What a ratio / odds-ratio cell holds in the workbook. Excel cannot compute
 inside a number format, so a cell storing \code{0.83} cannot be made to print \verb{÷1.2} the way the

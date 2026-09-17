@@ -273,8 +273,8 @@ testthat::test_that("the colour vocabulary is declared, not written out", {
   testthat::expect_equal(measure_key(NA_character_), "")
   testthat::expect_equal(measure_key(character(0)), "")
 
-  # Phase 22c-v: ONE acronym vocabulary, so every spelling `tab_reg(measure =)` takes and every word
-  # a header can print works here too -- with its DERIVED lowercase twin.
+  # ONE acronym vocabulary, so every spelling `tab_reg(measure =)` takes and every word a header can
+  # print works here too -- with its DERIVED lowercase twin, and the RETIRED `IRR` still resolving.
   testthat::expect_equal(vapply(c("RD", "diff", "rd", "RR", "IRR", "RoM", "rr", "irr", "rom", "or"),
                                 measure_key, character(1), USE.NAMES = FALSE),
                          c("difference", "difference", "difference", "ratio", "ratio", "ratio",
@@ -376,4 +376,34 @@ testthat::test_that("contrib / OR never get a difference CI forced on them", {
   o <- tab(fx_gss(), marital, race, pct = "col", display = "{or}", ref = "first", color = TRUE,
            color_signif = "grey_non_signif")
   testthat::expect_false(any(get_scale(o) == "points"))
+})
+
+
+testthat::test_that("a publication palette is the TABLE's: scoped by its class, above every page layer", {
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  testthat::expect_match(as.character(tab_html(t, theme = "print_ready", css = FALSE)),
+                         'class="tabxplor-tab tx-print_marks', fixed = TRUE)
+  testthat::expect_no_match(as.character(tab_html(t, theme = "light", css = FALSE)), "tx-print_", fixed = TRUE)
+  testthat::expect_match(tab_md(t, theme = "print_emphasis", css = FALSE, print = FALSE),
+                         "::: {.tabxplor-tab .tx-print_emphasis}", fixed = TRUE)
+
+  # every sheet, whatever its own theme, carries every member -- so a colour page can hold a print table
+  spec <- function(sel) {                      # (ids, classes + attributes + pseudo-classes, types)
+    s <- gsub(":(not|is)\\(([^)]*)\\)", " \\2", sel)
+    c(0, lengths(regmatches(s, gregexpr("\\.[-\\w]+|\\[[^]]+\\]|:[-\\w]+", s, perl = TRUE))),
+      lengths(regmatches(s, gregexpr("(^|[ >+~])[a-z]+", s, perl = TRUE))))
+  }
+  rank <- function(v) v[2] * 100 + v[3]
+  for (th in c("light", "auto")) {
+    css <- strsplit(tab_css(theme = th, style_tag = FALSE), "\n")[[1]]
+    for (m in names(PRINT_PALETTES))
+      testthat::expect_true(any(grepl(paste0(":root .tabxplor-tab.tx-", m, " .p1"), css, fixed = TRUE)), info = m)
+  }
+  # scoping adds (0,2,0); a page hook at most (0,1,1) -- so the scoped twin of any rule wins
+  base <- ".tabxplor-tab td:not(.p1,.p2) .tx-pill"
+  scoped <- tabxplor:::tx_print_scope_sel(base, "print_marks")
+  hooked <- tabxplor:::tx_hook_sel(base, "body.quarto-dark")
+  testthat::expect_gt(rank(spec(scoped)), rank(spec(hooked)))
+  # a comma inside :not()/:is() is not a selector boundary
+  testthat::expect_identical(tabxplor:::tx_sel_parts(".a:not(.b,.c),.d"), c(".a:not(.b,.c)", ".d"))
 })

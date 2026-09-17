@@ -3,10 +3,12 @@
 #   render_kable_html() isolates the engine so the render model stays engine-agnostic. There is ONE
 #   engine; `engine =` is accepted and ignored.
 # KEY CONSTRAINTS:
-#   - EVERY LOOK IS A CLASS, never an inline style. That is what makes theme = "auto" possible: an
+#   - EVERY COLOUR IS A CLASS, never an inline style. That is what makes theme = "auto" possible: an
 #     inline `style` beats every stylesheet rule short of !important, so inline hex could never
 #     follow a dark-mode toggle. R/tab-css.R owns what each class looks like; this file only names
-#     them. Do not reintroduce inline colour.
+#     them. Do not reintroduce inline colour. ⚠ The ONE inline `style` this engine writes is the data
+#     bar's LENGTH (`--tx-bar`, set_bars()): a length is not a look, its ink stays a stylesheet
+#     custom property, and a class per percent would mean a hundred rules.
 #   - The <thead> is the prep's three rows (R/tab-export-prep.R). An INDEX column has no unit, so its
 #     header spans both rows and sits bottom-aligned, putting "levels" on the line of the "<row%>"
 #     beside it; Excel merges the same two.
@@ -14,8 +16,10 @@
 #     a <div> sibling by default -- the only shape that cannot size the table -- a real <caption>
 #     under bookdown, which numbers tables by scanning for one, and nothing at all under Quarto when
 #     the cell already wrote `tbl-cap`. The markup a host reads is not a style choice.
-#   - EVERY <table> OPENS THROUGH tx_table_open(), and what this file hands back must OPEN AND CLOSE
-#     WITH A TAG: two things Quarto needs, stated at those two functions.
+#   - EVERY <table> OPENS THROUGH tx_table_open() AND IS WRAPPED BY tx_scrollbox(), and what this
+#     file hands back must OPEN AND CLOSE WITH A TAG: three things stated at those functions. The
+#     box is what makes a table too wide for its host scroll instead of widening the page; its
+#     title is emitted outside it, so it stays put while the table moves.
 #   - The <style> is hoisted ONCE by tab_kable_join(). It works inside jamovi: the results view
 #     injects our html through jQuery .html(), which applies <style> nodes, and has no sanitizer on
 #     that path (what jamovi ignores is htmlDependency, not <style>).
@@ -78,16 +82,17 @@ render_kable_html <- function(rd, meta,
                               subtext  = character(0),
                               caption  = NULL,
                               tooltips = TRUE, popover = FALSE,
-                              get_data = FALSE) {
+                              get_data = FALSE, cells = NULL) {
   # a table that merely lost its class keeps its fmt columns and is not degraded; only
   # tab_export_prep()'s own `degrade` flag (a non-tabxplor input) takes this path.
   if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars)  # batch-aware (see tab_export_prep)
     return(render_html_degrade(rd$tab))
   }
 
   render_html_engine(rd, meta, subtext = subtext, caption = caption,
-                     tooltips = tooltips, popover = popover, get_data = get_data)
+                     tooltips = tooltips, popover = popover, get_data = get_data,
+                     cells_arg = cells)
 }
 
 
@@ -100,6 +105,15 @@ render_kable_html <- function(rd, meta,
 tx_table_open <- function(class) {
   paste0('<table class="', class, '" data-quarto-disable-processing="true">')
 }
+
+# THE ONE PLACE A <table> IS WRAPPED, and every one of ours is: a table too wide for the space it
+# has must SCROLL, not widen the document around it. The box is what scrolls -- `overflow-x` on the
+# <table> itself would need `display:block`, which costs the table its shrink-to-fit width. Idle
+# where the table fits, so there is nothing to decide at render time; R/tab-css.R has the rule.
+# ⚠ THE TITLE STAYS OUTSIDE. A caption that scrolls away with the table it names is not a caption --
+# so the `<div class="tabxplor-caption">` sibling is emitted BEFORE this call, never inside it. The
+# bookdown arm is the exception it cannot be: there the title IS a <caption> child of the <table>.
+tx_scrollbox <- function(html) paste0('<div class="tx-scrollbox">', html, '</div>')
 
 # WHO OWNS THE TABLE'S TITLE. The one host probe this file makes, answered from the ecosystem's own
 # flags through tx_knitr_opt(), which is NULL outside a render -- so the Viewer, tab_export(file =)
@@ -217,8 +231,41 @@ html_face_wrap <- function(html, bold, italic, underline) {
   }
   bold <- g(bold); italic <- g(italic); underline <- g(underline)
   if (any(underline)) html[underline] <- paste0("<u>", html[underline], "</u>")
-  if (any(italic))    html[italic]    <- paste0("<i>", html[italic],    "</i>")
+  # DESIGN: `<em>`, not `<i>`. A publication palette's italic MEANS something (it is the cell's
+  # reading, like the bold beside it), and it must survive leaving the page: jamovi's Copy walker and
+  # its LaTeX export both keep `<em>` and drop `<i>`, so a copied print_emphasis table used to lose
+  # exactly half of its typography.
+  if (any(italic))    html[italic]    <- paste0("<em>", html[italic],   "</em>")
   if (any(bold))      html[bold]      <- paste0("<b>", html[bold],      "</b>")
+  html
+}
+
+
+# === SECTION: the cells override =================================================================
+
+# `cells =` is the WRITE side of `get_data = TRUE`: the same frame, some cells edited. A value that
+# still equals the one format() produced means "keep", so handing the frame straight back renders the
+# table unchanged -- only a genuine edit takes the raw path. DESIGN: an edited cell is written
+# verbatim into its <td>, keeping the cell's classes (colour, alignment, borders) and its tooltip,
+# and losing the decorations that belong to the text it replaced -- the bold split, the background
+# pill, the sparkline. That is the point: the replacement is somebody else's markup, and escaping it
+# would defeat the only reason to ask. Its SHAPE is checked at the public boundary
+# (tx_cells_check), so an error names `cells` and not a purrr frame.
+tx_cells_override <- function(x, cells, nm) {
+  if (is.null(x)) return(NULL)
+  ovr <- stats::setNames(vector("list", length(nm)), nm)
+  for (name in names(x)) {
+    new <- as.character(x[[name]])
+    new[is.na(new) | new == as.character(cells[[name]])] <- NA_character_
+    if (any(!is.na(new))) ovr[[name]] <- new
+  }
+  if (all(vapply(ovr, is.null, logical(1)))) NULL else ovr
+}
+
+tx_cells_write <- function(html, ovr) {
+  if (is.null(ovr)) return(html)
+  hit <- !is.na(ovr)
+  html[hit] <- ovr[hit]
   html
 }
 
@@ -228,7 +275,7 @@ html_face_wrap <- function(html, bold, italic, underline) {
 # Returns the BARE <table> string; the <style> block is hoisted once by tab_kable_join(). Only a
 # palette's TYPOGRAPHY reaches this markup, read from the RESOLVED theme, never from `meta$theme`.
 render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, get_data,
-                               cap_host = tx_caption_host()) {
+                               cells_arg = NULL, cap_host = tx_caption_host()) {
   # the model-fit block's first row draws a boundary across the whole table (2px), where a row_var
   # separator stops at the name column.
   foot_top <- if (length(rd$footer_rows)) min(rd$footer_rows) else NA_integer_
@@ -249,7 +296,7 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   } else purrr::imap(tab, function(col, name) {
     if (is_fmt(col)) {
       format(col, html = TRUE, special_formatting = TRUE, na = "", stars = TRUE,
-             theme = meta$theme_cols$theme %||% "light",
+             theme = meta$theme_cols$marks,
              bold_split = TRUE, .ref = ann_ref(ann[[name]]))
     } else {
       as.character(col)
@@ -261,6 +308,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     names(df) <- nm
     return(df)
   }
+
+  # `cells =` is resolved against the text this render just produced, so "unchanged" is knowable.
+  ovr <- tx_cells_override(cells_arg, stats::setNames(cells, nm), nm)
 
   # (b) column-CONSTANT CLASSES, one string per column, never inline `style=`: `border-right:1px solid`
   # as a shorthand would reset border-color to the cell's own text colour (R/tab-css.R uses longhands
@@ -292,10 +342,10 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       bsl <- slot(a$bg_slot)
       cls <- tx_slot_class("text", tsl)
       bgc <- tx_slot_class("bg",   bsl)
-      # keep_black = ref_alltot | is_refrow | footer -- the cells kept as black reading anchors rather
-      # than greyed; falls back to ref_alltot alone (a degraded-model guard) when absent.
-      keep <- if (is.null(a$keep_black)) a$ref_alltot else { stopifnot(length(a$keep_black) == n_row)
-                                                             a$keep_black }
+      # `anchor` -- the cells that read in the table's own ink rather than greyed (fmt_row_look(),
+      # R/row-model.R); falls back to ref_alltot alone (a degraded-model guard) when absent.
+      keep <- if (is.null(a$anchor)) a$ref_alltot else { stopifnot(length(a$anchor) == n_row)
+                                                         a$anchor }
       grey <- !nzchar(cls) & !nzchar(bgc) & !keep
       cls[grey] <- if (isTRUE(a$has_color) || isTRUE(a$has_bgc)) "g1" else "g2"
       cls[a$bold] <- trimws(paste(cls[a$bold], "tx-b"))
@@ -352,19 +402,37 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
       cell_html[bg_left] <- paste0('<span class="tx-pill ', bgc[bg_left], '">',
                                    cell_html[bg_left], '</span>')
     }
-    paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', tip, '>', cell_html, '</td>')
+    if (!is.null(ovr)) cell_html <- tx_cells_write(cell_html, ovr[[name]])
+    # THE DATA BAR (set_bars()). ⚠ The ONE inline `style` this engine writes, and the file header's
+    #   rule survives it: what is inline is a LENGTH, never a colour -- the ink is a stylesheet
+    #   custom property, so `theme = "auto"` and every publication palette still decide how the bar
+    #   looks. A class per width would need one rule per percent.
+    # TWO classes, because a groove and a bar are two facts: `tx-bar` says the cell is ON the bar's
+    # scale and draws the groove (its whole width, saying how far a full bar reaches), `tx-bar-on`
+    # that it has a length to draw. A value of zero keeps its groove -- the column would otherwise
+    # look as if it had lost a row -- and gets no bar, whose border alone would draw a tick on nothing.
+    sty <- ""
+    bar <- rd$bars[[name]]
+    if (!is.null(bar)) {
+      hit <- !is.na(bar)
+      pos <- hit & bar > 0
+      cls[hit] <- trimws(paste(cls[hit], "tx-bar"))
+      cls[pos] <- trimws(paste(cls[pos], "tx-bar-on"))
+      sty <- ifelse(pos, paste0(' style="--tx-bar:', round(bar * 100, 1), '%"'), "")
+    }
+    paste0('<td class="', trimws(paste(cls_col[j], cls)), '"', sty, tip, '>', cell_html, '</td>')
   })
 
   # (c2) LABEL columns are re-emitted as ONE `rowspan` cell per block, so the row/tab variable is
   # named once; a continuation row contributes "", which is what (d)'s paste0 needs. html_escape_br(),
   # not the raw path (c): a label carries no markup of ours except tab_wrap_text()'s own "<br>".
-  for (cl in names(roles$label_cols)) {
-    j    <- match(cl, nm)
-    run  <- roles$label_runs[[cl]]
+  for (k in seq_along(roles$label_cols)) {
+    j    <- roles$label_cols[[k]]
+    run  <- roles$label_runs[[k]]
     if (is.null(run) || is.na(j)) next
-    named <- cl %in% names(roles$var_name_col)   # a variable name is bold in its own right
+    named <- j %in% unname(roles$var_name_col)   # a variable name is bold in its own right
     # rotation is decided by the prep (tab_vname_plan), never re-derived -- Excel reads the same vector.
-    vert  <- named & (roles$vname_plans[[cl]]$vert %||% (run$span > 1L))
+    vert  <- named & (roles$vname_plans[[k]]$vert %||% (run$span > 1L))
     # the bottom rule is decided HERE: a rowspanned cell is anchored in its block's FIRST row, so
     # `tr.tx-bb2>*` never reaches it, unlike a one-row block's own closing row.
     # ⚠ AT THE TABLE'S OWN WEIGHT: the closing row draws `tr.tx-bb2` (a block boundary) across every
@@ -380,8 +448,9 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
     cls   <- gsub(" +", " ", paste(cls_col[j], "tx-lbl", ifelse(vert, "tx-vname", ""),
                                    ifelse(named, "tx-b", ""),
                                    ifelse(named & !nzchar(bot), "tx-nb", ""), bot))
-    td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">',
-                   html_escape_br(cells[[j]]), '</td>')
+    lbl  <- html_escape_br(cells[[j]])
+    if (!is.null(ovr)) lbl <- tx_cells_write(lbl, ovr[[nm[[j]]]])
+    td   <- paste0('<td class="', trimws(cls), '" rowspan="', run$span, '">', lbl, '</td>')
     td[!run$show] <- ""
     td_html[[j]]  <- td
   }
@@ -424,12 +493,17 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
   # the col_var spanning-name header row: each variable name centred (colspan) over its level columns.
   # A span belonging to a SUB-POPULATION gets its own line above the variable name, composed here from
   # two stored facts rather than welded into the name.
-  cvh_runs <- tab_header_runs(cvh$label, cvh$group)
+  cvh_runs <- tab_header_runs(cvh$label, cvh$group, cvh$full)
   span_thead <- if (any(nzchar(cvh_runs$labels))) {
     span_txt <- ifelse(nzchar(cvh_runs$labels), html_escape_br(cvh_runs$labels), "")
     span_txt <- ifelse(nzchar(cvh_runs$groups) & nzchar(span_txt),
                        paste0(html_escape_br(cvh_runs$groups), "<br>", span_txt), span_txt)
-    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '">', span_txt,
+    # a span the cascade SHORTENED says its full name out of band: an elided "_ROCK" does not carry
+    # where the previous name was cut, and html is the one medium that can hand it over on hover.
+    tip <- ifelse(nzchar(cvh_runs$labels) &
+                    tx_unwrap_text(cvh_runs$labels) != cvh_runs$full,
+                  paste0(' title="', tx_html_escape(cvh_runs$full), '"'), "")
+    span_cells <- paste0('<th class="tx-span" colspan="', cvh_runs$spans, '"', tip, '>', span_txt,
                          '</th>')
     paste0('<tr>', paste0(span_cells, collapse = ""), '</tr>')
   } else ""
@@ -454,53 +528,55 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
            paste0(subtext, collapse = "<br>"), '</div></td></tr></tfoot>')
   } else ""
 
-  # no `tabxplor-<theme>` token in the markup -- the stylesheet carries the theme. A table showing
-  # significance stars gets `tx-has-stars`, flipping the number cells to the monospace stack in CSS.
-  tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
+  # no COLOUR-theme token in the markup -- the stylesheet carries it, so `auto` follows the page. A
+  # publication palette IS one (tx_palette_class()): it is the table's, and its rules are scoped to it.
+  # A table showing significance stars gets `tx-has-stars`, flipping the number cells to monospace.
+  tbl_class <- paste(c("tabxplor-tab", tx_palette_class(meta$theme_cols$theme),
+                       if (isTRUE(roles$has_stars)) "tx-has-stars"), collapse = " ")
   paste0(
     cap_div,
-    tx_table_open(tbl_class), cap_el,
-    '<thead>', span_thead, thead, unit_thead, '</thead>',
-    '<tbody>', body, '</tbody>',
-    tfoot,
-    '</table>'
+    tx_scrollbox(paste0(
+      tx_table_open(tbl_class), cap_el,
+      '<thead>', span_thead, thead, unit_thead, '</thead>',
+      '<tbody>', body, '</tbody>',
+      tfoot,
+      '</table>'
+    ))
   )
 }
 
 
-# The SHAPE TABLE as html: the same four columns the console prints, in the table's own chrome, with
-# the glyph run upgraded to an <svg> at double size -- a table of its own has room a base-count cell
-# has not.
-shape_html_table <- function(tab) {
-  # `syntax = "html"`: the outcome cell comes back as markup (a subscripted "%"), so that ONE column
-  # is not escaped again below -- every other cell still is.
-  st <- reg_shape_table(tab, syntax = "html")
-  if (is.null(st)) return(NULL)
-  hd <- attr(st, "headers"); al <- attr(st, "align")
+# A NOTE as html: its columns in the table's own chrome, one step smaller and in the aside ink -- a
+# note under the table, not a second table (`tx-shape`). Per-column behaviour is the note's declared
+# `kind` and never its column names: "markup" is not escaped again, "spark" is a run of block glyphs
+# upgraded to an <svg> at double size, which a table of its own has room for.
+note_html <- function(nt) {
+  if (is.null(nt) || !nrow(nt)) return(NULL)
+  hd <- attr(nt, "headers"); al <- attr(nt, "align")
+  kd <- attr(nt, "kind") %||% rep("text", length(nt))
   cls <- vapply(al, function(a) if (a == "right") "tx-r tx-num" else "tx-l", character(1))
   thead <- paste0('<tr>', paste0('<th class="', cls, '">', tx_html_escape(hd), '</th>',
                                  collapse = ""), '</tr>')
-  # a curve inside its own sampling noise wears the ASIDE ink -- same convention as a non-significant
-  # cell. WARNING: the grey goes on a SPAN inside the cell, never the <td>: tab_css() gives `.tx-sec`
+  # a row the note greys out wears the ASIDE ink -- same convention as a non-significant cell.
+  # WARNING: the grey goes on a SPAN inside the cell, never the <td>: tab_css() gives `.tx-sec`
   # `display:inline-block` under every publication palette, which on a <td> would break the row layout.
-  ns <- attr(st, "noisy") %||% rep(FALSE, nrow(st))
-  cells <- lapply(seq_along(st), function(j) {
-    v <- as.character(st[[j]])
-    if (names(st)[[j]] != "outcome") v <- tx_html_escape(v)   # the outcome cell IS markup
+  ns <- attr(nt, "noisy") %||% rep(FALSE, nrow(nt))
+  cells <- lapply(seq_along(nt), function(j) {
+    v <- as.character(nt[[j]])
+    if (!identical(kd[[j]], "markup")) v <- tx_html_escape(v)
     k <- cls[[j]]
-    if (names(st)[[j]] == "shape") { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
-                                     k <- paste(k, "tx-sparkcell") }
+    if (identical(kd[[j]], "spark")) { v <- tx_spark_svg(v, h = 44L, dx = 10L, lwd = 2.6)
+                                       k <- paste(k, "tx-sparkcell") }
     v <- ifelse(ns, paste0('<span class="tx-sec">', v, '</span>'), v)
     paste0('<td class="', k, '">', v, '</td>')
   })
   body <- paste0('<tr>', do.call(paste0, cells), '</tr>', collapse = "")
-  nt    <- attr(st, "note")                        # empty wherever no row wears the "ns" mark
-  tfoot <- if (!length(nt)) "" else
-    paste0('<tfoot><tr><td colspan="', length(st), '"><div class="tx-foot">',
-           paste(tx_html_escape(nt), collapse = "<br>"), '</div></td></tr></tfoot>')
-  # `tx-shape`: a note under the table, not a second table -- one step smaller and in the aside ink.
-  paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
-         '<tbody>', body, '</tbody>', tfoot, '</table>')
+  ln    <- attr(nt, "note")                        # empty wherever the note says nothing extra
+  tfoot <- if (!length(ln)) "" else
+    paste0('<tfoot><tr><td colspan="', length(nt), '"><div class="tx-foot">',
+           paste(tx_html_escape(ln), collapse = "<br>"), '</div></td></tr></tfoot>')
+  tx_scrollbox(paste0(tx_table_open("tabxplor-tab tx-shape"), '<thead>', thead, '</thead>',
+                      '<tbody>', body, '</tbody>', tfoot, '</table>'))
 }
 
 
@@ -513,8 +589,8 @@ render_html_degrade <- function(tab) {
   cols <- lapply(tab, function(col) paste0('<td>', tx_html_escape(as.character(col)), '</td>'))
   row_inner <- if (length(cols)) do.call(paste0, cols) else rep("", nrow(tab))
   body <- paste0('<tr>', row_inner, '</tr>', collapse = "\n")
-  paste0(tx_table_open("tabxplor-tab"), '<thead>', thead,
-         '</thead><tbody>', body, '</tbody></table>')
+  tx_scrollbox(paste0(tx_table_open("tabxplor-tab"), '<thead>', thead,
+                      '</thead><tbody>', body, '</tbody></table>'))
 }
 
 
@@ -530,10 +606,10 @@ render_html_degrade <- function(tab) {
 # closing `:::` of the cell. Every part here already starts `<style>`, `<div ` or `<table `; keep it
 # that way, and add nothing before them. Asserted in test-tab-render-html.R.
 tab_kable_join <- function(parts, css = "", theme = NULL) {
-  # ⚠ NO <br> BETWEEN THE PARTS ANY MORE: each part ends in a `.tabxplor-tab`, which now carries one
-  # line of air below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism
-  # instead of two -- a <br> as well would have doubled the space between a table and its own shape
-  # table, which reads as a note under it.
+  # ⚠ NO <br> BETWEEN THE PARTS: each part ends in a `.tx-scrollbox`, which carries one line of air
+  # below it (TX_TAIL_SPACE), so the separator and the trailing gap are ONE mechanism instead of two
+  # -- a <br> as well would have doubled the space between a table and its own shape table, which
+  # reads as a note under it.
   body <- paste(unlist(parts), collapse = "\n")
   out  <- if (nzchar(css)) paste0("<style>", css, "</style>\n", body) else body
   out <- structure(out, format = "html", class = c("tabxplor_kable", "knitr_kable"))
@@ -638,7 +714,7 @@ print.tabxplor_kable <- function(x, ...) {
   mode <- kable_print_mode(theme, interactive(),
                            # `kableExtra_view_html` is honoured as the former spelling of the opt-out
                            getOption("tabxplor.view_html", getOption("kableExtra_view_html", TRUE)),
-                           !is.null(tx_knitr_opt("out.format", "knit")),
+                           tx_knitting(),
                            !is.null(deps))
   if (identical(mode, "degrade"))
     tx_need_pkg(c("rmarkdown", "htmltools"), "A themed Viewer page with styled tooltips",

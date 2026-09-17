@@ -4,9 +4,10 @@ on:
   push:
     branches: [main, master]
   pull_request:
-  release:
-    types: [published]
   workflow_dispatch:
+# NOT `release: [published]`. The site is master's, and a release is a TAG: publishing one would
+# rebuild gh-pages from that tag's commit, with `clean: true` -- so publishing a `jmo-*` module
+# release tagged on `dev` would replace the live site with a development build.
 
 name: pkgdown.yaml
 

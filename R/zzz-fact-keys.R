@@ -128,6 +128,21 @@ TAB_FOREIGN_KEYS <- list(
         function() names(MEASURES)),
   tx_fk("MEASURE_ACRONYMS_REG",    function() unname(MEASURE_ACRONYMS_REG),
         function() names(MEASURES)),
+  tx_fk("MEASURE_ACRONYMS_RETIRED", function() unname(MEASURE_ACRONYMS_RETIRED),
+        function() names(MEASURES)),
+  # --- the FOOTER: the region, its vocabulary and what each part reads -------------------------
+  # a placeholder's `reads` names the facts it is built from: `meta$<field>` must be a declared table
+  # attribute, and every other name a declared `fmt` column attribute. That edge is what lets
+  # ?tabxplor-footer say "to change what this says, use ..." without restating a single setter.
+  tx_fk("FOOTER_BLOCKS$reads (meta)",
+        function() sub("^meta[$]", "", grep("^meta[$]", tx_fk_all(FOOTER_BLOCKS, "reads"), value = TRUE)),
+        function() c(names(TAB_ATTRS), "spec$vars$wt", "spec$call")),
+  tx_fk("FOOTER_BLOCKS$reads (column)",
+        function() grep("^meta[$]", tx_fk_all(FOOTER_BLOCKS, "reads"), value = TRUE, invert = TRUE),
+        function() c(fmt_col_attrs, fmt_field_names, "subtext", "test")),
+  tx_fk("FOOTER_BLOCKS$kind",      function() tx_fk_scalar(FOOTER_BLOCKS, "kind"),
+        function() c("line", "note", "tab", "inline")),
+
   # --- into COLOR_SCALES (the break ladders) -------------------------------------------------
   tx_fk("EST_SCALES$break_key",    function() tx_fk_scalar(EST_SCALES, "break_key"),
         function() names(COLOR_SCALES), orphan = TRUE),
@@ -189,6 +204,12 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("REG_CELL_DIGITS", function() names(REG_CELL_DIGITS), function() names(EST_SCALES)),
   tx_fk("DISPLAY_TOKENS$alias",    function() tx_fk_scalar(DISPLAY_TOKENS, "alias"),
         function() names(DISPLAY_TOKENS)),
+  tx_fk("DISPLAY_TOKENS$needs",    function() tx_fk_all(DISPLAY_TOKENS, "needs"),
+        function() names(DISPLAY_NEEDS)),
+  tx_fk("DISPLAY_NEEDS$panel",     function() tx_fk_scalar(DISPLAY_NEEDS, "panel"),
+        function() names(DISPLAY_NEEDS)),
+  tx_fk("DISPLAY_TOKENS$arms",     function() tx_fk_scalar(DISPLAY_TOKENS, "arms"),
+        function() DISPLAY_ARMABLE),
   # every {token} a named layout is spelt with, so a preset can never name a token that went away
   tx_fk("DISPLAY_PRESETS",
         function() {
@@ -222,11 +243,11 @@ TAB_FOREIGN_KEYS <- list(
   tx_fk("names(MEASURE_PRODUCER_FN)", function() names(MEASURE_PRODUCER_FN),
         function() MEASURE_PRODUCERS),
   tx_fk("REG_CHECKS$kind",         function() tx_fk_scalar(REG_CHECKS, "kind"),
-        function() ROW_KINDS),
+        function() names(ROW_KINDS)),
 
   # --- into TEST_ROWS: what kind of statistical row this is -----------------------------------
   tx_fk("TEST_ROWS$kind",          function() tx_fk_scalar(TEST_ROWS, "kind"),
-        function() ROW_KINDS),
+        function() names(ROW_KINDS)),
   tx_fk("TEST_ROWS$stat",          function() tx_fk_scalar(TEST_ROWS, "stat"),
         function() reg_stat_keys()),
   tx_fk("TEST_ROWS$var_kind",      function() tx_fk_scalar(TEST_ROWS, "var_kind"),

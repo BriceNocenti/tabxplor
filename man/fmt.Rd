@@ -65,7 +65,7 @@ null value is, whether the scale is additive or multiplicative, and which colour
 \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
 \item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
 \item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
-\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, ratio of means)
 \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
 \item \code{"mixed"}: what binding columns of unlike scales collapses to
 }}
@@ -195,7 +195,7 @@ which compare a cell to \emph{another column} rather than to a reference row. A 
 column may carry them, provided it fills the \code{obs} field they score.
 }
 The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
-acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+acronyms included (\code{"RD"}, \code{"RR"}, \code{"RoM"}, \code{"OR"} and their
 lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
 The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
 superseded by the \code{color} + \code{color_signif} pair; here they resolve to their
@@ -313,6 +313,7 @@ the last few are not meant to be typed:
 \item \code{base} --- the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as \code{est}; beside a regression effect it is the adjusted prediction.
 \item \code{ci} --- the confidence interval of whatever the column compares, as \code{[low;high]}.
 \item \code{moe} --- the margin of error --- the same interval as \code{ci}, written as the half-width \code{+/-x} around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.
+\item \code{odds} --- the odds --- \code{pct / (1 - pct)}, the quantity an odds ratio is a ratio of. Printed on the odds ratio's own ladder, so a cell below 1 reads its inverse ("1/2.60") unless \code{options(tabxplor.ratio_print = "raw")} asks for the plain number. Void where the percentage is 1 and the odds infinite.
 \item \code{sd} --- the standard deviation, in the variable's own unit.
 \item \code{cv} --- the coefficient of variation --- the standard deviation as a percentage of the mean.
 \item \code{resid} --- the adjusted standardized residual -- whether the cell departs from independence. Derived from the p-value and the sign of \code{ctr}, so it is read-only.

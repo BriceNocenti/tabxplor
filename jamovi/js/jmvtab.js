@@ -19,11 +19,12 @@
 // R/var-shape.R (VAR_SHAPES). Re-run dev/generate_jamovi_js.R after changing them;
 // the suite checks this block (test-jamovi-vocabulary.R).
 var TABX_MEASURE_ODDS_RATIO = "odds_ratio";
-var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or"];
+var TABX_DISPLAY_ODDS_RATIO_FIELDS = ["or", "odds"];
 var TABX_SHAPES_INDEX = ["auto", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_COL = ["linear", "log", "sqrt", "sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPES_CUT = ["sd_bands", "median", "terciles", "quartiles", "quintiles", "deciles", "values_to_levels"];
 var TABX_SHAPE_LABEL = { "linear": _("linear (numeric)"), "log": _("log (numeric)"), "sqrt": _("sqrt (numeric)"), "sd_bands": _("sd_bands (cut)"), "median": _("median (cut)"), "terciles": _("terciles (cut)"), "quartiles": _("quartiles (cut)"), "quintiles": _("quintiles (cut)"), "deciles": _("deciles (cut)"), "values_to_levels": _("values_to_levels") };
+var TABX_DISPLAY_NEEDS = { "pct": ["fct", "pct_shown"], "wn": ["wt"], "mean": ["num"], "diff": ["ref", "comparable"], "ratio": ["ref", "comparable"], "or": ["fct", "pct_rowcol"], "odds": ["fct", "pct_rowcol"], "ctr": ["fct"], "var": ["num"], "sd": ["num"], "cv": ["num"], "resid": ["fct"], "or_base": ["fct", "pct_rowcol"], "mean_sd": ["num"], "mean_cv": ["num"], "or_pct": ["fct", "pct_rowcol"], "OR_pct": ["fct", "pct_rowcol"] };
 // --- END GENERATED ---
 
 // The file extension shown after the file name on the path line -- follows the chosen format. Rendered
@@ -177,6 +178,7 @@ var onUpdate = function(ui) {
     bottomAlignInRow(ui, "xl_replace");      // Replace checkbox -> bottom of row 1
     bottomAlignInRow(ui, "extCtrl");         // ".ext" text -> bottom of the path row
     renderVarTable(ui);    // the per-variable table (defined below: call-time resolution)
+    updateDisplayChoices(ui);
 };
 
 // --- BEGIN SHARED (dev/generate_jamovi_js.R: copied from jamovi/js/jmvtab.js) -- do not edit ---
@@ -889,6 +891,57 @@ var orIsActive = function (ui) {
 
 var tabVarsOf = function (ui, nm) { return ui[nm] ? utils.clone(ui[nm].value(), []) : []; };
 
+// --- the `display` dropdown: what THIS table could show --------------------------------------
+// A choice whose primary field the table cannot hold is not offered, so the list says what this
+// table can say instead of reciting the vocabulary. What each one needs is generated from
+// DISPLAY_TOKENS$needs (TABX_DISPLAY_NEEDS above); what an ARGUMENT could simply turn on -- an
+// interval, the chi-squared contributions -- is armed by R at the boundary and never hidden here.
+// ⚠ THREE RULES KEEP IT SAFE, because a dropdown that drops a value silently is worse than a long
+// one: an unknown fact counts as AVAILABLE (a column whose type is still being fetched, a choice
+// with no declared need), the CURRENT value is always kept, and any failure leaves the full list.
+var displayChoices = null;                // the declared list, read once, filtered from then on
+var displayFacts = function (ui) {
+    var cols = tabVarsOf(ui, "col_vars"), fct = false, num = false, unknown = false;
+    for (var i = 0; i < cols.length; i++) {
+        var cached = cachedLevels(cols[i]);
+        if (cached === undefined) { unknown = true; continue; }        // still fetching
+        // a NUMBER that is cut is a factor from here on -- the same rule tabxvKind() reads.
+        if (cached === null && TABX_SHAPES_CUT.indexOf(arrGet(ui, "shape", cols[i], "shape")) < 0)
+             num = true;
+        else fct = true;
+    }
+    if (unknown || cols.length === 0) { fct = true; num = true; }
+    var pct = ui.pct ? String(ui.pct.value() || "no") : "no";
+    var ref = ui.ref ? String(ui.ref.value() || "auto") : "auto";
+    var rowcol = (pct === "row" || pct === "col");
+    return {
+        fct: fct, num: num,
+        wt: !!(ui.wt && ui.wt.value()),
+        pct_shown:  pct !== "no",
+        pct_rowcol: rowcol,
+        ref:        (ref !== "no" && ref !== ""),
+        comparable: num || rowcol
+    };
+};
+var updateDisplayChoices = function (ui) {
+    try {
+        if (!ui.display || !ui.display.getPropertyValue) return;
+        if (displayChoices === null) displayChoices = ui.display.getPropertyValue("options");
+        if (!displayChoices || !displayChoices.length) return;
+        var have = displayFacts(ui);
+        var cur  = String(ui.display.value() || "auto");
+        var keep = displayChoices.filter(function (o) {
+            var nm = (o && o.name != null) ? o.name : o;
+            var need = TABX_DISPLAY_NEEDS[nm];
+            if (!need || nm === cur) return true;
+            for (var i = 0; i < need.length; i++) if (!have[need[i]]) return false;
+            return true;
+        });
+        if (keep.length !== (ui.display.getPropertyValue("options") || []).length)
+            ui.display.setPropertyValue("options", keep);
+    } catch (e) { /* the full list is always a correct answer */ }
+};
+
 // ⚠ THE REFERENCE COLUMN IS HEADED PER GROUP, because off the percentage axis it holds a DIFFERENT
 // ARGUMENT. `ref` is chosen on the axis the percentages run along (tabAxisVars); the other axis's
 // one writable cell is `ref2 =`, the odds ratio's SECOND reference, which exists only while an odds
@@ -1043,6 +1096,7 @@ module.exports = {
     onChange_vars: function (ui) {
         applyVarEnables(ui);
         renderVarTable(ui);
+        updateDisplayChoices(ui);
     },
 
     // pct / color / display changed: the reference axis and the odds-ratio second reference follow
@@ -1050,6 +1104,7 @@ module.exports = {
     // changes, so these controls are wired explicitly (.u.yaml).
     onChange_refopts: function (ui) {
         renderVarTable(ui);
+        updateDisplayChoices(ui);
     },
 
     // varTableCtrl: build on create; on `updated`, rebuild only when the signature moved or jamovi

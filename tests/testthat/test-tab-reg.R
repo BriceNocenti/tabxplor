@@ -85,9 +85,9 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 
 
 
-# ---- poisson IRR: parity + multiplicative fmt shape -----------------------------------------
+# ---- poisson RoM: parity + multiplicative fmt shape -----------------------------------------
 
-test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR shape", {
+test_that("tab_reg() poisson RoM / CI / p match glm(poisson); fmt uses the OR shape", {
   d   <- reg_data()
   # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
@@ -95,16 +95,16 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   ref = c(age = 0), empirical = FALSE, cleannames = FALSE))
-  col <- t1[["Model_IRR"]]
+  col <- t1[["Model_RoM"]]
 
-  # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
+  # a ratio of mean counts' own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
   expect_identical(get_pct_type(col), "none")
   expect_identical(get_display(col)[1], "mean")   # the Constant: the baseline mean count
   expect_identical(get_display(col)[2], "est")
   expect_identical(get_scale(col), "mean_ratio")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
-  # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the IRR = exp(coef) is the Poisson
+  # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the RoM = exp(coef) is the Poisson
   # estimate) but its SEs are scaled by sqrt(dispersion) and the interval uses t(df.residual) -- exactly
   # a quasi-Poisson fit's Wald interval. So the CI/p reference is quasipoisson, the point estimate poisson.
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
@@ -226,6 +226,18 @@ test_that("tab_reg() multinomial OR / CI / p match nnet::multinom; one OR column
   cvs <- vapply(c("Dem vs Ind", "Rep vs Ind"), function(nm) get_col_var(t1[[nm]])[1], character(1))
   expect_equal(length(unique(cvs)), 1L)                     # shared col_var
   expect_false(identical(unname(cvs[1]), "Dem vs Ind")) # not the per-category name
+})
+
+
+test_that("a multinomial outcome whose name is not syntactic keeps its likelihood-ratio test", {
+  skip_if_not_installed("nnet")
+  d  <- mnl_data()
+  d2 <- dplyr::rename(d, "party (3)" = party3)
+  lr <- function(t) { x <- get_test(t); x$pvalue[grepl("^lr", x$test)] }
+  p1 <- lr(tab_reg(d, "party3", "race", family = "multinomial", empirical = FALSE))
+  p2 <- lr(tab_reg(d2, "party (3)", "race", family = "multinomial", empirical = FALSE))
+  expect_length(p2, 1L)
+  expect_equal(p2, p1)
 })
 
 

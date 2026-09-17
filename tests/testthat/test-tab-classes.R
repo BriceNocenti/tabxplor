@@ -534,3 +534,301 @@ testthat::test_that("get_test() is exported and reads the tests off a built tabl
   testthat::expect_true(all(c("var", "col", "test", "statistic", "pvalue") %in% names(none)))
   testthat::expect_null(get_test(tibble::tibble(a = 1)))
 })
+
+
+# === Phase 25: meta$footer_tabs -- subordinate tables ============================================
+# The CONTRACT is "one table renders as several, in every medium": a producer attaches a fact that
+# belongs to the table without being a row of it, and no exporter needs to know what it holds.
+# *Silent failure guarded: the block renders in the console the author checked and in no export.*
+
+testthat::test_that("set_footer_tabs() attaches, names caption, and survives a dplyr verb", {
+  main <- tab(fx_gss(), race, marital, pct = "row")
+  side <- tab(fx_gss(), race)
+
+  testthat::expect_null(get_footer_tabs(main))
+  x <- set_footer_tabs(main, list("Base" = side))
+  testthat::expect_length(get_footer_tabs(x), 1L)
+  # a NAME is the subordinate table's caption -- the mechanism that already exists
+  testthat::expect_identical(get_caption(get_footer_tabs(x)[[1]]), "Base")
+  # a bare table is accepted, and nothing is captioned
+  testthat::expect_null(get_caption(get_footer_tabs(set_footer_tabs(main, side))[[1]]))
+  # it rides `meta`, so every dplyr verb carries it (tab_attrs)
+  testthat::expect_length(get_footer_tabs(dplyr::mutate(x, dummy = 1L)), 1L)
+  testthat::expect_null(get_footer_tabs(set_footer_tabs(x, NULL)))
+  testthat::expect_error(set_footer_tabs(main, "not a table"), "list of tables")
+})
+
+
+testthat::test_that("a footer table renders beside its host in every medium, and above it in console", {
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
+                          list("Base" = tab(fx_gss(), race)))
+
+  # console: the host stays a pillar grid, the subordinate one prints as a pipe table (phase 6) --
+  # ABOVE it, because the LAST thing printed is the R object you can go on to pipe (phase 7).
+  txt  <- cli::ansi_strip(print(main, get_text = TRUE))
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+  testthat::expect_true(any(grepl("^\\|:-", txt)))
+  testthat::expect_lt(which(grepl("^\\|:-", txt))[[1]], which(grepl("A tabxplor tab", txt))[[1]])
+
+  # markdown: a second pipe table, carrying its caption line, BELOW the host
+  md <- tab_md(main, css = FALSE, print = FALSE)
+  testthat::expect_true(grepl(": Base", md, fixed = TRUE))
+
+  # html: two <table> elements from one call
+  h <- tab_html(main)
+  testthat::expect_identical(lengths(regmatches(h, gregexpr("<table", h, fixed = TRUE))), 2L)
+})
+
+
+testthat::test_that("a host and its footer table share ONE generated footer", {
+  # the generated blocks belong to the HOST (FOOTER_BLOCKS' `carried` column): a subordinate renders
+  # what it carries and nothing generated, so two coloured tables show one colour legend, not two.
+  side <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row", color = "diff"), list(side))
+
+  md <- tab_md(main, css = FALSE, print = FALSE)
+  testthat::expect_identical(
+    lengths(regmatches(md, gregexpr("difference", md, fixed = TRUE))), 1L)
+
+  h <- tab_html(main)
+  testthat::expect_identical(
+    lengths(regmatches(h, gregexpr("(risk) difference", h, fixed = TRUE))), 1L)
+})
+
+
+testthat::test_that("a footer table's own footer tables are never rendered", {
+  side  <- tab(fx_gss(), race)
+  deep  <- set_footer_tabs(side, list(side))
+  main  <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"), list(deep))
+
+  testthat::expect_identical(
+    lengths(regmatches(tab_html(main), gregexpr("<table", tab_html(main), fixed = TRUE))), 2L)
+  txt <- cli::ansi_strip(print(main, get_text = TRUE))
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+  testthat::expect_identical(sum(grepl("^\\|:-", txt)), 1L)   # ONE pipe table, not two
+})
+
+
+# === Phase 6: the console pipe table, the data bar, and the `var` tag ============================
+
+testthat::test_that("a subordinate table prints as a pipe table, not a second pillar grid", {
+  # One grid is the table; what travels under it is a note, and the two must not look like peers.
+  main <- set_footer_tabs(tab(fx_gss(), race, marital, pct = "row"),
+                          list("Base" = tab(fx_gss(), race)))
+  txt <- print(main, get_text = TRUE)
+  testthat::expect_true(any(grepl("A tabxplor tab", txt)))        # the host, still pillar
+  testthat::expect_true(any(grepl("^\\|:-", cli::ansi_strip(txt))))  # the note, a pipe table
+  testthat::expect_identical(sum(grepl("A tabxplor tab", txt)), 1L)
+})
+
+
+testthat::test_that("tab_pipe() is tab_md() with three arguments fixed", {
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  p <- tab_pipe(t)
+  testthat::expect_type(p, "character")
+  testthat::expect_gt(length(p), 3L)
+  testthat::expect_true(any(grepl("<row%>", p, fixed = TRUE)))    # the unit line is kept
+  testthat::expect_false(any(grepl("]{.", p, fixed = TRUE)))      # no colour span
+  testthat::expect_false(any(grepl("<style>", p, fixed = TRUE)))  # no stylesheet
+  testthat::expect_false(any(grepl("difference (Total)", p, fixed = TRUE)))  # no footer
+  # ... and it cannot drift from the markdown export: `...` reaches tab_md()
+  testthat::expect_true(any(grepl("]{.", tab_pipe(t, color = TRUE), fixed = TRUE)))
+})
+
+
+# *Silent failure guarded: a bar drawn from a total row, or a colour frozen inline where the theme
+# should decide -- both look right and are wrong the moment the reader switches to dark.*
+testthat::test_that("set_bars() draws a length inline and leaves every colour to the stylesheet", {
+  t <- set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married")
+  # the stored field is the CEILING of each barred column, NA = "the column's own largest"
+  testthat::expect_identical(get_bars(t), c(Married = NA_real_))
+  testthat::expect_null(get_bars(set_bars(t, NULL)))
+  testthat::expect_length(get_bars(dplyr::mutate(t, dummy = 1L)), 1L)   # rides `meta`
+  # the house grammar of a per-variable argument: unnamed = the fallback, named = that column
+  testthat::expect_identical(get_bars(set_bars(t, c("Married", "Divorced"), max = 1)),
+                             c(Married = 1, Divorced = 1))
+  testthat::expect_identical(
+    get_bars(set_bars(t, c("Married", "Divorced"), max = c("Divorced" = 0.5))),
+    c(Married = NA_real_, Divorced = 0.5))
+  testthat::expect_error(set_bars(t, "Married", max = 0), "positive")
+  # a table stored before the ceilings existed carried the NAMES alone, and still draws its bars
+  old_shape <- set_meta_field(t, "bars", "Married")
+  testthat::expect_true(grepl("--tx-bar:100%", as.character(tab_html(old_shape)), fixed = TRUE))
+
+  h <- as.character(tab_html(t))
+  # one bar per DATA row -- a total is not on the same scale as what it totals
+  testthat::expect_identical(
+    lengths(regmatches(h, gregexpr("--tx-bar:", h, fixed = TRUE))), 3L)
+  # the tallest fills its cell (the share is of the column's own maximum)
+  testthat::expect_true(grepl("--tx-bar:100%", h, fixed = TRUE))
+  # the INK is in the stylesheet, never inline: no hex, no colour keyword in a style attribute
+  sty <- unlist(regmatches(h, gregexpr('style="[^"]*"', h)))
+  testthat::expect_false(any(grepl("#|rgb|oklch", sty)))
+  testthat::expect_true(grepl("td.tx-bar", h, fixed = TRUE))
+  testthat::expect_true(grepl("currentColor", h, fixed = TRUE))
+
+  # ONE reference per column, or two bars could not be compared: the ceiling is the largest data cell
+  # of the WHOLE column, never of a sub-table, and `max` states it instead.
+  tg <- set_bars(tab(fx_gss(), race, marital, tab_vars = "year", filter = "year %in% 2000:2002",
+                     pct = "row"), "Married")
+  hg <- as.character(tab_html(tg))
+  testthat::expect_identical(
+    lengths(regmatches(hg, gregexpr("--tx-bar:100%", hg, fixed = TRUE))), 1L)
+  # a stated ceiling: nothing reaches the full width any more
+  hm <- as.character(tab_html(set_bars(t, "Married", max = 1)))
+  wm <- as.numeric(sub("%$", "", sub("^--tx-bar:", "",
+                       unlist(regmatches(hm, gregexpr("--tx-bar:[0-9.]+%", hm))))))
+  testthat::expect_length(wm, 3L)
+  testthat::expect_true(max(wm) < 100 && max(wm) > 40)   # a share of 100 %, not of the largest
+
+  # a bar of length zero KEEPS its groove and loses its bar: the column would look as if it had lost
+  # a row, and the bar's border alone would draw a tick on nothing.
+  t0 <- t; t0$Married <- set_num(t0$Married, c(0, get_num(t0$Married)[-1]))
+  h0 <- as.character(tab_html(t0))
+  testthat::expect_identical(
+    lengths(regmatches(h0, gregexpr("--tx-bar:", h0, fixed = TRUE))), 2L)
+  td0 <- unlist(regmatches(h0, gregexpr('<td class="[^"]*"', h0)))    # the CELLS, not the stylesheet
+  testthat::expect_length(grep("tx-bar", td0), 3L)                    # three grooves
+  testthat::expect_length(grep("tx-bar-on", td0), 2L)                 # two bars
+  # the groove is the chrome's `track` and takes NO colour measure: one alpha shadow, both themes
+  css <- tab_css(style_tag = FALSE, theme = "auto")
+  testthat::expect_true(grepl("td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}", css,
+                              fixed = TRUE))
+  testthat::expect_true(grepl("background:rgba(255,255,255,.07)", css, fixed = TRUE))
+
+  # ⚠ A NAME WITH A SPACE IS A DIFFERENT NAME BY THE TIME THE HTML BACKEND LOOKS IT UP:
+  # tab_wrap_text() rewrites every space to U+202F and renames the column, so a `bars` list keyed
+  # before the wrap stops matching -- and the bar then vanishes with no error. The whole feature's
+  # real caller (ggfacto's "% variance") has a space in it.
+  h2 <- as.character(tab_html(set_bars(tab(fx_gss(), race, marital, pct = "row"), "Never married")))
+  testthat::expect_true(grepl("--tx-bar:100%", h2, fixed = TRUE))
+  testthat::expect_identical(
+    lengths(regmatches(h2, gregexpr("--tx-bar:", h2, fixed = TRUE))), 3L)
+
+  # ...and the SAME trap on the other seam: a transposed column IS a row level, so a `bars` list kept
+  # across the flip would name nothing. A bar is a per-COLUMN scale and has nothing left to be a share
+  # of -- it goes, rather than mis-drawing or silently matching none.
+  h3 <- as.character(tab_html(set_bars(tab(fx_gss(), race, marital, pct = "row"), "Married"),
+                              transpose = TRUE))
+  testthat::expect_false(grepl("--tx-bar:", h3, fixed = TRUE))
+})
+
+# === the auto-print medium ======================================================================
+# options(tabxplor.print) NAMES A MEDIUM; a medium is a renderer plus an object that presents itself.
+# What is pinned here is that ONE resolver answers for all six print / knit_print methods.
+
+# *An option nobody set is NULL, and the pre-2.0.1 predicate compared it with `%in%`, which is
+# `logical(0)` and stops an `if`. Reading through tx_option() makes the declared default structural:
+# a package reaching tabxplor only through `tabxplor::` never loads its namespace, and its user
+# could not print a table at all.*
+testthat::test_that("printing works with no tabxplor.print option set", {
+  t <- tab(fx_gss(), race, marital, pct = "row")
+  withr::local_options(tabxplor.print = NULL)
+  testthat::expect_null(getOption("tabxplor.print"))
+  testthat::expect_identical(tx_print_medium(), "console")
+  testthat::expect_no_error(print(t, get_text = TRUE))
+})
+
+testthat::test_that("tx_print_medium() names one medium per option value", {
+  for (v in c("console", "html", "md")) {
+    withr::local_options(tabxplor.print = v)
+    testthat::expect_identical(tx_print_medium(), v)
+  }
+  # "kable" is the pre-2.0.0 name of "html", kept working
+  withr::local_options(tabxplor.print = "kable")
+  testthat::expect_identical(tx_print_medium(), "html")
+  # a value that names no medium is the console, and says so once
+  tabxplor:::tx_reset_messages()
+  withr::local_options(tabxplor.print = "markdown")
+  testthat::expect_message(testthat::expect_identical(tx_print_medium(), "console"), "no medium")
+})
+
+testthat::test_that("a bare table auto-prints in the medium the option names", {
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff")
+  withr::local_options(tabxplor.tab_kable_css = FALSE)
+
+  withr::with_options(list(tabxplor.print = "md"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_true(any(grepl("^\\|:-", txt)))          # a pipe-table delimiter row
+    testthat::expect_true(any(grepl("]{.p", txt, fixed = TRUE)))  # the colour spans
+    # print() returns the TABLE, not the render: `print()` gives back its argument
+    r <- testthat::expect_invisible(print(t))
+    testthat::expect_s3_class(r, "tabxplor_tab")
+  })
+  # get_text is medium-independent: it was ignored under "html" before 2.0.1
+  withr::with_options(list(tabxplor.print = "html"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_true(any(grepl("<table", txt, fixed = TRUE)))
+  })
+  withr::with_options(list(tabxplor.print = "console"), {
+    txt <- print(t, get_text = TRUE)
+    testthat::expect_false(any(grepl("<table", txt, fixed = TRUE)))
+    testthat::expect_false(any(grepl("^\\|:-", txt)))
+  })
+})
+
+# *knit_print.tabxplor_tabs was html UNCONDITIONALLY: a LIST of tables was the one class that did
+# not follow the option -- console included.*
+testthat::test_that("knit_print() follows the option on all three classes", {
+  testthat::skip_if_not_installed("knitr")
+  withr::local_options(tabxplor.tab_kable_css = FALSE)
+  objs <- list(
+    tab     = tab(fx_gss(), race, marital, pct = "row"),
+    grouped = tab(fx_gss(), race, marital, year, pct = "row"),
+    tabs    = tab(fx_gss(), c(race, marital), partyid, pct = "row", output_list = TRUE)
+  )
+  testthat::expect_s3_class(objs$grouped, "tabxplor_grouped_tab")
+  testthat::expect_s3_class(objs$tabs,    "tabxplor_tabs")
+
+  for (nm in names(objs)) {
+    withr::with_options(list(tabxplor.print = "html"), {
+      out <- knitr::knit_print(objs[[nm]])
+      testthat::expect_s3_class(out, "knit_asis")
+      testthat::expect_true(grepl("<table", out, fixed = TRUE))
+    })
+    withr::with_options(list(tabxplor.print = "md"), {
+      out <- knitr::knit_print(objs[[nm]])
+      testthat::expect_s3_class(out, "knit_asis")
+      testthat::expect_true(grepl("|:-", out, fixed = TRUE))
+      testthat::expect_false(grepl("<table", out, fixed = TRUE))
+    })
+    withr::with_options(list(tabxplor.print = "console"), {
+      out <- utils::capture.output(kp <- knitr::knit_print(objs[[nm]]))
+      testthat::expect_false(inherits(kp, "knit_asis"))    # the console falls through to knitr
+      testthat::expect_true(any(grepl("A tabxplor tab", out, fixed = TRUE)))
+    })
+  }
+})
+
+
+# *Silent failure guarded: a column of variances headed "the variance of the mean".*
+testthat::test_that("a variance names itself, and the prefix rule is asked rather than derived", {
+  v <- fmt(n = rep(100, 3), scale = "level_mean", mean = c(2, 3, 4), var = c(4, 9, 16),
+           display = "var")
+  testthat::expect_identical(tabxplor:::fmt_display_label(v), "var")
+  # its own square root already did, and the two must agree
+  testthat::expect_identical(
+    tabxplor:::fmt_display_label(tabxplor::set_display(v, "sd")), "sd")
+  # ⚠ `prefix` is NOT `geometry`: `var` still names no effect geometry, which the mismatch refusal reads
+  testthat::expect_true(is.na(tabxplor:::DISPLAY_TOKENS$var$geometry))
+  testthat::expect_false(tabxplor:::DISPLAY_TOKENS$var$prefix)
+  # a deviation still takes the prefix -- that is what the rule is for
+  d <- fmt(n = rep(100, 3), scale = "level_pct", pct_type = "row", pct = c(.1, .2, .3),
+           diff = c(.01, .02, .03), display = "diff")
+  testthat::expect_identical(tabxplor:::fmt_display_label(d), "row%-diff")
+})
+
+
+# === Phase 10: tab_wrap_text() is unchanged, and the exporters no longer use half of it ===========
+
+testthat::test_that("tab_wrap_text() wraps NAMES and VALUES, tx_wrap_labels() only the values", {
+  t <- tab(fx_gss(), marital, race, pct = "row")
+  w <- tab_wrap_text(t, wrap_rows = 5L, wrap_cols = 4L, brk = "<br>")
+  testthat::expect_true(any(grepl("<br>", names(w), fixed = TRUE)))
+  testthat::expect_true(any(grepl("<br>", levels(w[[1]]), fixed = TRUE)))
+  # the exporters run only the second half, which is what keeps every per-column fact keyed by a
+  # name from going stale mid-export.
+  v <- tabxplor:::tx_wrap_labels(t, wrap_rows = 5L, brk = "<br>")
+  testthat::expect_identical(names(v), names(t))
+  testthat::expect_identical(levels(v[[1]]), levels(w[[1]]))
+})

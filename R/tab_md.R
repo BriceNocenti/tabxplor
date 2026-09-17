@@ -17,6 +17,10 @@
 #     it (`pre` / `post`), read by both the width pass and the body loop -- they cannot disagree.
 #   - The class names are palette- and theme-INDEPENDENT (a slot, not a hex). tab_css(format = "md")
 #     maps them, which is what lets one stylesheet serve a whole document.
+#   - tab_md() RETURNS A `tabxplor_md`, the twin of tab_html()'s `tabxplor_kable`: a string that knows
+#     how to present itself in either medium (print() cats it, knit_print() hands it over raw). That
+#     is what lets options(tabxplor.print = "md") need no per-medium branch, and what makes a bare
+#     `|> tab_md()` in a knitted chunk emit markdown instead of a verbatim block.
 # See: CLAUDE.md section "tabxplor architecture" (exports and rendering); R/tab-css.R (the classes).
 
 #' Render a table as Markdown
@@ -38,19 +42,23 @@
 #' @param title `r lifecycle::badge("deprecated")` Renamed to `caption`.
 #' @param col_var_names `r lifecycle::badge("deprecated")` Replaced by `var_names`:
 #'   `col_var_names = FALSE` is `var_names = "rows"` (or `"none"`).
-#' @param css When `TRUE` (the default), prepend an inline `<style>` block so the exported markdown is
-#'   self-contained and renders coloured and compact on its own. Set `FALSE` inside an `.Rmd`/`.qmd`
-#'   document once the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top
-#'   for the whole document) -- otherwise the `<style>` block is duplicated per table. A plain
-#'   uncoloured table renders byte-identical either way.
+#' @param css Prepend an inline `<style>` block so the exported markdown is self-contained and
+#'   renders coloured and compact on its own (default, from
+#'   \code{getOption("tabxplor.tab_kable_css")}). Set `FALSE` inside an `.Rmd`/`.qmd` document once
+#'   the host page brings the stylesheet (or call \code{\link{tab_css}} once at the top for the
+#'   whole document) -- otherwise the `<style>` block is duplicated per table. A plain uncoloured
+#'   table renders byte-identical either way.
 #' @param clipboard Copy output to clipboard via \code{clipr::write_clip()} (requires \pkg{clipr}).
 #' @param file Path to write the markdown to a file. `NULL` (default) skips.
-#' @param print If `TRUE`, print via `cat()` and return invisibly; if `FALSE`, return the string.
+#' @param print By default (`NULL`), `cat()` the markdown and return it invisibly -- except while a
+#'   document is being knitted, where the object is returned instead, so the chunk emits raw markdown
+#'   rather than a verbatim block. `TRUE` or `FALSE` forces either.
 #' @param ... Retired arguments, accepted and ignored with a deprecation message since 2.0.0
 #'   (`color_type`, `html_24_bit`): colour is a CSS class, and exports are always 24-bit.
 #'   Anything else is an error naming the argument you meant, as it already was in [tab()].
 #'
-#' @return A character string (visible or invisible depending on `print`).
+#' @return A \code{tabxplor_md}: the markdown as a character string, which prints as the text it is
+#'   and reaches a knitted document raw.
 #' @export
 #'
 #' @examples
@@ -75,15 +83,22 @@ tab_md <- function(tabs,
                    caption = NULL,
                    transpose = FALSE,
                    var_names = NULL,
-                   css = TRUE,
+                   css = NULL,
                    clipboard = FALSE,
                    file = NULL,
-                   print = TRUE,
+                   print = NULL,
                    title = lifecycle::deprecated(),
                    col_var_names = lifecycle::deprecated(),
                    ...) {
   tx_export_dots(rlang::list2(...), "tab_md", rlang::caller_env())
   .cb <- push_color_breaks(tabs); on.exit(pop_color_breaks(.cb), add = TRUE)
+  css   <- if (is.null(css))   isTRUE(tx_option("tab_kable_css")) else isTRUE(css)
+  # cat() is a console convenience; while knitting, the OBJECT is the answer -- knit_print() emits it
+  # raw, where a cat() would land in a verbatim block.
+  print <- if (is.null(print)) !tx_knitting() else isTRUE(print)
+  # A knitr chunk's `tab.cap` is the caption when the call gives none -- read here rather than as a
+  # default argument, so knitr can stay a Suggest (tx_knitr_opt() answers NULL outside a render).
+  caption <- caption %||% tx_knitr_opt("tab.cap")
   if (lifecycle::is_present(title)) {
     lifecycle::deprecate_soft("2.0.0", "tab_md(title)", "tab_md(caption)")
     caption <- title
@@ -101,9 +116,10 @@ tab_md <- function(tabs,
   }
   # `allow_auto`: markdown carries a stylesheet (css = TRUE / tab_css()), so it can follow the reader's
   # colour scheme -- the spans themselves are theme-independent (only the CSS differs).
-  o <- resolve_export_opts(theme = theme, color = color, transpose = transpose,
+  o <- resolve_export_opts(theme = theme, color = color, color_legend = color_legend,
+                           transpose = transpose,
                            var_names = var_names, allow_auto = TRUE, tabs = tabs)
-  theme <- o$theme; color <- o$color
+  theme <- o$theme; color <- o$color; color_legend <- o$color_legend
 
   # a single tab (or a mergeable list) renders as ONE table; a non-mergeable list renders each table
   # one-after-another (list_method = TRUE), keeping its own tab_vars sub-tables (drop_tab_vars = FALSE).
@@ -111,36 +127,31 @@ tab_md <- function(tabs,
   compute <- "refs"
   if (bold_references) compute <- c(compute, "bold")
   if (color) compute <- c(compute, "colors")
-  prep <- tab_export_prep(tabs, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
+  # a table carrying subordinate tables (meta$footer_tabs) enters as the LIST it means, so the same
+  # list path renders them under it -- one pipe table after another (tx_with_footer_tabs).
+  tabs_x    <- tx_with_footer_tabs(tabs)
+  tabs_list <- if (is.data.frame(tabs_x) || !is.list(tabs_x)) list(tabs_x) else tabs_x
+  prep <- tab_export_prep(tabs_x, backend = "md", drop_tab_vars = FALSE, wrap = NULL,
                           compute = compute, transpose = o$transpose,
                           theme = theme, var_names = o$var_names, list_method = TRUE,
-                          what = "tab_md()")
+                          color_legend = color_legend, lang = lang, what = "tab_md()")
 
   # WARNING: the POSITION, never imap()'s `i` -- a NAMED list makes `i` the name and `i == 1` silently
   # FALSE on every table, so the caption is dropped with no error. Same trap as xl_check_images().
   parts   <- purrr::map_chr(seq_along(prep$tables), function(i) {
-    rd <- prep$tables[[i]]
+    rd  <- prep$tables[[i]]
     cap <- rd_caption(rd, if (i == 1L) caption else NULL)   # user caption= applies to the FIRST table
-    md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
-                  subtext = subtext, color = color, css = css,
-                  color_legend = color_legend, lang = lang,
-                  title = cap,
-                  theme = theme)
+    txt <- md_render_one(rd, special_formatting = special_formatting, wrap_rows = wrap_rows,
+                         subtext = subtext, color = color, css = css, lang = lang,
+                         title = cap,
+                         theme = theme)
+    # the NOTES this table carries -- a character grid, and the regression's observed curves where the
+    # base-count cell cannot hold them -- as pipe tables of their own below its footer.
+    for (nt in footer_notes(tabs_list[[i]], "md"))
+      txt <- paste(c(txt, "", note_md(nt)), collapse = "\n")
+    txt
   })
   md_text <- paste(parts, collapse = "\n\n")
-
-  # the observed curves, as a pipe table of their own below the footer, taken only where the
-  # base-count cell cannot carry them (see tab_wants_shape_table).
-  if (is_tab(tabs) && tab_wants_shape_table(tabs, "md")) {
-    st <- reg_shape_table(tabs)
-    if (!is.null(st)) {
-      nt <- attr(st, "note")                       # empty wherever no row wears the "ns" mark
-      md_text <- paste(c(md_text, "",
-                         tx_pipe_table(st, attr(st, "headers"), attr(st, "align")),
-                         if (length(nt)) c("", paste0("*", paste(nt, collapse = " "), "*"))),
-                       collapse = "\n")
-    }
-  }
 
   # a STYLED table is wrapped in a pandoc fenced div: pandoc emits a BARE `<table>` for a pipe table,
   # which none of tab_css()'s `.tabxplor-tab ...` rules can reach, so `::: {.tabxplor-tab}` (rendered
@@ -150,7 +161,8 @@ tab_md <- function(tabs,
   # byte-identical (no div).
   any_color <- any(vapply(prep$tables, function(x) isTRUE(x$roles$has_color), logical(1)))
   styled    <- any_color || isTRUE(css)
-  if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
+  if (styled) md_text <- paste0("::: {", paste0(".", c("tabxplor-tab", tx_palette_class(theme)),
+                                                  collapse = " "), "}\n", md_text, "\n:::")
   if (isTRUE(css)) {
     md_text <- paste0(tab_css(theme = theme, format = "html", style_tag = TRUE), "\n\n", md_text)
   }
@@ -160,11 +172,40 @@ tab_md <- function(tabs,
     if (isTRUE(tx_need_pkg("clipr", "Copying to the clipboard", severity = "inform")))
       clipr::write_clip(md_text)
   }
+  md_text <- new_tabxplor_md(md_text)
   if (print) {
-    cat(md_text, "\n")
+    print(md_text)
     return(invisible(md_text))
   }
   md_text
+}
+
+
+# === SECTION: the markdown object ==================================================================
+# The twin of `tabxplor_kable` (R/tab-render-html.R): a rendered string that knows how to present
+# itself in either medium. Its two methods are the whole of what `options(tabxplor.print = "md")`
+# needs -- see the router in R/tab_classes.R.
+
+#' @keywords internal
+#' @noRd
+new_tabxplor_md <- function(x) structure(x, class = c("tabxplor_md", "character"))
+
+#' Printing method for a markdown table
+#' @param x A \code{tabxplor_md}, as returned by \code{\link{tab_md}}.
+#' @param ... Unused.
+#' @return \code{x}, invisibly.
+#' @export
+#' @keywords internal
+print.tabxplor_md <- function(x, ...) {
+  cat(unclass(x), "\n")
+  invisible(x)
+}
+
+# No `meta =`: markdown carries no html dependency (there are no tooltips), and the `<style>` block
+# of `css = TRUE` is part of the text itself.
+#' @exportS3Method knitr::knit_print
+knit_print.tabxplor_md <- function(x, ...) {
+  knitr::asis_output(paste0(as.character(x), "\n\n"))
 }
 
 
@@ -195,10 +236,10 @@ md_plain_pipe <- function(df) {
 # a pandoc bracketed span `[<num>]{.class}` (uncoloured cells get the neutral `.n`), keeping the
 # numbers aligned in raw text; an uncoloured table renders the byte-identical plain padded table.
 md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
-                          color = TRUE, css = FALSE, color_legend = TRUE, lang = NULL, title = NULL,
+                          color = TRUE, css = FALSE, lang = NULL, title = NULL,
                           theme = NULL) {
   if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars)
     return(md_plain_pipe(rd$tab))
   }
 
@@ -215,10 +256,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # tx_slot_class()), so tab_css() colours them identically. The source is `rd$color_src` for a
   # transposed model (whose rd$tab is plain character), so weight/stars/legend read the right
   # attributes. Legend only when coloured.
-  src         <- if (is.null(rd$color_src)) tabs else rd$color_src
-  want_legend <- isTRUE(color) && isTRUE(color_legend) && length(rd$roles$color_cols) != 0
-  subtext_text <- rd_footer(src, "md", theme = theme, want_legend = want_legend,
-                            subtext = subtext_text, lang = lang)
+  src          <- if (is.null(rd$color_src)) tabs else rd$color_src
+  subtext_text <- rd_blocks(src, "md", theme = theme, want_legend = isTRUE(rd$want_legend),
+                            subtext = subtext_text, lang = lang,
+                            host = !isTRUE(rd$subordinate))
 
   # md drops the trailing separator (no line after the last row); the prep's new_group is the base.
   new_group <- rd$roles$new_group
@@ -258,7 +299,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
       # purpose, since pandoc must see an empty cell as `<td></td>` (`:empty`) for the spacer/blank-row
       # mechanisms to key on. nchar is unchanged (one codepoint either way).
       raw     <- format(col, special_formatting = special_formatting, na = "", stars = TRUE,
-                        theme = theme, bold_split = TRUE, pad = fig_space,
+                        theme = if (isTRUE(color)) theme else NULL,
+                        bold_split = TRUE, pad = fig_space,
                         .ref = ann_ref(rd$ann[[nm]]))
       pn      <- attr(raw, "primary_nchar")
       pf      <- attr(raw, "primary_from")
@@ -309,12 +351,12 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   do_color <- isTRUE(rd$roles$has_color)
   styled   <- do_color || isTRUE(css)
   blank_lbl <- if (styled) "\u00a0" else ""
-  for (cl in names(label_cols)) {
-    idx <- which(names(cell_data) == cl)
-    if (length(idx) != 1) next
-    show <- label_runs[[cl]]$show
+  for (k in seq_along(label_cols)) {
+    idx <- label_cols[[k]]
+    if (is.na(idx) || idx > length(cell_data)) next
+    show <- label_runs[[k]]$show
     cell_data[[idx]][!show] <- blank_lbl
-    if (cl %in% names(var_name_col)) {
+    if (idx %in% unname(var_name_col)) {
       nz <- show & nzchar(cell_data[[idx]]) & !is.na(cell_data[[idx]]) & cell_data[[idx]] != blank_lbl
       cell_data[[idx]][nz] <- paste0("*", cell_data[[idx]][nz], "*")
     }
@@ -344,10 +386,8 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   # sentinel drives `col_names` at Step 7. WARNING: this is NOT the prep's header blanking and must not
   # be folded into it -- the prep keeps a real variable name (`marital`) in cvh$clean for the backends
   # that show it, while md renders every label column's name as a body row instead.
-  for (cl in names(label_cols)) {
-    idx <- which(names(cell_data) == cl)
-    if (length(idx) == 1) names(cell_data)[idx] <- ""
-  }
+  for (idx in unname(label_cols))
+    if (!is.na(idx) && idx <= length(cell_data)) names(cell_data)[idx] <- ""
 
   # --- Step 6b: per-cell pandoc span attributes (colour) ---
   # a table is "coloured" iff some fmt column carries a colour measure; attr_mat holds the per-cell
@@ -613,6 +653,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   if (length(subtext_text) > 0) {
+    # WARNING: pandoc joins consecutive lines into ONE paragraph, so without the `\` hard break the
+    # legend, "Champ : ..." and "Source : ..." render as a single run of text.
+    n_sub <- length(subtext_text)
+    if (n_sub > 1L) subtext_text[-n_sub] <- paste0(subtext_text[-n_sub], "\\")
     all_lines <- c(all_lines, "", subtext_text)
   }
 
@@ -747,4 +791,32 @@ md_bold <- function(text, from = NA_integer_, to = NA_integer_) {
   paste0(substr(text, 1L, from - 1L),
          bold_span(substr(text, from, to)),
          substr(text, to + 1L, nchar(text)))
+}
+
+
+#' Render a table as a plain pipe table
+#'
+#' @description
+#' The markdown grid without the markup: one GFM pipe table, its unit line kept (\verb{<col%>},
+#' \verb{<var>}), no colour spans, no footer and no stylesheet. It is what the console prints under a
+#' table for each of its subordinate tables (\code{\link{set_footer_tabs}}), the same shape a regression's
+#' \emph{shape table} takes there --- a grid one can read as text and paste anywhere.
+#'
+#' It is \code{\link{tab_md}} with three arguments fixed, not a second renderer: a pipe table that
+#' drifted from the markdown export would be a second answer to one question.
+#'
+#' @param tabs A \code{tabxplor_tab}, or a list of them.
+#' @param ... Passed to \code{\link{tab_md}} --- `color = TRUE` brings the colour spans back,
+#'   `subtext = TRUE` the footer.
+#' @return A character vector, one element per line.
+#' @seealso [tab_md()], [set_footer_tabs()].
+#' @export
+#' @examples
+#' cat(tab_pipe(tab(forcats::gss_cat, race, marital, pct = "row")), sep = "\n")
+tab_pipe <- function(tabs, ...) {
+  # `...` OVERRIDES the three defaults rather than colliding with them: they are a starting point,
+  # not a contract, and `tab_pipe(t, color = TRUE)` must reach tab_md() once.
+  args <- utils::modifyList(list(css = FALSE, color = FALSE, subtext = FALSE), rlang::list2(...))
+  txt  <- do.call(tab_md, c(list(tabs), args, list(print = FALSE)))
+  strsplit(txt, "\n", fixed = TRUE)[[1L]]
 }

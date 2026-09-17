@@ -129,7 +129,7 @@ A `tabxplor_fmt` cell carries **21 fields** (many are `NA` when the relevant qua
 | `ratio`     | ratio to the reference (relative risk, or a ratio of means) |
 | `ci_inf`, `ci_sup` | confidence-interval bounds |
 | `pvalue`    | per-cell significance p-value (feeds the stars) |
-| `or`        | odds ratio / relative-risk ratio |
+| `or`        | odds ratio |
 | `ctr`       | contribution to the chi-squared (`color = "contrib"`) |
 | `var`       | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n`     | the cell's own base — the count its percentage is computed on |
@@ -346,7 +346,7 @@ purrr::pmap(specs, \(row_var, col_var, pct)
 
 Beyond the everyday defaults (`vignette("tabxplor")` &rarr; *Global R options*), these `options()` tune the exporters and the build. HTML / `tab_html()`:
 
-- `tabxplor.tab_kable_css` — inline the stylesheet with each table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does).
+- `tabxplor.tab_kable_css` — inline the stylesheet with each `tab_html()` *and* `tab_md()` table (`TRUE`); set `FALSE` in a many-table document and call `tab_css()` once instead (this vignette does), or in a plain-Markdown notebook that wants no stylesheet at all.
 - `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`); set `FALSE` once per document to switch them off everywhere.
 - `tabxplor.tab_kable_num_font` — the number CSS font stack (everything else is `tab_css()`'s business).
 - `tabxplor.kable_popover` — click popovers instead of hover tooltips.

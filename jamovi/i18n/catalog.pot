@@ -63,7 +63,7 @@ msgid "<b>Models and references</b>"
 msgstr ""
 
 #: jmvtabreg/ui[2].label
-msgid "<b>Models comparison and interactions</b>"
+msgid "<b>Model comparison and interactions</b>"
 msgstr ""
 
 #: jmvtab/options/n_min.title
@@ -77,7 +77,7 @@ msgstr ""
 
 #: jmvtabreg/options/outcome.title
 #: jmvtabreg/ui/variablesupplier[0].label
-msgid "<b>outcome = <i>(dependent variable[s])</i></b>"
+msgid "<b>outcome = <i>(dependent variables)</i></b>"
 msgstr ""
 
 #: jmvtab/ui[1].label
@@ -114,12 +114,12 @@ msgstr ""
 
 #: jmvtab/options/tab_vars.title
 #: jmvtab/ui/variablesupplier[2].label
-msgid "<b>tab_vars = <i>(subtables variables)</i></b>"
+msgid "<b>tab_vars = <i>(sub-table variables)</i></b>"
 msgstr ""
 
 #: jmvtab/ui[1][1][0]/test.label
 msgid ""
-"<b>test = <i>(Chi2 and Cramer’V for categorical; ANOVA F and eta2 for "
+"<b>test = <i>(Chi2 and Cramér's V for categorical; ANOVA F and eta2 for "
 "numeric)</i></b>"
 msgstr ""
 
@@ -186,8 +186,11 @@ msgid "adjustment <i>(gap between model/observed)</i>"
 msgstr ""
 
 #: jmvtab/options/pct/all.title
+msgid "all (whole table)"
+msgstr ""
+
 #: jmvtab/options/lvs/all.title
-msgid "all"
+msgid "all <i>(keep every level)</i>"
 msgstr ""
 
 #: jmvtab/options/comp/all.title
@@ -208,11 +211,11 @@ msgid "anova = <i>(which test for numeric variables ?)</i>"
 msgstr ""
 
 #: jmvtabreg/ui[5][0][2]/xl_check.label
-msgid "assumption checks plots"
+msgid "assumption-check plots"
 msgstr ""
 
 #: jmvtabreg/options/xl_check.title
-msgid "assumption checks plots in Excel"
+msgid "assumption-check plots in Excel"
 msgstr ""
 
 #: jmvtabreg/options/effect/at_reference.title
@@ -460,11 +463,8 @@ msgid "digits = <i>(number of digits)</i>"
 msgstr ""
 
 #: jmvtab/ui[1][0][2][0].label
-msgid "display = <i>(what each cell shows)</i>"
-msgstr ""
-
 #: jmvtabreg/ui[1][2][1][0][0].label
-msgid "display = <i>(what numbers the cell show)</i>"
+msgid "display = <i>(what each cell shows)</i>"
 msgstr ""
 
 #: jmvtab/options/na/drop.title
@@ -770,7 +770,7 @@ msgid ""
 msgstr ""
 
 #: jamovi/js/jmvtabreg.js:1676
-msgid "Models comparison: choose predictors subsets"
+msgid "Model comparison: choose predictor subsets"
 msgstr ""
 
 #: jamovi/js/jmvtabreg.js:13
@@ -974,7 +974,7 @@ msgid "ratio <i>(relative risk, or mean ratio)</i>"
 msgstr ""
 
 #: jmvtabreg/options/measure/ratio.title
-msgid "ratio <i>(RR, IRR, RoM)</i>"
+msgid "ratio <i>(RR, RoM)</i>"
 msgstr ""
 
 #: jmvtabreg/options/measure/raw_coefficient.title
@@ -1056,6 +1056,15 @@ msgstr ""
 #: jmvtabreg/options/run_compare.title
 #: jmvtabreg/ui[2][2]/run_compare.label
 msgid "Run comparison"
+msgstr ""
+
+#: R/jmvtab-export.R
+msgctxt "language code"
+msgid "en"
+msgstr ""
+
+#: R/jmvtab-export.R
+msgid "Weighted by the `wt` variable. jamovi's own row weights are not used."
 msgstr ""
 
 #: R/jmvtab-export.R
@@ -1244,10 +1253,10 @@ msgstr ""
 
 #: jmvtab/ui[4][4][0].label
 #: jmvtabreg/ui[4][0][3][0].label
-msgid "wrap_cols = <i>(nb chars for line break)</i>"
+msgid "wrap_cols = <i>(characters before a line break)</i>"
 msgstr ""
 
 #: jmvtab/ui[4][3][0].label
 #: jmvtabreg/ui[4][0][2][0].label
-msgid "wrap_rows = <i>(nb chars for line break)</i>"
+msgid "wrap_rows = <i>(characters before a line break)</i>"
 msgstr ""
