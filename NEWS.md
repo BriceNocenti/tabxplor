@@ -1,60 +1,71 @@
-# tabxplor 2.0.0.9000 (development version)
+# tabxplor 2.0.1
 
 ## New features
 
-* **The footer is a template you can edit.** Everything printed under a table --- the weight line,
-  the `Model:` line, the colour legend, the significance-stars key --- is a `<placeholder>` in the
-  table's `subtext`, and everything you write is a line: the order of the lines is the order of the
-  footer. `get_subtext()` shows it, the new `set_subtext()` replaces it, and `tab_footer_text()`
-  reads back what it prints. Drop `<legend>` and no colour legend is generated, in the console too.
-  Drop `<breaks>` into a sentence of your own and the ladder is still built from the plan the cells
-  are painted with. A `subtext` naming no placeholder is appended to the default, as before.
-  See `?tabxplor-footer`.
+* **The footer under a table is a template you can edit.** Everything printed there — the weight
+  line, the colour legend, the significance-stars key — is a `<placeholder>` in the table's
+  `subtext`, and everything you write is a line: the order of the lines is the order of the footer.
+  `get_subtext()` shows it, `set_subtext()` replaces it, and dropping `<legend>` drops the legend, in
+  the console too. `set_legend_words()` re-states what that legend calls a measure, for a table
+  grading the same ladder on another quantity. See `?tabxplor-footer`.
 
-* **`set_legend_words()` --- re-state what the colour legend calls a measure.** A table grading the
-  same ladder on another quantity (a contribution to an axis's variance rather than to a
-  chi-squared) keeps tabxplor's whole legend --- both registers, the publication palettes, the plot
-  guide --- and says its own nouns. Naming only: an engine fact is refused.
+* **A note, or a second table, under a table.** `set_footer_tabs()` takes a `tabxplor_tab` and
+  renders it as a table, or any other data.frame and renders it as a grey note; `tab_note()` sets
+  that note's headers, alignment and footnote.
 
-* **`tab_note()` and `set_footer_tabs()` --- a note beside a table.** `set_footer_tabs()` now takes
-  any data.frame and renders it as a grey note of character columns under the table, in all four
-  media; `tab_note()` sets its headers, alignment, greyed rows and footnote. In the console notes
-  and subordinate tables print *above* the table, so the last thing printed is the object you can
-  go on to pipe.
+* **Data bars.** `set_bars()` draws a bar chart inside the table — in html and in Excel — scaled to
+  the column's own largest data cell, or to a ceiling you state.
 
-* **A wide html table now scrolls instead of widening the page.** `tab_html()` wraps every table in
-  a `.tx-scrollbox`, and `tab_css()` styles it: the table keeps its own width up to the space it has
-  and scrolls sideways past it, in a document, on a pkgdown site, in the RStudio/Positron Viewer and
-  in jamovi alike. Its title stays outside the box, so it does not scroll away, and `@media print`
-  lifts the clip. Opt out with `.tx-scrollbox { overflow-x: visible; max-width: none; }`.
+* **`options(tabxplor.print = "md")`.** A bare table prints as markdown instead of in the console or
+  the Viewer, which is what a Quarto or R Markdown notebook knitted without pandoc needs.
+
+* **A wide html table scrolls instead of widening the page**, in a document, on a pkgdown site, in
+  the Viewer and in jamovi alike. Its title stays outside the box, and printing lifts the clip.
 
 * **`tab_html(cells = )` — write back what `get_data = TRUE` reads.** Hand back the same data.frame
-  with some cells edited and each edit is written verbatim into its `<td>`: the cell keeps its
-  classes (colour, alignment, borders) and its tooltip, and loses only the decorations that belonged
-  to the text it replaced (the bold split, the background pill, the sparkline). A value still equal
-  to the one the table renders means "keep", so the round trip
-  `tab_html(x, cells = tab_html(x, get_data = TRUE))` renders `x` unchanged. This is the supported
-  way to splice foreign markup — an input box, a link, a badge — into a tabxplor table, in place of
-  parsing its html back out.
+  with some cells edited and each edit is written verbatim into its `<td>`, keeping the cell's
+  colours, alignment and tooltip. This is the supported way to splice an input box, a link or a badge
+  into a tabxplor table.
+
+* **The jamovi module is now built for macOS (Apple silicon and Intel), Windows and Linux**, on both
+  jamovi lines, and published as downloadable files. It is installed by sideloading, not from
+  jamovi's library: the procedure and the links are in the README and on the package website.
 
 ## Minor improvements and fixes
 
-* **A regression's title is readable past two predictors, and no longer half English.** Up to three
-  are listed ("cinema by qualif, sexe and age"), four or more counted ("cinema, by 4 predictors"),
-  and the title now follows the exporter's `lang =` like the footer below it.
+* **Two bugs with weighted data, both silent.** A variable whose name is not syntactic (`Age group`,
+  `Household weight`) broke every formula built from names: with `design_effect = TRUE` the
+  design-based tests returned `NA` with no message, and `tab_reg(wt = )` stopped on a parse error.
 
-* **A host and its footer table share one footer.** A subordinate table renders what it carries and
-  nothing generated, so a coloured pair shows one colour legend instead of two (or, in the console,
-  none). The variable names a legend line opens with are now bold.
+* **A `subtext` written by a user is escaped in html.** It is now shown, never executed — which
+  matters for a table shared inside jamovi, where an html result can run scripts.
 
-* `color = FALSE` under a `print_marks` palette no longer draws the `+`/`-` marks in the cells while
-  suppressing the key that explains them.
+* **Significance stars are now `.05` / `.01` / `.001`**, the discipline's usual scale, instead of
+  `.10` / `.05` / `.01`. At the default confidence level a greyed cell can therefore no longer carry
+  a star.
 
-* **The weight footer no longer mentions intervals and tests that are not there.** A weighted table
-  showing no confidence interval, no significance star, no test and no significance-gated colour now
-  prints only "Weighted by `<wt>`."; the caveat about what the intervals rest on is kept for the
-  tables that actually have one.
+* **`display = "odds"`** prints the odds behind a percentage — the middle rung between a percentage
+  and an odds ratio.
 
+* **Options set in `.Rprofile` are no longer overwritten when the package loads.** `tabxplor.print`
+  and `tabxplor.theme` set before `library(tabxplor)` now hold.
+
+* A regression's multiplicative count measure is named `RoM` (ratio of means) rather than `IRR`, so a
+  column is headed `Model_RoM`; `measure = "IRR"` is still accepted.
+
+* The weight footer no longer mentions intervals and tests that are not in the table: a weighted
+  table showing none of them prints only "Weighted by `<wt>`."
+
+* **A `col_var` span header is wrapped and compacted like every other header.** It was the one
+  header no rule owned, so a long variable name widened the whole block. One visible consequence:
+  its spaces are now narrow no-break spaces in html, as every other header's already were — code
+  that matches a span's text literally has to allow for that.
+
+* A host table and its subordinate share one footer, instead of printing the colour legend twice in
+  html and not at all in the console.
+
+* French translations: every multiplicative comparison that is not an odds ratio now reads
+  *ratio*, and six mistranslated strings that were printing in English are fixed.
 
 # tabxplor 2.0.0
 

@@ -390,7 +390,7 @@ None of them links `libR.dylib` at all. Two comparisons made on jamovi's own lib
 
 ### 3.8 Getting the right file to each student
 
-The build is the easy half; a student picking the wrong file is the likely failure, because jamovi will not say *wrong system* (section 3.1). What the students need is one page — a README section or a short pkgdown article — that asks two questions and gives one link:
+The build is the easy half; a student picking the wrong file is the likely failure, because jamovi will not say *wrong system* (section 3.1). What the students need is one page that asks two questions and gives one link — written, since 2.0.1, in `dev/readme-jamovi.Rmd`, the child document both home pages include, so the procedure is stated once and reaches the README, CRAN and the site alike:
 
 1. **Which jamovi?** The number in jamovi's About box: `2.7.x` is *solid*, `28.x` is *current*. Simplest advice: install the Solid release the download page recommends, so everyone is on the same line as the course.
 2. **Which computer?** Windows, Linux, or a Mac — and for a Mac, Apple menu › *About This Mac*: *Chip: Apple M…* is Apple silicon, *Processor: Intel* is Intel (jamovi's download page links the same check, *"Which Mac do I have?"*).
@@ -402,7 +402,7 @@ The build is the easy half; a student picking the wrong file is the likely failu
 | Mac, Intel         | `tabxplor_jamovi-2.7_macos-x64.jmo`   | `tabxplor_jamovi-28_macos-x64.jmo`   |
 | Linux              | —                                     | `tabxplor_jamovi-28_linux-x64.jmo`   |
 
-Each name a `…/releases/latest/download/<name>` link; then, in jamovi, Modules (**+**) › *Sideload* › the file. Two symptoms are worth printing on the same page: *"Needs update"* or *"This module is either missing or incompatible"* means the wrong jamovi line; an R error saying a package or a shared object cannot be loaded most likely means the wrong system.
+Each name a `…/releases/latest/download/<name>` link, which never goes stale because the asset names carry no version; then, in jamovi, Modules (**+**) › *Sideload* › the file. ⚠ Those links 404 until a release carrying the files is **published**, and a 404 in `README.md` is a NOTE from `R CMD check --as-cran` — which is why the module release comes before the CRAN submission (`dev/release_checklist.md` step 1b). Two symptoms are worth printing on the same page: *"Needs update"* or *"This module is either missing or incompatible"* means the wrong jamovi line; an R error saying a package or a shared object cannot be loaded most likely means the wrong system.
 
 ⚠ Unverified until a first Mac test: whether macOS's quarantine flag on a browser-downloaded `.jmo` reaches the files jamovi unpacks from it. A sideload is not signature-checked by jamovi, so that flag is the only macOS mechanism left that could object.
 

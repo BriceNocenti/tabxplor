@@ -9,8 +9,9 @@
 ^\.github$
 ^CRAN-SUBMISSION$
 [.]jmo$
-^build/js/
+^build/js
 ^build/R
+^build_old$
 ^jamovi/
 ^CLAUDE\.md$
 ^vignettes/claude_code_setup\.md$

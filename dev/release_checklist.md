@@ -11,16 +11,30 @@ The permanent branches:
 ```bash
 git checkout dev && git pull
 
-# 1. Pre-flight on dev
+# 1. Pre-flight on dev. The ORDER matters: each gate reads what the one before it wrote, and the
+#    home pages link to release assets that must exist before anything URL-checks them.
 #    - Version bumped in DESCRIPTION, NEWS.md section finalized
+#    - Home pages regenerated (below), then the jamovi modules published (step 1b), THEN the checks
 #    - Full test suite green (the CLAUDE.md § Testing recipe)
 #    - Second suite green:  OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
 #      (the engine-parity sweeps, the source-tree lint and the seam checks the shipped suite
 #       keeps only a slice of -- see CLAUDE.md § Testing)
-#    - devtools::check(manual = TRUE) green (the ~3 min release gate). The `manual = TRUE` is
-#      NOT optional: the default builds no PDF, and "checking PDF version of manual" is the only
-#      step that catches a glyph LaTeX cannot set. Locally: R CMD Rd2pdf --no-preview --force .
-#      Needs HTML Tidy too (apt install tidy), or "checking HTML version of manual" only SKIPS.
+#    - Reverse dependency green:  Rscript dev/revdep_ggfacto.R
+#      (CRAN ggfacto and the local checkout, both R CMD check'ed against this tree -- the CRAN one
+#       still calls the superseded surface, which is how set_type() was caught at 2.0.0)
+#    - urlchecker::url_check(".") clean -- the same tools::check_url_db that R CMD check --as-cran
+#      runs, over DESCRIPTION, README.md, NEWS.md, every Rd and the built vignettes. It is what
+#      catches a .../releases/latest/download/... link whose release has not been published yet,
+#      and a 301, which is also a NOTE.
+#    - devtools::check(manual = TRUE, remote = TRUE, incoming = TRUE) green (the ~4 min release
+#      gate). NONE of the three arguments is optional, and the bare form is misleading:
+#        `manual = TRUE`  -- the default builds no PDF, and "checking PDF version of manual" is the
+#                            only step that catches a glyph LaTeX cannot set. Locally:
+#                            R CMD Rd2pdf --no-preview --force .  Needs HTML Tidy too
+#                            (apt install tidy), or "checking HTML version of manual" only SKIPS.
+#        `incoming = TRUE` -- devtools defaults it to `remote`, i.e. FALSE, so the bare call runs
+#                            NO URL check and NO CRAN-incoming check. It is the only way to see
+#                            locally what CRAN's own incoming machine will say.
 #    - Rscript -e 'pkgdown::check_pkgdown()' clean
 #    - Generated jamovi files regenerated and committed. R/jmvtab*.h.R are compiler output and
 #      they SHIP in the tarball: a stale one makes a declared option read back NULL in the running
@@ -32,6 +46,17 @@ git checkout dev && git pull
 #        git status --porcelain -- 'R/*.h.R' inst/i18n jamovi/0000.yaml
 #    - Home pages regenerated from their sources, on dev (dev/ is stripped from the release
 #      branch, and README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
+
+# 1b. Publish the jamovi modules BEFORE the checks and before CRAN.
+#     The home pages link to .../releases/latest/download/<file>, which 404s until a release
+#     carrying the seven .jmo files is PUBLISHED -- and a 404 in README.md is a NOTE from
+#     R CMD check --as-cran. `jmo-*` is the module's own tag namespace, so `v*` keeps meaning
+#     "a CRAN release" and the module can be rebuilt when a jamovi line moves.
+git tag jmo-x.y.z && git push origin jmo-x.y.z
+#     The jmo workflow builds seven files into a DRAFT release. Sideload-test at least one Mac
+#     file, then publish it -- and only then run the checks above. Publishing does not touch the
+#     site: pkgdown deploys from master only.
+gh run watch && gh release edit jmo-x.y.z --draft=false
 
 # 2. Branch + strip development-only files
 git checkout -b release/x.y.z
@@ -68,11 +93,11 @@ git branch -D release/x.y.z   # denied in Claude sessions: run in your own termi
 git tag vx.y.z <merge-commit-sha>
 git push origin vx.y.z
 
-# 7. The jamovi modules
-#    The tag starts .github/workflows/jmo.yaml, which builds the seven .jmo files and opens a
-#    DRAFT release carrying them. Sideload-test at least one Mac file, then publish the draft
-#    by hand -- publishing is also what redeploys the pkgdown site.
-gh run watch    # then: gh release view vx.y.z
+# 7. The jamovi modules, again
+#    The v tag starts .github/workflows/jmo.yaml a second time and opens a DRAFT release carrying
+#    the same seven files. Publish it: `latest` is the newest published release whatever it holds,
+#    so a published release WITHOUT them turns every download link in the README into a dead one.
+gh run watch && gh release edit vx.y.z --draft=false
 ```
 
 ## Notes
@@ -106,14 +131,9 @@ gh run watch    # then: gh release view vx.y.z
 - **The site must be live before step 5.** Every `bricenocenti.github.io` link in the Rd,
   the README and the vignettes 404 until the pkgdown workflow has deployed from `master` and
   Pages is enabled, and CRAN's incoming check reports them. Merge, confirm the site answers,
-  then submit. The gate, reading exactly the files CRAN reads -- every line must be `200`, and
-  NOT `curl -L`, because a 301 is also a NOTE:
-
-  ```bash
-  git grep -ho 'https://bricenocenti\.github\.io/tabxplor/[A-Za-z0-9._/#-]*' \
-      -- DESCRIPTION README.md man vignettes | sed 's/[.,)]*$//' | sort -u |
-    while read -r u; do printf '%s  %s\n' "$(curl -sI -o /dev/null -w '%{http_code}' "$u")" "$u"; done
-  ```
+  then submit. `urlchecker::url_check(".")` (step 1) is the gate: it runs the same
+  `tools::check_url_db` that `R CMD check --as-cran` runs, over the same files, and reports a
+  301 as well as a 404 -- a permanent redirect is also a NOTE.
 - **rhub: the compiler containers say nothing here.** tabxplor has no `src/`, so `clang*`,
   `gcc*`, `c23`, `lto`, `*-asan`, `valgrind` and `rchk` only exercise a toolchain the package
   never uses -- and a stale image there fails on a *dependency* (`clang19`/`clang20` carry an

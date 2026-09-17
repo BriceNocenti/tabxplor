@@ -1,12 +1,12 @@
 ---
 title: User-Friendly Tables with Color Helpers for Data Exploration
 name: tabxplor
-version: 2.0.0
+version: 2.0.1
 jms: '1.0'
 authors:
   - Brice Nocenti
 maintainer: Brice Nocenti
-date: '2026-08-29'
+date: '2026-09-17'
 type: R
 description: >-
   Make it easy to deal with multiple cross-tables in data exploration, by

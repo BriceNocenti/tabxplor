@@ -501,7 +501,7 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     # ⚠ the title is emitted OUTSIDE the scrollbox, so it stays put while the table scrolls under it.
     # ITALIC as well as bold: a table's title is a caption, not a heading -- it names the table
     # rather than opening a section, and the italic is what says so at a glance on a page where a
-    # heading is also bold. Carried here since 2.0.0.9000, from the courses' own stylesheet, which
+    # heading is also bold. Carried here since 2.0.1, from the courses' own stylesheet, which
     # had been restating it under every document.
     # `margin-top` for the same reason it is here rather than in a document's own sheet: a caption
     # opens a table and belongs to it, so the air that separates the pair from the paragraph above

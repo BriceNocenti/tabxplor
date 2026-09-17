@@ -23,7 +23,9 @@ name: jmo
 
 on:
   push:
-    tags: ['v*']
+    # `v*` is a package release, `jmo-*` a module-only one: a jamovi line moves faster than CRAN,
+    # and the seven files must be rebuildable without waiting for a package release.
+    tags: ['v*', 'jmo-*']
     branches: ['ci/**']   # a scratch branch: the workflow can be exercised before it reaches master
   workflow_dispatch:      # usable only once this file is on the default branch, which is how GitHub works
     inputs:
@@ -421,7 +423,7 @@ jobs:
     name: draft release
     # all or nothing: a draft carrying five of seven files gives students a dead link, which is
     # worse than no release at all
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [build, build-linux]
     runs-on: ubuntu-latest
     permissions:
@@ -441,10 +443,11 @@ jobs:
           ls -l tabxplor_jamovi-*.jmo
           n=$(ls tabxplor_jamovi-*.jmo | wc -l)   # `needs:` already guarantees every job passed
           [ "$n" -eq 7 ] || { echo "::error title=Incomplete set::$n files, expected 7"; exit 1; }
-          # A release CREATED by this token starts no other workflow, so the draft is left for a
-          # human: publishing it by hand is also what redeploys the pkgdown site.
+          # The draft is left for a human: publishing a release is public and irreversible. It
+          # does NOT touch the pkgdown site -- that deploys from master only, deliberately.
+          ver=${TAG#v}; ver=${ver#jmo-}   # v2.0.1 and jmo-2.0.1 both name version 2.0.1
           gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --draft \
-            --title "tabxplor ${TAG#v}" \
+            --title "tabxplor $ver" \
             --notes "jamovi modules to sideload. Pick the file for your jamovi line (About box: 2.7.x is *solid*, 28.x is *current*) and for your computer."
           gh release upload "$TAG" tabxplor_jamovi-*.jmo --clobber
           echo "Draft release $TAG carries $n .jmo files. Publish it by hand." >> "$GITHUB_STEP_SUMMARY"

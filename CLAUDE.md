@@ -105,7 +105,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *Reading a regression*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the five French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d) · `.github/` (CI: `R CMD check`, pkgdown, coverage, rhub, and `jmo.yaml` + `scripts/jmo-verify.R`, which build and verify the seven jamovi modules).
+**Other directories:** `vignettes/` (introduction, *Reading a regression*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the five French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — `dev/readme-jamovi.Rmd` — the jamovi install procedure both home pages include — `dev/revdep_ggfacto.R`, and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d) · `.github/` (CI: `R CMD check`, pkgdown, coverage, rhub, and `jmo.yaml` + `scripts/jmo-verify.R`, which build and verify the seven jamovi modules).
 
 ---
 
@@ -1654,8 +1654,8 @@ in both places it lands — `jamovi.yaml` and the installed package's `DESCRIPTI
 
 **A draft release, all seven files or none.** `gh` rather than a fourth third-party action; the job
 refuses an incomplete set, because after publishing, a `…/releases/latest/download/…` link missing its
-file is a dead link — worse than no release. The maintainer publishes the draft, which is also what
-redeploys the site: a release *created* by the workflow's own token triggers nothing. ⚠ Two traps in
+file is a dead link — worse than no release. The maintainer publishes the draft, because publishing is
+public and irreversible. ⚠ Two traps in
 the trigger: no `paths:` filter, ever (with `tags:` it silently suppresses tag pushes), and a
 `ci/**` branch, because `workflow_dispatch` only offers a workflow already on the default branch —
 and `.github/` reaches master only with the 2.0.1 release.
@@ -1693,29 +1693,77 @@ table. No scheduled canary run: the workflow is exercised only at release time a
 between them, which one `schedule:` line would catch.
 
 
-### v2.0.1 — Phase 17 — v2.0.1 release
+#### v2.0.1 — Phase 17 — the 2.0.1 release **PREPARED** (the submission is the maintainer's)
 
-Help me do the new CRAN release, so I don’t have to check everything myself.
+Everything a CRAN release needs, except the four acts that are the maintainer's: the pushes, the
+module publication, rhub/win-builder, and the submission itself.
 
-On the pkgdown site and documentation, we need to change the way the way jamovi it presented : the installation procedure is not jamovi library yet, but sideloading (look at `~/github/formations_stat/cours/L3/L3S1_01.qmd` for the part where I explain the module installation procedure to my student if needed) ; the documentation should point to the github releases, starting with the pkgdown index page itself (by platforms ? Is it possible to have direct download links for the last versions here, without forcing the user to check on github realeses manually ? ).
+**One measurement set the order of the whole release.** `R CMD check --as-cran` URL-checks
+`README.md`, `NEWS.md` and every Rd. A `releases/latest/download/…` link is CRAN-clean once the file
+exists — 302 to 200, `tools:::check_url_db` says nothing, verified against a module that already
+publishes them — and a NOTE while it 404s. So **the jamovi modules must be published before the
+submission**, which is now step **1b** of `dev/release_checklist.md`, before the gates rather than
+after CRAN acceptance. It also gets macOS files to students without waiting for CRAN, which is the
+reason the phase existed. Measured on the finished tree: `0 errors, 0 warnings, 1 note`, and that
+note is exactly the seven links.
 
-On `dev/` branch, we’ll do R CMD CHECK, then github actions, rhub, then reverse dependency check with ggfacto (CRAN 0.3.2 and current dev version in this WSL2 machine), and everything else needed for the new release.
+**The docs stopped lying about jamovi.** Four user-facing places told people to *"choose jamovi
+library"* — the module is not in the library and will not be before September 2027. The procedure is
+now written **once**, in `pkgdown/_jamovi-install.Rmd`, a child document both home sources include:
+the seven direct download links, which jamovi line to install, how to read *About This Mac*, the
+sideload path, and the two symptoms that tell a wrong line from a wrong system. ⚠ It lives in
+`pkgdown/` and not in `dev/`, which is stripped from the release branch — this way `README.Rmd` still
+knits on `master`; `^pkgdown$` keeps it out of the tarball and pkgdown renders only root markdown, so
+it never becomes a page. ⚠ Both parents resolve `child =` against the package ROOT, not their own
+directory (`dev/build_readmes.R` knits with `knit_root_dir = root`).
 
-What else is needed here ? What can you do yourself ? When do I need to do it myself ?
+**`jmo-*` is the module's own tag namespace**, so `v*` keeps meaning "a CRAN release" and the seven
+files can be rebuilt when a jamovi line moves. Three edits, not one: the trigger glob, the release
+job's `refs/tags/v` guard — which would otherwise build seven files and publish none — and a title
+that strips either prefix. ⚠ The asset names carry the jamovi LINE, which moves: when the current
+channel becomes 29 the names change and links frozen in a released README die. That is what the
+releases-page line at the end of the fragment is for — the one URL no line change can break.
 
-NEWS.md : very concise, just the very few important things to know. Nobody have used 2.0.0 for regressions and for something else than basic tables with no significance, etc. (only my students in one beginner’s course), so it can be very quick, and if it’s too much a detail it’s not interesting.
+⚠ **`pkgdown.yaml` lost its `release: [published]` trigger, and that is a fix, not a simplification.**
+The site is `master`'s and a release is a TAG: publishing one rebuilt `gh-pages` from that tag's
+commit with `clean: true`, so publishing a `jmo-*` release tagged on `dev` would have replaced the
+live site with a development build. The trigger had never fired because no release had ever been
+published; phases 16 and 17 make releases routine, which is what turned a dead line into a trap.
 
-Then, release branch, pull resquest, new github actions, check that jamovi modules etc.
+**The reverse dependency is checked, not asserted.** `cran-comments.md` has claimed since 2.0.0 that
+"the last version of ggfacto works with this version" with no evidence behind it.
+`dev/revdep_ggfacto.R` runs `R CMD check` on CRAN's ggfacto 0.3.2 **and** on the local checkout
+against a throwaway library — two versions because they ask different questions: the CRAN one still
+calls the superseded surface, which is how `set_type()` was caught at 2.0.0. `revdepcheck` was
+deliberately not used: for one reverse dependency it adds a `revdep/` directory to ignore twice and
+an opaque cache, where two readable check runs say the same thing.
 
-For my message to CRAN, reuse the 2.0.0 one and modify it, and change the rhub and github actions links once you have them.
+**`urlchecker::url_check()` replaces a hand-rolled gate.** The checklist grepped
+`bricenocenti.github.io` URLs out of four paths with `curl`; `url_check()` runs the same
+`tools::check_url_db` that `R CMD check --as-cran` runs, over DESCRIPTION, README.md, NEWS.md, every
+Rd and the *built* vignettes, and reports a 301 as well as a 404. A strict superset, one line.
+⚠ Written down beside it: `devtools::check(manual = TRUE)` — what the checklist called the release
+gate — defaults `incoming` to `remote`, i.e. FALSE, so the bare call runs **no URL check and no
+CRAN-incoming check at all**. The gate is now `check(manual = TRUE, remote = TRUE, incoming = TRUE)`.
 
-Check possible CRAN after-release messages from v 2.0.0 on exotic platforms, etc.
+**French is complete again**: the 25 msgids phases 9–16 added were printing in English. 359
+translated, 0 untranslated, 0 fuzzy, `msgfmt -c` clean.
 
-If there are useless or outdated stuff in the release checklist, we can think about removing them.
+**Measured, on the finished tree:** shipped suite **5027** green; `R CMD check` 0/0/1 as above;
+the tarball **1.8 MB** with `data DESCRIPTION inst man NAMESPACE NEWS.md po R README.md tests
+vignettes` at top level and nothing else; `pkgdown::check_pkgdown()` clean; CRAN's own checks of
+2.0.0 **OK on all 13 flavours**, so there is nothing to chase from the last release.
 
-At the end, when everything is ready, I’ll submit to CRAN myself.
+⚠ **One reported blocker was not one.** An audit flagged the untracked 171 MB `build_old/` as
+shipping, since no `.Rbuildignore` pattern matches it. Tested twice, with the pattern verifiably
+absent: the tarball is 1.8 MB and holds zero `build_old` entries either way. `^build_old$` was added
+anyway, for intent, and `^build/js/` lost its trailing slash so it matches the directory as well as
+its contents.
 
-
+**What remains, in order:** commit; push `ci/jmo` and read the workflow's first real run; tag
+`jmo-2.0.1`, sideload-test a Mac file, publish; re-run the gates (the URL note clears); then the
+release branch, the PR, rhub, win-builder, and the submission. `dev/release_checklist.md` is the
+procedure and now carries all of it.
 
 
 

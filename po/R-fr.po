@@ -580,7 +580,7 @@ msgstr "différence de risque"
 
 #: reg-estimand.R:350
 msgid "Somers' D"
-msgstr ""
+msgstr "D de Somers"
 
 #: reg-estimand.R:351
 msgid "win ratio"
@@ -643,7 +643,7 @@ msgstr "modèle à cotes proportionnelles"
 msgid ""
 "an ordinal outcome must keep the order of its levels, so none can be singled "
 "out"
-msgstr ""
+msgstr "une variable à expliquer ordinale doit conserver l'ordre de ses niveaux : aucun ne peut être isolé"
 
 #: reg-estimand.R:535
 msgid "quasi-Poisson regression"
@@ -670,7 +670,7 @@ msgstr "régression"
 
 #: reg-estimand.R:642
 msgid "this family models no single level of the outcome"
-msgstr ""
+msgstr "cette famille ne modélise aucun niveau particulier de la variable à expliquer"
 
 #: reg-estimand.R:830 reg-estimand.R:863
 msgid "sample-averaged"
@@ -723,15 +723,15 @@ msgstr "%s, %s"
 msgid ""
 "how often someone from this group ends up higher than someone from the "
 "reference group"
-msgstr ""
+msgstr "à quelle fréquence une personne de ce groupe se classe au-dessus d'une personne du groupe de référence"
 
 #: reg-estimand.R:861
 msgid "as a ratio of wins to losses"
-msgstr ""
+msgstr "en ratio des victoires aux défaites"
 
 #: reg-estimand.R:862
 msgid "as a difference in percentage points, wins minus losses"
-msgstr ""
+msgstr "en différence de points de pourcentage, victoires moins défaites"
 
 #: reg-estimand.R:863
 #, c-format
@@ -756,7 +756,7 @@ msgstr "en points de pourcentage, %s"
 msgid ""
 "a raw coefficient is the model's own, so it has no marginal or at-reference "
 "form"
-msgstr ""
+msgstr "un coefficient brut est celui du modèle lui-même : il n'a ni forme marginale ni forme à la référence"
 
 #: reg-estimand.R:1108
 msgid ""
@@ -771,7 +771,7 @@ msgstr ""
 msgid ""
 "this measure compares two people drawn from the population, and one profile "
 "holds only one"
-msgstr ""
+msgstr "cette mesure compare deux personnes tirées de la population, et un profil n'en contient qu'une"
 
 #: reg-estimand.R:1121
 #, c-format
@@ -782,7 +782,7 @@ msgstr "le modèle estime %s : cette mesure n'a pas de coefficient ici"
 msgid ""
 "an ordinal outcome's cell is a rank, so its measures compare PAIRS of "
 "people, not shares"
-msgstr ""
+msgstr "la cellule d'une variable à expliquer ordinale est un rang : ses mesures comparent des PAIRES de personnes, pas des parts"
 
 #: reg-estimand.R:1131
 msgid "continuous"
@@ -876,11 +876,11 @@ msgstr " ; %1$s : %2$s"
 
 #: reg-estimand.R:1523
 msgid "(any)"
-msgstr ""
+msgstr "(au choix)"
 
 #: tab-display.R:228
 msgid "sup"
-msgstr ""
+msgstr "sup."
 
 #: tab-display.R:229
 msgid "obs"
@@ -888,11 +888,11 @@ msgstr "obs."
 
 #: tab-display.R:230
 msgid "adj"
-msgstr ""
+msgstr "ajust."
 
 #: tab-export-prep.R:689
 msgid "n"
-msgstr ""
+msgstr "n"
 
 #: tab-footer.R:466 tab-legend.R:771
 #, c-format
@@ -1083,7 +1083,7 @@ msgstr "intervalle t de Student"
 
 #: tab-legend.R:418
 msgid "Student t interval, pooled over the variable's levels"
-msgstr ""
+msgstr "intervalle t de Student, à variance commune sur les niveaux de la variable"
 
 #: tab-legend.R:419 tab-legend.R:434
 msgid "Wald interval on the log odds-ratio"
@@ -1342,7 +1342,7 @@ msgstr "tab_transpose()"
 msgid ""
 "it transposes a crosstab; a regression table transposes via "
 "tab_export(transpose = TRUE)"
-msgstr ""
+msgstr "elle transpose un tableau croisé ; un tableau de régression se transpose avec tab_export(transpose = TRUE)"
 
 #: tab-structure.R:229
 msgid "it transposes a single table, with no sub-tables (tab_vars)"
@@ -1491,7 +1491,7 @@ msgstr "Chi2"
 
 #: tab-test-display.R:919
 msgid "Chi2, Rao-Scott"
-msgstr ""
+msgstr "Chi2, Rao-Scott"
 
 #: tab-test-display.R:919
 msgid "F, Welch"
@@ -1516,12 +1516,12 @@ msgstr "Variable expliquée"
 #: tab_reg.R:447
 #, c-format
 msgid "t(%s) on %s design df"
-msgstr ""
+msgstr "t(%s) sur %s ddl du plan"
 
 #: tab_reg.R:448
 #, c-format
 msgid "%s design df"
-msgstr ""
+msgstr "%s ddl du plan"
 
 #: tab_reg.R:495
 #, c-format
@@ -1640,17 +1640,17 @@ msgstr "variables"
 #: var-shape.R:341
 #, c-format
 msgid "%s or %s"
-msgstr ""
+msgstr "%s ou %s"
 
 #: var-shape.R:342
 #, c-format
 msgid "%s to %s"
-msgstr ""
+msgstr "%s à %s"
 
 #: var-shape.R:376
 #, c-format
 msgid "< -1%s"
-msgstr ""
+msgstr "< -1%s"
 
 #: var-shape.R:376
 msgid "below mean"
@@ -1663,23 +1663,23 @@ msgstr "au-dessus de la moyenne"
 #: var-shape.R:377
 #, c-format
 msgid "> +1%s"
-msgstr ""
+msgstr "> +1%s"
 
 #: var-shape.R:456
 #, c-format
 msgid "%s: cut into %s groups rather than %s, having too few distinct values."
-msgstr ""
+msgstr "%s : découpée en %s groupes au lieu de %s, faute de valeurs distinctes en nombre suffisant."
 
 #: var-shape.R:693
 #, c-format
 msgid "%s: one row per value."
-msgstr ""
+msgstr "%s : une ligne par valeur."
 
 #: var-shape.R:695
 #, c-format
 msgid ""
 "%s: cut into four bands, at its mean and one standard deviation either side."
-msgstr ""
+msgstr "%s : découpée en quatre bandes, à sa moyenne et à un écart-type de part et d'autre."
 
 #, c-format
 #~ msgid "… +%d vars"

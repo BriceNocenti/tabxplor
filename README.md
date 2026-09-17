@@ -49,6 +49,56 @@ install.packages("tabxplor", dependencies = TRUE)
 devtools::install_github("BriceNocenti/tabxplor")
 ```
 
+<!-- PURPOSE: the jamovi module's install procedure, written once.
+     ROLE: a child document included by BOTH home sources, `README.Rmd` (GitHub and CRAN) and
+       `pkgdown/index.Rmd` (the site), because a procedure written twice drifts. `dev/build_readmes.R`
+       knits both with `knit_root_dir = root`, so both resolve `child =` against the package root --
+       write the path from there, not from the parent's directory.
+     KEY CONSTRAINTS:
+       - The links are `releases/latest/download/<name>`, which never goes stale because the asset
+         names carry the jamovi line and the system but not the package version. They 404, and
+         `R CMD check --as-cran` NOTEs README.md, until a release carrying the files is PUBLISHED.
+       - The asset names are the workflow's (`.github/workflows/jmo.yaml`); changing one here alone
+         breaks every link. They carry the jamovi LINE, which moves: when jamovi's current channel
+         becomes 29, these seven names change and the links frozen in a released README die. That is
+         what the releases-page line at the end is for -- it is the one URL no line change can break.
+       - It lives in `pkgdown/` and not in `dev/`, which is stripped from the release branch: this
+         way `README.Rmd` still knits on `master`. `^pkgdown$` keeps it out of the tarball, and
+         pkgdown renders only root markdown, so it never becomes a page.
+     See: dev/jamovi_library_vs_sideloading.md section 3 (why one file per line and system). -->
+
+### The jamovi module
+
+The point-and-click interface is a jamovi module, installed by
+**sideloading** a file. Install
+[jamovi](https://www.jamovi.org/download.html) first – the **solid**
+release its download page recommends – then take the file for your
+computer:
+
+|  | jamovi 2.7 (*solid*) | jamovi 28 (*current*) |
+|:---|:---|:---|
+| Windows | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_win-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_win-x64.jmo) |
+| Mac, Apple silicon | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-arm64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-arm64.jmo) |
+| Mac, Intel | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-x64.jmo) |
+| Linux | – | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_linux-x64.jmo) |
+
+Your jamovi line is the number in its *About* box: `2.7.x` is *solid*,
+`28.x` is *current*. On a Mac, Apple menu `>>` *About This Mac*: *Chip:
+Apple M…* is Apple silicon, *Processor: Intel* is Intel.
+
+Then, in jamovi: `Modules` (the **`+`**, top right) `>>` *Manage
+installed modules* `>>` *Sideload* `>>` the arrow in the middle `>>` the
+file you downloaded. It adds a **Crosstables** and a **Regressions**
+analysis, whose options carry the names of the arguments documented
+here.
+
+*Two symptoms worth knowing: if jamovi says the module needs an update,
+or that it “is either missing or incompatible”, the file is for another
+jamovi line; if an analysis errors about a package that cannot be
+loaded, it is for another system. The full, current list of files is
+always on the [releases
+page](https://github.com/BriceNocenti/tabxplor/releases/latest).*
+
 ## A quick look
 
 A simple cross-table with row percentages: shades of blue mean the cell
