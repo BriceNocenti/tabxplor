@@ -291,6 +291,10 @@ jobs:
       - name: Build
         run: |
           set -euo pipefail
+          # A restored library can carry a 00LOCK from an install that died in an earlier run, and
+          # install.packages() then refuses every later attempt at that package. The cache is a
+          # cache, so clear it rather than letting one bad run poison the key forever.
+          rm -rf '${{ matrix.build_dir }}'/00LOCK*
           node "$JMC" --build . --home "$JAMOVI_HOME" --jmo '${{ matrix.jmo }}' \
             --assume-app-version '${{ matrix.version }}'
 
@@ -394,6 +398,7 @@ jobs:
       - name: Build
         run: |
           set -euo pipefail
+          rm -rf "build/R${LR}-x64-linux"/00LOCK*
           node "$RUNNER_TEMP/jmvtools/inst/node_modules/jamovi-compiler/index.js" \
             --build . --home flatpak --jmo "$JMO" --assume-app-version "$JAMOVI_VERSION"
 
