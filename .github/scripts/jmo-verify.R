@@ -7,8 +7,11 @@
 # KEY CONSTRAINTS:
 #   - It reads the UNZIPPED .jmo, never the build directory: the artefact is what ships.
 #   - `install.packages()` reports a failed SOURCE build as a warning, so the compiler can finish
-#     and write a valid .jmo with a package simply missing. `REQUIRED` is what catches that, and is
-#     the reason it is a declared list rather than "whatever is in the directory".
+#     and write a valid .jmo with a package simply missing. `REQUIRED` is what catches that. ⚠ It is
+#     checked by LOADING, not by looking in the module's directory: the compiler deliberately omits
+#     whatever jamovi's own library already holds, and which packages those are differs per jamovi
+#     line -- `fansi` ships with the 2.7 line and not with 28. What the module owes a user is that
+#     the package is THERE when R asks for it, wherever it comes from.
 #   - `.libPaths()` is pinned to the module plus jamovi's own libraries -- the pair the compiler
 #     itself computes -- and the pin is then asserted. A second R library on the same R minor
 #     version otherwise wins silently.
@@ -25,8 +28,8 @@
 MACOS_LOAD_IS_FATAL <- TRUE
 ANALYSIS_IS_FATAL <- TRUE
 
-# What a usable module must carry, whatever jamovi's own library already holds. Every one of these
-# is a Suggests or an Imports the compiler vendors; openxlsx2 is the one built from source.
+# What a usable module must be able to LOAD. Some of these the compiler vendors, some jamovi's own
+# library already holds; openxlsx2 is the one built from source, and the one this list exists for.
 REQUIRED <- c("tabxplor", "openxlsx2", "survey", "VGAM", "svyVGAM", "brant",
               "marginaleffects", "mirai", "nanonext", "parallelly", "RhpcBLASctl", "fansi")
 
@@ -103,12 +106,7 @@ check_version <- function() {
 
 check_library <- function() {
   pkgs <- list.dirs(rlib, recursive = FALSE, full.names = FALSE)
-  missing <- setdiff(REQUIRED, pkgs)
-  if (length(missing)) {
-    fail("Package missing from the module",
-         paste(missing, collapse = ", "), " is not in the module's R library. install.packages() ",
-         "reports a failed source build as a warning, so the build can look green without it.")
-  }
+  if (!"tabxplor" %in% pkgs) fail("tabxplor is missing", "the module's R library holds no tabxplor")
   say("vendored   ", length(pkgs), " packages: ", paste(pkgs, collapse = ", "))
   pkgs
 }
@@ -175,6 +173,14 @@ check_load <- function(pkgs) {
       }
       if (os != "macos" || MACOS_LOAD_IS_FATAL) fail("Package does not load", m) else note(m)
     }
+  }
+  # the REQUIRED contract: available to R once the paths are jamovi's, vendored or bundled
+  gone <- REQUIRED[!vapply(REQUIRED, requireNamespace, TRUE, quietly = TRUE)]
+  if (length(gone)) {
+    fail("Required package cannot be loaded",
+         paste(gone, collapse = ", "), " is neither vendored in the module nor in jamovi's own ",
+         "library. A source build that failed is reported by install.packages() as a warning, so ",
+         "the .jmo can look complete without it.")
   }
   library(tabxplor)
   say("loaded     tabxplor ", as.character(utils::packageVersion("tabxplor")))
