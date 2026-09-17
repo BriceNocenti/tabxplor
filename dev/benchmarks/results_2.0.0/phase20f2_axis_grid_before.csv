@@ -1,9 +1,0 @@
-"case","axis","n_units","whole","sum_units","max_unit","ceiling","balance","speedup_ceiling"
-"G tab_vars 4 groups (race), n = 200 000","G",3,1.735,1.26,0.935,1.41,2.226,1.23
-"G tab_vars 8 groups (year), n = 200 000","G",8,1.927,1.357,0.277,0.847,1.633,2.275
-"G tab_vars 4 groups (race), n = 21 483","G",3,0.287,0.231,0.131,0.187,1.701,1.535
-"S 2 outcomes, one table, n = 200 000","S",2,5.212,5.355,2.792,2.792,1.043,1.867
-"S 4 outcomes, one table, n = 200 000","S",4,9.145,10.212,3.192,3.192,1.25,2.865
-"S 3-model comparison UNBALANCED, n = 200 000","S",3,4.239,4.594,3.206,3.206,2.094,1.322
-"S 3-model comparison BALANCED, n = 200 000","S",3,7.212,7.822,3.099,3.099,1.189,2.327
-"R 2 outcomes x a models list, n = 200 000","R",2,10.266,10.417,5.445,5.445,1.045,1.885

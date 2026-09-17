@@ -1,9 +1,0 @@
-Phase 3b AFTER (gss_cat, 21483 rows, 3 row_vars x 3 col_vars = 9 factor tables)
-9-table chi2=TRUE  : 0.870 s
-9-table chi2=FALSE : 0.330 s
-chi2 SHARE         : 0.540 s (62% of the call)
-  [pre-3b profile: chi2 was 2.01 s = 84% of a 2.39 s call]
-3xtvhours ANOVA=T  : 0.220 s
-3xtvhours ANOVA=F  : 0.080 s
-ANOVA share        : 0.140 s
-
