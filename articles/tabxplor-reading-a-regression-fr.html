@@ -19,6 +19,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script>
 </head>
@@ -30,7 +37,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,7 +88,7 @@
 
 
 
-<script src="tabxplor-reading-a-regression-fr_files/tabxplor-2.0.0/tabxplor.js"></script><div class="row">
+<script src="tabxplor-reading-a-regression-fr_files/tabxplor-2.0.1/tabxplor.js"></script><div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Interpréter un modèle de régression sans perdre de vue les données observées</h1>
@@ -103,7 +110,9 @@
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 .tabxplor-tab{margin-bottom:1.2em;}
-.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+.tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}
+.tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}
+.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}
 .tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
@@ -147,6 +156,11 @@
 .popover-body,.popover-content{padding:6px;white-space:pre;}
 .tabxplor-tab{color:#000000;background:transparent;}
 .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}
+.tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+.tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+.tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+.tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+.tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 .g1,.tabxplor-tab .g1{color:#949494;}
 .g2,.tabxplor-tab .g2{color:#444444;}
@@ -177,6 +191,11 @@
   .tabxplor-tab{color:#f1efe0;background:transparent;}
   .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,:is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),.tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
   .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
   .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
   .g1,.tabxplor-tab .g1{color:#919085;}
   .g2,.tabxplor-tab .g2{color:#CDCBBC;}
@@ -206,6 +225,11 @@
 }
 body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab{color:#000000;background:transparent;}
 body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td{background-color:transparent;border-color:#000000;}
+body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1{color:#949494;}
 body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2{color:#444444;}
@@ -233,8 +257,13 @@ body.quarto-light .u2,body.quarto-light .tabxplor-tab .u2,[data-bs-theme=light] 
 body.quarto-light .u3,body.quarto-light .tabxplor-tab .u3,[data-bs-theme=light] .u3,[data-bs-theme=light] .tabxplor-tab .u3,[data-theme=light] .u3,[data-theme=light] .tabxplor-tab .u3{background-color:#FCBDA5;}
 body.quarto-light .u4,body.quarto-light .tabxplor-tab .u4,[data-bs-theme=light] .u4,[data-bs-theme=light] .tabxplor-tab .u4,[data-theme=light] .u4,[data-theme=light] .tabxplor-tab .u4{background-color:#FEAC9F;}
 body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#f1efe0;background:transparent;}
-body.quarto-dark .tabxplor-tab td:not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4) .tx-pill,body.quarto-dark :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4) .tx-pill,[data-bs-theme=dark] :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4) .tx-pill,[data-theme=dark] :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4) .tx-pill,html.dark :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill){color:#21252b;}
+body.quarto-dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,body.quarto-dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-bs-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,html.dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
 body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
 body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#919085;}
 body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#CDCBBC;}
@@ -261,10 +290,119 @@ body.quarto-dark .u1,body.quarto-dark .tabxplor-tab .u1,[data-bs-theme=dark] .u1
 body.quarto-dark .u2,body.quarto-dark .tabxplor-tab .u2,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .tabxplor-tab .u2,[data-theme=dark] .u2,[data-theme=dark] .tabxplor-tab .u2,html.dark .u2,html.dark .tabxplor-tab .u2{background-color:#F6D0B2;}
 body.quarto-dark .u3,body.quarto-dark .tabxplor-tab .u3,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .tabxplor-tab .u3,[data-theme=dark] .u3,[data-theme=dark] .tabxplor-tab .u3,html.dark .u3,html.dark .tabxplor-tab .u3{background-color:#FABDA8;}
 body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4,[data-bs-theme=dark] .tabxplor-tab .u4,[data-theme=dark] .u4,[data-theme=dark] .tabxplor-tab .u4,html.dark .u4,html.dark .tabxplor-tab .u4{background-color:#FCAAA3;}
+:root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_marks .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}
 @media print {
   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tx-scrollbox{max-width:none;overflow:visible;}
   .tabxplor-tab{color:#000000;background:#ffffff;}
   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   .tabxplor-tab tbody tr:hover{background:transparent;}
   .g1,.tabxplor-tab .g1{color:#949494;}
   .g2,.tabxplor-tab .g2{color:#444444;}
@@ -294,6 +432,11 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
   .u4,.tabxplor-tab .u4{background-color:#B8B8B8;}
   body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab,body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#000000;background:#ffffff;}
   body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td,body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar,body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover,body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:transparent;}
   body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1,body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#949494;}
   body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2,body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#444444;}
@@ -328,8 +471,8 @@ tous les étudiants ne savent pas dire <em>quelles</em> choses ont été
 maintenues égales, ni ce que cela a changé au résultat. Les méthodes de
 régression ne sont-elles pas, trop souvent, enseignées comme des
 machines à prédire ? : on y verse des variables, il en sort des nombres
-— coefficients, rapports de cotes — dont le rapport avec ce qu’on
-pouvait lire dans les données reste souvent mystérieux.</p>
+— coefficients, rapports de cotes — dont le lien avec ce qu’on pouvait
+lire dans les données reste souvent mystérieux.</p>
 <p><code>tabxplor</code> prend le chemin inverse : son objectif est de
 construire un modèle de régression sur des données d’enquête (ou des
 bases de données administratives), et le lire <strong>sans jamais perdre
@@ -419,7 +562,7 @@ bien la choisir rend le tableau lisible</td>
 </td>
 <td align="left">la distance entre un groupe et sa référence</td>
 <td align="left">on choisit comment le mesurer : une différence, un
-rapport, ou un rapport de cotes</td>
+ratio, ou un rapport de cotes</td>
 </tr>
 <tr class="odd">
 <td align="left">
@@ -531,6 +674,7 @@ l’article.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="va">colour</span>, <span class="va">released</span>, pct <span class="op">=</span> <span class="st">"row"</span>,</span>
 <span>    color <span class="op">=</span> <span class="st">"difference"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span>, ref <span class="op">=</span> <span class="st">"first"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -623,6 +767,7 @@ points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>86 % des personnes blanches interpellées ont été relâchées, contre 74
 % des personnes noires : douze points d’écart. <strong>Voilà le résultat
 de base.</strong> Tout ce qui suit cherche à le comprendre, non à le
@@ -632,6 +777,7 @@ les choix de gardes à vue, dans un seul tableau :</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">colour</span>, <span class="va">sex</span>, <span class="va">employed</span>, <span class="va">citizen</span><span class="op">)</span>, <span class="va">released</span>, pct <span class="op">=</span> <span class="st">"row"</span>,</span>
 <span>    color <span class="op">=</span> <span class="st">"difference"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -672,7 +818,7 @@ Total
 </thead>
 <tbody>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-nb" rowspan="3">
 colour
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -762,7 +908,7 @@ Total
 </td>
 </tr>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-nb" rowspan="3">
 employed
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -807,7 +953,7 @@ Total
 </td>
 </tr>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-bb2" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-bb2" rowspan="3">
 citizen
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -864,6 +1010,7 @@ points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Avoir un emploi et avoir la nationalité canadienne vont l’un et
 l’autre avec le fait d’être relâché, et fortement. D’où la question
 évidente — celle, précisément, pour laquelle une régression existe : les
@@ -890,6 +1037,7 @@ les calculer :</p>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>difference <span class="op">=</span> <span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="va">Yes</span>, <span class="st">"difference"</span><span class="op">)</span>,</span>
 <span>         ratio      <span class="op">=</span> <span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="va">Yes</span>, <span class="st">"ratio"</span><span class="op">)</span>,</span>
 <span>         odds_ratio <span class="op">=</span> <span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="va">Yes</span>, <span class="st">"odds_ratio"</span><span class="op">)</span> <span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1023,18 +1171,19 @@ bold) <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" st
 significantly different from the reference category (Newcombe score
 interval, 95% confidence) or under the first colour threshold (±5
 points).<br>***: significantly different from the reference category (in
-bold) at the 99% confidence level ; **: at the 95% level ; *: at the 90%
-level ; no star: not significant.
+bold) at the 99,9% confidence level ; **: at the 99% level ; *: at the
+95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Chacune des trois dernières colonnes correspond à une mesure de
 l’écart. À partir de 86 % et de 74 %, on obtient :</p>
 <ul>
 <li>une <strong>différence</strong> de −12 points de pourcentage — on
 soustrait l’un de l’autre ;</li>
-<li>un <strong>rapport</strong> de ÷1.16 — les personnes noires ont été
+<li>un <strong>ratio</strong> de ÷1.16 — les personnes noires ont été
 relâchées 1,2 fois moins souvent que les personnes blanches (risque
 relatif) ;</li>
 <li>un <strong>rapport de cotes</strong> (<em>odds ratio</em>) de
@@ -1055,12 +1204,12 @@ diviser les cotes. C’est l’argument qu’on utilise le plus régulièrement
 <p><strong>La cote, c’est le mot des paris sportifs.</strong> Le terme
 vient du turf : dire qu’un cheval est <em>coté à 3 contre 1</em>, c’est
 dire que sa probabilité de gagner est trois fois plus grande que sa
-probabilité de perdre. Une cote met en rapport une situation
+probabilité de perdre. Une cote met en regard une situation
 dissymétrique — au numérateur la réussite, au dénominateur l’échec. Ici
 : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le
 sont pas, soit une cote de <strong>6,1 contre 1</strong> ; chez les
 personnes noires, 74 contre 26, soit <strong>2,8 contre 1</strong>. Le
-rapport de ces deux quantités est le <em>rapport de cotes</em> :
+ratio de ces deux quantités est le <em>rapport de cotes</em> :
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.8</mn><mi>/</mi><mn>6.1</mn><mo>=</mo><mn>0.46</mn></mrow><annotation encoding="application/x-tex">2.8/6.1 = 0.46</annotation></semantics></math>.
 Comme il tombe du mauvais côté de 1, on en prend l’inverse,
 <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi>/</mi><mn>0.46</mn></mrow><annotation encoding="application/x-tex">1/0.46</annotation></semantics></math>
@@ -1068,7 +1217,7 @@ Comme il tombe du mauvais côté de 1, on en prend l’inverse,
 fois <em>moins</em> de chances.</p>
 <p><strong>Ce sont trois mesures du <em>même</em> écart</strong>, et
 pourtant elles ne se lisent pas du tout de la même façon : le rapport de
-cotes fait sonner l’écart environ cinq fois plus fort que le rapport. Ce
+cotes fait sonner l’écart environ cinq fois plus fort que le ratio. Ce
 n’est pas une déformation, c’est que l’un divise des <em>cotes</em> et
 l’autre des pourcentages. Mais c’est le contresens le plus répandu des
 sciences sociales, et autant le rappeler : un rapport de cotes de 2 ne
@@ -1116,6 +1265,7 @@ de la sélection de l’échantillon.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="va">colour</span>, <span class="va">released</span>, pct <span class="op">=</span> <span class="st">"row"</span>, ref <span class="op">=</span> <span class="st">"first"</span>, ci <span class="op">=</span> <span class="st">"ref"</span>,</span>
 <span>    color <span class="op">=</span> <span class="st">"difference"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1208,11 +1358,12 @@ points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Une case est <strong>significative</strong> quand l’intervalle de sa
 déviation par rapport à la référence exclut la valeur neutre, celle qui
 signifierait aucun écart du tout : 0 pour une différence, 1 pour un
-rapport ou un rapport de cotes. L’intervalle, les étoiles et le grisé
-sont cohérents parce qu’ils lisent tous le résultat du même calcul.</p>
+ratio ou un rapport de cotes. L’intervalle, les étoiles et le grisé sont
+cohérents parce qu’ils lisent tous le résultat du même calcul.</p>
 <p>Mais pourvu que l’écart soit significatif, c’est la taille de
 l’effet, donnée par la couleur, qui est véritablement intéressante. Dans
 un dispositif expérimental réalisé sur 100 personnes par des médecins ou
@@ -1300,7 +1451,7 @@ modalités</td>
 <td align="left">décompte (heures de <code>x</code>, nombre de
 <code>x</code>)</td>
 <td align="left"><code>poisson</code></td>
-<td align="left">rapport de taux d’incidence — « 1,4 fois plus de
+<td align="left">ratio de moyennes — « 1,4 fois plus de
 <code>x</code>/jour »</td>
 </tr>
 <tr class="even">
@@ -1344,7 +1495,7 @@ prédicteur d’une manière spécifique :</p>
 <strong>comme décompte</strong> — les autres variables choisies
 étant égales, les personnes racisées comme noires figurent dans
 <strong>1,35 fois plus</strong> de fichiers que les personnes du groupe
-ethnique majoritaire (rapport de taux d’incidence, IRR) ;</li>
+ethnique majoritaire (ratio de moyennes, <code>RoM</code>) ;</li>
 <li>
 <strong>comme score sur six</strong> — pour <strong>un fichier
 donné</strong>, leur chance (cote, <em>odds</em>) d’y figurer plutôt que
@@ -1371,22 +1522,23 @@ correspondent à trois manières de regarder la même chose :</p>
 <span>           stats <span class="op">=</span> <span class="cn">NULL</span>, empirical <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span>          <span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Regression models: checks_gaussian, checks_poisson +1 more by colour,
-employed +1 more
+Regression models: checks_gaussian, checks_poisson and checks_binomial
+by colour, employed and citizen
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="1">
-checks_gaussian
+checks_<br>gaussian
 </th>
 <th class="tx-span" colspan="1">
-checks_poisson
+checks_<br>poisson
 </th>
 <th class="tx-span" colspan="1">
-checks_binomial
+checks_<br>binomial
 </th>
 </tr>
 <tr>
@@ -1402,7 +1554,7 @@ n
 Model_diff
 </th>
 <th class="tx-r tx-num tx-br">
-Model_IRR
+Model_RoM
 </th>
 <th class="tx-r tx-num tx-br">
 Model_OR
@@ -1561,24 +1713,25 @@ No
 <div class="tx-foot">
 Model (checks_gaussian): linear regression; diff: mean difference (vs
 the reference category).<br>Model (checks_poisson): Poisson regression;
-IRR: incidence-rate ratio (vs the reference category).<br>Model
+RoM: ratio of means (vs the reference category).<br>Model
 (checks_binomial): logistic regression; OR: odds ratio (vs the reference
-category).<br>checks_gaussian — diff ≥ <span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; diff ≤ <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD. Uncoloured: not significantly
+category).<br><b>checks_gaussian</b> — diff ≥ <span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; diff ≤ <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD. Uncoloured: not significantly
 different from the reference category (Wald interval, 95% confidence) or
-under the first colour threshold (±0,1 SD).<br>checks_poisson — IRR ≥
-<span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; IRR ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,2</span> ; <span class="m3" style="font-weight:bold;">÷1,5</span> ; <span class="m4" style="font-weight:bold;">÷2</span>. Uncoloured: not significantly
-different from the reference category (Wald interval on the log
-rate-ratio, 95% confidence) or under the first colour threshold
-(×1,1).<br>checks_binomial — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+under the first colour threshold (±0,1 SD).<br><b>checks_poisson</b> —
+RoM ≥ <span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; RoM ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,2</span> ; <span class="m3" style="font-weight:bold;">÷1,5</span> ; <span class="m4" style="font-weight:bold;">÷2</span>. Uncoloured: not significantly
+different from the reference category (Wald interval on the log ratio of
+means, 95% confidence) or under the first colour threshold
+(×1,1).<br><b>checks_binomial</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence) or under the first colour threshold
 (×1,2).<br>***: significantly different from the reference category (in
-bold) at the 99% confidence level (from 1 for the Constant) ; **: at the
-95% level ; *: at the 90% level ; no star: not significant.
+bold) at the 99,9% confidence level (from 1 for the Constant) ; **: at
+the 99% level ; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Mêmes données, mêmes prédicteurs, trois mesures de l’écart
 différentes, trois phrases d’interprétation spécifiques.</p>
 <p>On pourrait discuter de celle qui « prédit » le mieux le modèle. Par
@@ -1608,9 +1761,9 @@ modéliser l’écart entre plusieurs catégories d’un prédicteur.</p>
 <span><span class="co">#&gt;  5 binomial (any)      difference marginal|at_reference Model_mRD   marginal ri…</span></span>
 <span><span class="co">#&gt;  6 binomial (any)      ratio      marginal|at_reference Model_mRR   marginal ri…</span></span>
 <span><span class="co">#&gt;  7 binomial (any)      odds_ratio marginal|at_reference Model_mOR   marginal od…</span></span>
-<span><span class="co">#&gt;  8 poisson  ratio      ratio      conditional           Model_IRR   incidence-r…</span></span>
+<span><span class="co">#&gt;  8 poisson  ratio      ratio      conditional           Model_RoM   ratio of me…</span></span>
 <span><span class="co">#&gt;  9 poisson  (any)      difference marginal|at_reference Model_mdiff marginal me…</span></span>
-<span><span class="co">#&gt; 10 poisson  (any)      ratio      marginal|at_reference Model_mIRR  marginal in…</span></span></code></pre>
+<span><span class="co">#&gt; 10 poisson  (any)      ratio      marginal|at_reference Model_mRoM  marginal ra…</span></span></code></pre>
 <p>Chaque famille de modèle vient avec son lien (<code>link =</code>)
 par défaut, sa manière préférentielle de mesurer l’écart entre
 différents groupes. C’est son effet <em>conditionnel</em> : quand nous
@@ -1643,15 +1796,16 @@ mises en garde à vue – binomiale car notre variable est binaire.</p>
 <code class="sourceCode R"><span><span class="va">model</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">model</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -1754,7 +1908,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
   1.01<span class="tx-sec">    (83%)</span>
@@ -1943,17 +2097,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Par défaut tabxplor ajoute à côté de chaque estimation de l’écart
 donnée par le modèle, dans une colonne
 <strong><code>Obs_OR</code></strong>, l’écart observé dans les données.
@@ -1963,6 +2118,7 @@ cotes (OR) que nous avions obtenus tout à l’heure sans faire le modèle
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">colour</span>, <span class="va">sex</span>, <span class="va">employed</span>, <span class="va">citizen</span><span class="op">)</span>, <span class="va">released</span>, pct <span class="op">=</span> <span class="st">"row"</span>, ref <span class="op">=</span> <span class="st">"first"</span>,</span>
 <span>    stars <span class="op">=</span> <span class="cn">TRUE</span>, color <span class="op">=</span> <span class="st">"odds_ratio"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span>, display <span class="op">=</span> <span class="st">"OR"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -2003,7 +2159,7 @@ Total
 </thead>
 <tbody>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-nb" rowspan="3">
 colour
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -2069,10 +2225,10 @@ Female
 Male
 </td>
 <td class="tx-r tx-num g1">
-1/1.26<span class="tx-sec">*  </span>
+1/1.26<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num g1">
-1.26<span class="tx-sec">*  </span>
+1.26<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot g1">
 <span class="tx-sec">(4 783)</span>
@@ -2093,7 +2249,7 @@ Total
 </td>
 </tr>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-nb" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-nb" rowspan="3">
 employed
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -2138,7 +2294,7 @@ Total
 </td>
 </tr>
 <tr class="tx-b">
-<td class="tx-l tx-br tx-bl tx-lbl tx-b tx-bb2" rowspan="3">
+<td class="tx-l tx-br tx-bl tx-lbl tx-vname tx-b tx-bb2" rowspan="3">
 citizen
 </td>
 <td class="tx-l tx-br tx-bl tx-rv">
@@ -2173,10 +2329,10 @@ No
 Total
 </td>
 <td class="tx-r tx-num g1">
-1/1.14<span class="tx-sec">** </span>
+1/1.14<span class="tx-sec">*  </span>
 </td>
 <td class="tx-r tx-num g1">
-1.14<span class="tx-sec">** </span>
+1.14<span class="tx-sec">*  </span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot g1">
 <span class="tx-sec">(5 226)</span>
@@ -2191,20 +2347,23 @@ Odds ratio : OR ≥ <span class="p1" style="font-weight:bold;">1,2</span>
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; Woolf closed form) or under the first colour
 threshold (×1,2).<br>***: significantly different from the reference
-category (in bold) at the 99% confidence level ; **: at the 95% level ;
-*: at the 90% level ; no star: not significant.
+category (in bold) at the 99,9% confidence level ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Les mêmes nombres, les mêmes étoiles. La colonne observée n’est ni
 une approximation du tableau croisé ni un résumé : elle <em>est</em> le
 tableau croisé — le rapport de cotes calculé directement sur les
 pourcentages observés, imprimé à côté du modèle. Les traditionnelles
 étoiles ont été ajoutées pour dire en toutes lettres ce que les couleurs
 encodent déjà : une catégorie sans étoile n’est pas significativement
-différente de la modalité de référence, au seuil de confiance de 90 %
-que marque la plus petite étoile (le grisé, lui, se décide à 95 %).</p>
+différente de la modalité de référence. La plus petite étoile marque le
+seuil de 95 %, celui-là même où se décide le grisé — une case grisée ne
+porte donc jamais d’étoile —, les deux autres (99 % et 99,9 %) disant de
+combien l’intervalle dépasse encore la référence.</p>
 <p>C’est ce qui rend la comparaison possible et honnête, et cela vaut
 d’être énoncé comme une règle : <strong>dans tabxplor, l’écart observé
 est toujours homogène avec l’effet modélisé, calculé sur les mêmes
@@ -2238,15 +2397,16 @@ ci-dessous, pour plus de détails sur l’ajustement.</p>
 modélisation<a class="anchor" aria-label="anchor" href="#lire-une-ligne-de-gauche-%C3%A0-droite-permet-de-suivre-la-logique-de-la-mod%C3%A9lisation"></a>
 </h3>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -2349,7 +2509,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
   1.01<span class="tx-sec">    (83%)</span>
@@ -2538,17 +2698,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Prenons les deux lignes <code>White</code> et <code>Black</code> du
 prédicteur <code>colour</code> de ce tableau. De gauche à droite, dans
 les cinq colonnes, on peut lire :</p>
@@ -2650,15 +2811,16 @@ pas de modalités à comparer. Deux choses changent.</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"checks"</span><span class="op">)</span>, stats <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -2758,17 +2920,19 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-shape" data-quarto-disable-processing="true">
 <thead><tr>
 <th class="tx-l">
@@ -2799,6 +2963,7 @@ checks
 </td>
 </tr></tbody>
 </table>
+</div>
 <p><strong>D’abord, l’effet est par unité — et l’unité est un
 choix.</strong> Un fichier de police de plus, sur six, est un grand pas
 ; une année d’âge de plus, un petit. tabxplor rapporte donc par défaut
@@ -2819,15 +2984,16 @@ choisir “1 base de donnée” comme unité (<code>multiplier =</code>) :</p>
 <span>        ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>checks <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>, multiplier <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>checks <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>, </span>
 <span>        empirical <span class="op">=</span> <span class="cn">FALSE</span>, stats <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="1">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -2914,12 +3080,14 @@ category).<br>OR ≥ <span class="p1" style="font-weight:bold;">1,2</span>
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence) or under the first colour threshold
 (×1,2).<br>***: significantly different from the reference category (in
-bold) at the 99% confidence level (from 1 for the Constant) ; **: at the
-95% level ; *: at the 90% level ; no star: not significant.
+bold) at the 99,9% confidence level (from 1 for the Constant) ; **: at
+the 99% level ; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-shape" data-quarto-disable-processing="true">
 <thead><tr>
 <th class="tx-l">
@@ -2950,6 +3118,7 @@ checks
 </td>
 </tr></tbody>
 </table>
+</div>
 <p>La lecture se fait maintenant par fichier : chaque fichier
 supplémentaire divise par 1,50 la cote d’être relâché.</p>
 <p>Il est recommandé de regarder la courbe affichée sous le tableau
@@ -2971,15 +3140,16 @@ catégories. C’est l’argument <code>shape =</code> qui le fait :</p>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"checks"</span><span class="op">)</span>, shape <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>checks <span class="op">=</span> <span class="st">"quartiles"</span><span class="op">)</span>, stats <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -3123,17 +3293,18 @@ checks
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Il est également possible d’appliquer une racine carrée ou un
 logarithme pour redresser une courbe qui se tasse progressivement, ou
 d’utiliser un modèle quadratique pour modéliser une courbe plus complexe
@@ -3147,15 +3318,16 @@ d’utiliser un modèle quadratique pour modéliser une courbe plus complexe
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"checks"</span><span class="op">)</span>,</span>
 <span>        ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>checks <span class="op">=</span> <span class="fl">0</span><span class="op">)</span>, multiplier <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>checks <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>, stats <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -3255,17 +3427,18 @@ per 1, at 0
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Une régression mesure tout écart <em>depuis</em> quelque part, et la
 ligne <code>Constant</code> nous dit depuis où : le <strong>profil de
 référence</strong>, c’est-à-dire la personne qui a la modalité de
@@ -3296,15 +3469,16 @@ citer.</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span><span class="op">)</span>, empirical <span class="op">=</span> <span class="cn">FALSE</span>, stats <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +2 more
+Logistic regression: released, by 4 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="1">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -3454,12 +3628,13 @@ category).<br>OR ≥ <span class="p1" style="font-weight:bold;">1,2</span>
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence) or under the first colour threshold
 (×1,2).<br>***: significantly different from the reference category (in
-bold) at the 99% confidence level (from 1 for the Constant) ; **: at the
-95% level ; *: at the 90% level ; no star: not significant.
+bold) at the 99,9% confidence level (from 1 for the Constant) ; **: at
+the 99% level ; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Et dès qu’une variable numérique figure parmi les prédicteurs, ce
 compte disparaît, comme dans le tableau juste au-dessus : le profil se
 tient à une valeur exacte d’une variable continue, et la plupart du
@@ -3626,15 +3801,16 @@ des <em>odds</em>.</p>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span>, stats<span class="op">=</span><span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -3737,7 +3913,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span>1/1.26<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
   1.01<span class="tx-sec">    (83%)</span>
@@ -3827,17 +4003,18 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <blockquote>
 <p>Toutes les autres variables choisies étant égales, les personnes
 noires interpellées ont eu <strong>1,48 fois plus de chances</strong> de
@@ -3857,15 +4034,16 @@ plus souvent » :</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span>,</span>
 <span>        measure <span class="op">=</span> <span class="st">"ratio"</span>, stats<span class="op">=</span><span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -3969,7 +4147,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span>÷1.04<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span>÷1.04<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
 ×1.00<span class="tx-sec">    (83%)</span>
@@ -4059,17 +4237,18 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression; mRR: marginal risk ratio (the ratio of
 adjusted proportions, sample-averaged); obs%: observed proportion; adj%:
-adjusted/predicted proportion.<br>Obs_RR, Model_mRR — RR ≥ <span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; RR ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,25</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>. Uncoloured: not significantly
+adjusted/predicted proportion.<br><b>Obs_RR, Model_mRR</b> — RR ≥ <span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; RR ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,25</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 risk-ratio, 95% confidence; matching Katz interval on the observed
 column) or under the first colour threshold (×1,1).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <blockquote>
 <p>Entre personnes de même sexe, de même situation d’emploi, de même
 nationalité et de mêmes antécédents, les personnes noires ont été
@@ -4085,15 +4264,16 @@ catégorie rare que lorsqu’on prend la catégorie fréquente.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span>,</span>
 <span>        measure <span class="op">=</span> <span class="st">"ratio"</span>, stats<span class="op">=</span><span class="cn">NULL</span>, outcome_level <span class="op">=</span> <span class="st">"No"</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: No
+released: No
 </th>
 </tr>
 <tr>
@@ -4287,17 +4467,18 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression; mRR: marginal risk ratio (the ratio of
 adjusted proportions, sample-averaged); obs%: observed proportion; adj%:
-adjusted/predicted proportion.<br>Obs_RR, Model_mRR — RR ≥ <span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; RR ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,25</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>. Uncoloured: not significantly
+adjusted/predicted proportion.<br><b>Obs_RR, Model_mRR</b> — RR ≥ <span class="p1" style="font-weight:bold;">×1,1</span> ; <span class="p2" style="font-weight:bold;">×1,2</span> ; <span class="p3" style="font-weight:bold;">×1,5</span> ; <span class="p4" style="font-weight:bold;">×2</span> ; RR ≤ <span class="m1" style="font-weight:bold;">÷1,1</span> ; <span class="m2" style="font-weight:bold;">÷1,25</span> ; <span class="m3" style="font-weight:bold;">÷2</span> ; <span class="m4" style="font-weight:bold;">÷4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 risk-ratio, 95% confidence; matching Katz interval on the observed
 column) or under the first colour threshold (×1,1).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><strong>La différence marginale, en points de pourcentage</strong> —
 <code>measure = "difference"</code>. La plus utile de toutes, le plus
 souvent, parce que le point est l’unité dans laquelle beaucoup de gens
@@ -4306,15 +4487,16 @@ pensent déjà.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span>,</span>
 <span>        measure <span class="op">=</span> <span class="st">"difference"</span>, stats<span class="op">=</span><span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -4418,7 +4600,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span> -3.1%<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span> -3.1%<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
  +0.1%<span class="tx-sec">    (83%)</span>
@@ -4508,17 +4690,18 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression; mRD: marginal risk difference (on adjusted
 proportions, in percentage points, sample-averaged); obs%: observed
-proportion; adj%: adjusted/predicted proportion.<br>Obs_RD, Model_mRD —
-RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+proportion; adj%: adjusted/predicted proportion.<br><b>Obs_RD,
+Model_mRD</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <blockquote>
 <p>Entre personnes de même sexe, de même situation d’emploi, de même
 nationalité et de mêmes antécédents, les personnes noires ont été
@@ -4557,7 +4740,7 @@ marginal</strong> — et il faut prendre garde à un faux ami : en
 sociologie française, à la suite de Philippe Cibois, « effet marginal »
 désigne souvent un effet <em>exprimé en points de pourcentage</em>.
 Originellement, le mot veut dire <strong>moyenné sur
-l’échantillon</strong>, et vaut pour un rapport aussi bien qu’une
+l’échantillon</strong>, et vaut pour un ratio aussi bien qu’une
 différence. On dira donc aussi bien <em>effet moyenné</em> ou <em>effet
 moyenné sur l’échantillon</em>, qui ont l’avantage de dire ce qu’ils
 font.</p>
@@ -4793,7 +4976,7 @@ ci-dessous est un résultat réel commenté quelque part dans cet article
 mises en garde à vue à Toronto, nous avons vu que l’effet de la couleur
 de peau perdait environ la moitié de sa taille. Une partie de ce qui
 ressemblait à un effet direct de la race assignée était l’emploi, la
-nationalité canadienne et les antécédents dans les rapports avec la
+nationalité canadienne et les antécédents dans les relations avec la
 police (tous conséquences, d’une certaine manière, d’une certaine
 dimension du racisme structurel). Mais l’autre moitié, celle qui tient,
 pourrait <em>aussi</em> s’expliquer par une forme de racisation plus
@@ -4808,15 +4991,16 @@ choisies, l’effet se dissipe totalement :</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"released"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span>, <span class="st">"checks"</span><span class="op">)</span>,</span>
 <span>        measure <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-released: Yes
+released: Yes
 </th>
 </tr>
 <tr>
@@ -4920,7 +5104,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num g1">
-<span class="tx-sec">(83%) </span> -3.1%<span class="tx-sec">*  </span>
+<span class="tx-sec">(83%) </span> -3.1%<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
  +0.1%<span class="tx-sec">    (83%)</span>
@@ -5109,17 +5293,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; mRD: marginal risk difference (on adjusted
 proportions, in percentage points, sample-averaged); obs%: observed
-proportion; adj%: adjusted/predicted proportion.<br>Obs_RD, Model_mRD —
-RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+proportion; adj%: adjusted/predicted proportion.<br><b>Obs_RD,
+Model_mRD</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>La ligne <code>sex</code> passe de <code>-3.1 %*</code> à
 <code>+0.1 %</code>. Lire cela avec soin, car c’est là qu’on en dit
 souvent trop : cela ne dit pas que les hommes et les femmes ont été
@@ -5151,6 +5336,7 @@ de passer une <strong>liste nommée</strong> au lieu d’un vecteur :</p>
 <div class="tabxplor-caption">
 Logistic regressions (models comparison): released, ‘Yes’ (mRD)
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5289,7 +5475,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num tx-br g1">
--3.1%<span class="tx-sec">*  </span>
+-3.1%<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
 </td>
@@ -5408,17 +5594,18 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression of released (‘Yes’); mRD: marginal risk
 difference (on adjusted proportions, in percentage points,
-sample-averaged).<br>Obs_RD, colour, + who they are, + prior record — RD
-≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+sample-averaged).<br><b>Obs_RD, colour, + who they are,
++ prior record</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Lire la ligne <code>colour</code> de gauche à droite : <strong>−11,7
 points → −7,8 → −5,2</strong>. La différence observée est à gauche.
 L’emploi et la nationalité canadienne rendent compte d’environ un tiers
@@ -5449,6 +5636,7 @@ risque observée »), en gras :</p>
 <div class="tabxplor-caption">
 Logistic regressions (models comparison): released, ‘Yes’ (mRD)
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5587,7 +5775,7 @@ Male
 4 783
 </td>
 <td class="tx-r tx-num tx-br tx-b">
-<span class="tx-sec" style="font-weight:normal;">(83%) </span> -3.1%<span class="tx-sec" style="font-weight:normal;">*  </span>
+<span class="tx-sec" style="font-weight:normal;">(83%) </span> -3.1%<span class="tx-sec" style="font-weight:normal;">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
 </td>
@@ -5706,26 +5894,27 @@ per 3.08 (2SD), at 1.64 (mean)
 <div class="tx-foot">
 Model: logistic regression of released (‘Yes’); mRD: marginal risk
 difference (on adjusted proportions, in percentage points,
-sample-averaged).<br>Obs_RD — The observed effect (the reference for the
-adjustment).<br>colour, + who they are, + prior record — RD further from
-no effect (0) than the observed column, by <span class="p1" style="font-weight:bold;">+0</span> ; <span class="p2" style="font-weight:bold;">+2</span> ; <span class="p3" style="font-weight:bold;">+5</span> ; <span class="p4" style="font-weight:bold;">+10</span> points ; RD closer to no effect (0)
+sample-averaged).<br><b>Obs_RD</b> — The observed effect (the reference
+for the adjustment).<br><b>colour, + who they are, + prior record</b> —
+RD further from no effect (0) than the observed column, by <span class="p1" style="font-weight:bold;">+0</span> ; <span class="p2" style="font-weight:bold;">+2</span> ; <span class="p3" style="font-weight:bold;">+5</span> ; <span class="p4" style="font-weight:bold;">+10</span> points ; RD closer to no effect (0)
 than the observed column (or inversed effect), by <span class="m1" style="font-weight:bold;">-0</span> ; <span class="m2" style="font-weight:bold;">-2</span> ; <span class="m3" style="font-weight:bold;">-5</span> ; <span class="m4" style="font-weight:bold;">-10</span> points. Uncoloured: not
 significantly different from the observed effect. Some rows carry no
 test and are left uncoloured.<br>***: significantly different from the
-reference category (in bold) at the 99% confidence level ; **: at the
-95% level ; *: at the 90% level ; no star: not significant.
+reference category (in bold) at the 99,9% confidence level ; **: at the
+99% level ; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Les nuances du jaune au rouge disent que l’ajustement a ramené
 l’écart <strong>plus près de la valeur nulle</strong> (0 = « aucun effet
 »), voire parfois qu’il en a <strong>inversé le sens</strong> (par
-exemple, on passe d’un écart négatif à un écart positif). Pour un
-rapport ou un <strong>odds ratio</strong> la valeur nulle est 1, et
-inverser l’effet consisterait à passer de « A a <em>moins</em> de
-chances de X que B » (<code>÷</code>) à « A a <em>plus</em> de chances
-de X que B » (<code>×</code>).</p>
+exemple, on passe d’un écart négatif à un écart positif). Pour un ratio
+ou un <strong>odds ratio</strong> la valeur nulle est 1, et inverser
+l’effet consisterait à passer de « A a <em>moins</em> de chances de X
+que B » (<code>÷</code>) à « A a <em>plus</em> de chances de X que B »
+(<code>×</code>).</p>
 <p>Des bleus de plus en plus foncés diraient, pour leur part, que
 l’ajustement a poussé l’écart <strong>plus loin de la valeur
 nulle</strong> (0 = « aucun effet ») : si la différence observée était
@@ -5764,11 +5953,11 @@ Il ne compte qu'une seule fois, et cela vaut d'être vu, parce que les deux écr
 
 
 `link` est l'écart que chaque modèle estime — le mot que prend `link =` — et `fit` est l'appel R qui a
-tourné : un `glm()` logistique ordinaire pour le premier, dont le rapport vient des prédictions,
-contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le rapport directement et
+tourné : un `glm()` logistique ordinaire pour le premier, dont le ratio vient des prédictions,
+contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le ratio directement et
 prend des erreurs-types robustes (Huber-White), cette vraisemblance étant délibérément la mauvaise.
 
-**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur un modèle Poisson modifié publié. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html). 
+**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même ratio vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur un modèle Poisson modifié publié. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html). 
 -->
 </div>
 </div>
@@ -5791,6 +5980,7 @@ que nous avons mesurées et choisies.</p>
 <div class="tabxplor-caption">
 Logistic regressions (models comparison): released, ‘Yes’ (mRD)
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6119,17 +6309,18 @@ LR vs previous
 <div class="tx-foot">
 Model: logistic regression of released (‘Yes’); mRD: marginal risk
 difference (on adjusted proportions, in percentage points,
-sample-averaged).<br>Obs_RD, sans les antécédents, avec les antécédents
-— RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+sample-averaged).<br><b>Obs_RD, sans les antécédents,
+avec les antécédents</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Le même écart de comportement des policiers en fonction de la couleur
 de peau des personnes arrêtées vaut <strong>−5,2 points</strong> dans
 une colonne et <strong>−7,9</strong> dans l’autre. Les deux sont «
@@ -6155,6 +6346,7 @@ antécédents policiers sont-ils eux-mêmes structurés par le groupe
 ethnique ?</strong></p>
 <div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="va">colour</span>, <span class="va">checks</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6213,12 +6405,14 @@ Standardized mean difference : cell ≥ the reference category (in bold)
 </td>
 </tr></tfoot>
 </table>
+</div>
 <div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_arrests</span>, <span class="st">"checks"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"colour"</span>, <span class="st">"sex"</span>, <span class="st">"employed"</span>, <span class="st">"citizen"</span><span class="op">)</span>,</span>
 <span>        family <span class="op">=</span> <span class="st">"binomial"</span>, trials <span class="op">=</span> <span class="fl">6</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: checks by colour, sex +2 more
+Logistic regression: checks, by 4 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6394,7 +6588,7 @@ No
 <span class="tx-sec">(1.8) </span>1.13<span class="tx-sec">***</span>
 </td>
 <td class="tx-r tx-num tx-br g1">
-1/1.09<span class="tx-sec">*   (1.6)</span>
+1/1.09<span class="tx-sec">    (1.6)</span>
 </td>
 </tr>
 <tr class="tx-bt2">
@@ -6514,17 +6708,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Les personnes noires interpellées figurent en moyenne dans
 <strong>2,1 fichiers contre 1,5</strong> pour les personnes blanches
 interpellées, et le motif survit à l’ajustement sur le sexe, l’emploi et
@@ -6566,6 +6761,7 @@ même piège est celle qu’on entend chaque année dans la presse : «
 <div class="tabxplor-caption">
 Linear regressions (models comparison): salary (diff)
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6614,7 +6810,7 @@ Reference profile
 39
 </td>
 <td class="tx-r tx-num tx-br tx-b">
-101 002<span class="tx-sec" style="font-weight:normal;">   </span>
+101 002<span class="tx-sec" style="font-weight:normal;">  </span>
 </td>
 <td class="tx-r tx-num tx-br tx-b">
 99 019<span class="tx-sec" style="font-weight:normal;">   </span>
@@ -6634,7 +6830,7 @@ Female
 39
 </td>
 <td class="tx-r tx-num tx-br tx-b">
-0<span class="tx-sec" style="font-weight:normal;">   </span>
+0<span class="tx-sec" style="font-weight:normal;">  </span>
 </td>
 <td class="tx-r tx-num tx-br tx-b">
 0<span class="tx-sec" style="font-weight:normal;">   </span>
@@ -6651,10 +6847,10 @@ Male
 358
 </td>
 <td class="tx-r tx-num tx-br p3 tx-b">
-+14 088<span class="tx-sec" style="font-weight:normal;">***</span>
++14 088<span class="tx-sec" style="font-weight:normal;">**</span>
 </td>
 <td class="tx-r tx-num tx-br g1">
-+8 423<span class="tx-sec">*  </span>
++8 423<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num tx-br g1">
 +4 771<span class="tx-sec">   </span>
@@ -6914,13 +7110,14 @@ Model: linear regression of salary; diff: mean difference (vs the
 reference category).<br>diff ≥ <span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; diff ≤ <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD. Uncoloured: not significantly
 different from the reference category (Wald interval, 95% confidence) or
 under the first colour threshold (±0,1 SD).<br>***: significantly
-different from the reference category (in bold) at the 99% confidence
-level ; **: at the 95% level ; *: at the 90% level ; no star: not
+different from the reference category (in bold) at the 99,9% confidence
+level ; **: at the 99% level ; *: at the 95% level ; no star: not
 significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>L’écart brut est de 14 088 $ en faveur des hommes. Ajouter la
 discipline et l’ancienneté le ramène à 8 423 $ ; ajouter le grade
 universitaire, professeur assistant, professeur associé ou professeur,
@@ -6933,6 +7130,7 @@ que tout à l’heure :</p>
 <div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">car_salaries</span>, <span class="va">sex</span>, <span class="va">is_prof</span>, pct <span class="op">=</span> <span class="st">"row"</span>, </span>
 <span>    color <span class="op">=</span> <span class="st">"difference"</span>, ref <span class="op">=</span> <span class="fl">1</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7025,6 +7223,7 @@ points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><strong>46 % des femmes ont le grade de professeures, contre 69 % des
 hommes.</strong> Si la promotion est elle-même inégale, alors contrôler
 par le grade revient à comparer les femmes aux hommes promus au même
@@ -7040,8 +7239,9 @@ soit nul. Afficher l’intervalle de confiance permet de le voir :</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">car_salaries</span>, <span class="st">"salary"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sex"</span>, <span class="st">"discipline"</span>, <span class="st">"yrs.service"</span>, <span class="st">"rank"</span><span class="op">)</span>,</span>
 <span>        family <span class="op">=</span> <span class="st">"gaussian"</span>, display <span class="op">=</span> <span class="st">"est_ci"</span>, empirical <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Linear regression: salary by sex, discipline +2 more
+Linear regression: salary, by 4 predictors
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7277,13 +7477,14 @@ Model: linear regression; diff: mean difference (vs the reference
 category).<br>diff ≥ <span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; diff ≤ <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD. Uncoloured: not significantly
 different from the reference category (Wald interval, 95% confidence) or
 under the first colour threshold (±0,1 SD).<br>***: significantly
-different from the reference category (in bold) at the 99% confidence
-level ; **: at the 95% level ; *: at the 90% level ; no star: not
+different from the reference category (in bold) at the 99,9% confidence
+level ; **: at the 99% level ; *: at the 95% level ; no star: not
 significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>L’écart est compatible avec tous les scénarios possibles, depuis 2
 853 $ en faveur des femmes jusqu’à 12 396 $ en faveur des hommes. Ce
 n’est pas « aucune différence » : c’est un échantillon trop petit pour
@@ -7306,6 +7507,7 @@ admissions en master à l’Université de Berkeley, publié dans
 <em>Science</em> en 1975 :</p>
 <div class="sourceCode" id="cb31"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">ucb</span>, <span class="va">Gender</span>, <span class="va">Admit</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7396,21 +7598,23 @@ confidence) or under the first colour threshold (±5 points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>45 % des hommes ont été admis contre 30 % des femmes — quatorze
 points d’écart, sur 4 526 candidatures. Maintenant, maintenons constants
 les départements de l’université :</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">ucb</span>, <span class="st">"Admit"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Gender"</span>, <span class="st">"Dept"</span><span class="op">)</span>, measure <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: Admit by Gender, Dept
+Logistic regression: Admit by Gender and Dept
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-Admit: Admitted
+Admit: Admitted
 </th>
 </tr>
 <tr>
@@ -7681,22 +7885,24 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; mRD: marginal risk difference (on adjusted
 proportions, in percentage points, sample-averaged); obs%: observed
-proportion; adj%: adjusted/predicted proportion.<br>Obs_RD, Model_mRD —
-RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+proportion; adj%: adjusted/predicted proportion.<br><b>Obs_RD,
+Model_mRD</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>−14,2 points deviennent +1,9*, et ce n’est plus significatif. Non pas
 réduit : <strong>inversé</strong>. Et le mécanisme est entièrement
 visible dans un tableau croisé, ce qui est bien tout l’intérêt :</p>
 <div class="sourceCode" id="cb33"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">ucb</span>, <span class="va">Gender</span>, <span class="va">Dept</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7842,6 +8048,7 @@ bold) <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" st
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Les deux lignes sont à lire en regard des taux d’admission des
 départements dans le tableau précédent (A 64 %, B 63 %, C 35 %, D 34 %,
 E 25 %, F 6 %). 31 % des hommes ont candidaté au département A, le plus
@@ -7880,15 +8087,16 @@ catégorie sociale :</p>
 <div class="sourceCode" id="cb34"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">questionr_hdv</span>, <span class="st">"cinema"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"qualif"</span>, <span class="st">"age"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-cinema: Oui
+cinema: Oui
 </th>
 </tr>
 <tr>
@@ -8030,7 +8238,7 @@ Autre
 58
 </td>
 <td class="tx-r tx-num m3 tx-b">
-<span class="tx-sec" style="font-weight:normal;">(47%) </span>1/2.17<span class="tx-sec" style="font-weight:normal;">***</span>
+<span class="tx-sec" style="font-weight:normal;">(47%) </span>1/2.17<span class="tx-sec" style="font-weight:normal;">** </span>
 </td>
 <td class="tx-r tx-num tx-br m3 tx-b">
  1/3.12<span class="tx-sec" style="font-weight:normal;">*** (44%)</span>
@@ -8157,17 +8365,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; OR: odds ratio (vs the reference category);
 obs%: observed proportion; adj%: adjusted/predicted
-proportion.<br>Obs_OR, Model_OR — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
+proportion.<br><b>Obs_OR, Model_OR</b> — OR ≥ <span class="p1" style="font-weight:bold;">1,2</span> ; <span class="p2" style="font-weight:bold;">1,5</span> ; <span class="p3" style="font-weight:bold;">2</span> ; <span class="p4" style="font-weight:bold;">4</span> ; OR ≤ <span class="m1" style="font-weight:bold;">1/1,2</span> ; <span class="m2" style="font-weight:bold;">1/1,5</span> ; <span class="m3" style="font-weight:bold;">1/2</span> ; <span class="m4" style="font-weight:bold;">1/4</span>. Uncoloured: not significantly
 different from the reference category (Wald interval on the log
 odds-ratio, 95% confidence; matching Woolf interval on the observed
 column) or under the first colour threshold (×1,2).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level (from 1 for the Constant) ; **: at the 95% level ; *:
-at the 90% level ; no star: not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level (from 1 for the Constant) ; **: at the 99% level
+; *: at the 95% level ; no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>65 % des cadres vont au cinéma, contre 22 % des ouvrier·es
 spécialisé·es : un écart de classe considérable et parfaitement
 bourdieusien. Or le rapport de cotes <em>grandit</em> quand on ajuste
@@ -8178,6 +8387,7 @@ de classe, ce qui serait un résultat intéressant.</p>
 <div class="sourceCode" id="cb35"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">questionr_hdv</span>, <span class="va">qualif</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">cinema</span>, <span class="va">age</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, na <span class="op">=</span> <span class="st">"drop_all"</span>, </span>
 <span>    color <span class="op">=</span> <span class="st">"difference"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -8364,14 +8574,15 @@ Total
 <tfoot><tr>
 <td colspan="5">
 <div class="tx-foot">
-cinema — Percentage points (risk) difference : cell ≥ the reference
-category (in bold) <span class="p1" style="font-weight:bold;">+5</span>
-; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; cell ≤ ref <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points.<br>age — Standardized mean
-difference : cell ≥ the reference category (in bold) <span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; cell ≤ ref <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD.
+<b>cinema</b> — Percentage points (risk) difference : cell ≥ the
+reference category (in bold) <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; cell ≤ ref <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points.<br><b>age</b> —
+Standardized mean difference : cell ≥ the reference category (in bold)
+<span class="p1" style="font-weight:bold;">+0,1</span> ; <span class="p2" style="font-weight:bold;">+0,2</span> ; <span class="p3" style="font-weight:bold;">+0,4</span> ; <span class="p4" style="font-weight:bold;">+0,8</span> SD ; cell ≤ ref <span class="m1" style="font-weight:bold;">-0,1</span> ; <span class="m2" style="font-weight:bold;">-0,2</span> ; <span class="m3" style="font-weight:bold;">-0,4</span> ; <span class="m4" style="font-weight:bold;">-0,8</span> SD.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Les catégories ont <strong>toutes le même âge moyen</strong>, entre
 46 et 50 ans, et la dispersion des réponses y est proche (coefficient de
 variation entre 28 et 37 % – l’écart-type divisé par la moyenne). Il
@@ -8379,7 +8590,7 @@ semble donc douteux que l’âge explique quoi que ce soit. D’où vient
 alors l’écart supplémentaire ?</p>
 <p>Le coupable est le rapport de cotes lui-même. <strong>Un rapport de
 cotes se déplace dès qu’on ajoute au modèle n’importe quel prédicteur
-fort de la variable à expliquer, même sans le moindre rapport avec la
+fort de la variable à expliquer, même sans le moindre lien avec la
 variable qui nous intéresse.</strong> Cette propriété porte un nom, la
 non-collapsibilité, et elle relève de l’arithmétique. L’avertissement de
 Carina Mood aux sociologues est exactement celui-là : pour cette raison,
@@ -8392,15 +8603,16 @@ pourcentages :</p>
 <div class="sourceCode" id="cb36"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab_reg.html">tab_reg</a></span><span class="op">(</span><span class="va">questionr_hdv</span>, <span class="st">"cinema"</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"qualif"</span>, <span class="st">"age"</span><span class="op">)</span>, measure <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
 <div class="tabxplor-caption">
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="3">
 </th>
 <th class="tx-span" colspan="2">
-cinema: Oui
+cinema: Oui
 </th>
 </tr>
 <tr>
@@ -8543,7 +8755,7 @@ Autre
 58
 </td>
 <td class="tx-r tx-num m2 tx-b">
-<span class="tx-sec" style="font-weight:normal;">(47%) </span>-18.8%<span class="tx-sec" style="font-weight:normal;">***</span>
+<span class="tx-sec" style="font-weight:normal;">(47%) </span>-18.8%<span class="tx-sec" style="font-weight:normal;">** </span>
 </td>
 <td class="tx-r tx-num tx-br m3 tx-b">
 -22.6%<span class="tx-sec" style="font-weight:normal;">*** (44%)</span>
@@ -8670,17 +8882,18 @@ BIC
 <div class="tx-foot">
 Model: logistic regression; mRD: marginal risk difference (on adjusted
 proportions, in percentage points, sample-averaged); obs%: observed
-proportion; adj%: adjusted/predicted proportion.<br>Obs_RD, Model_mRD —
-RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
+proportion; adj%: adjusted/predicted proportion.<br><b>Obs_RD,
+Model_mRD</b> — RD ≥ <span class="p1" style="font-weight:bold;">+5</span> ; <span class="p2" style="font-weight:bold;">+10</span> ; <span class="p3" style="font-weight:bold;">+20</span> ; <span class="p4" style="font-weight:bold;">+30</span> points ; RD ≤ <span class="m1" style="font-weight:bold;">-5</span> ; <span class="m2" style="font-weight:bold;">-10</span> ; <span class="m3" style="font-weight:bold;">-20</span> ; <span class="m4" style="font-weight:bold;">-30</span> points. Uncoloured: not
 significantly different from the reference category (Wald interval, 95%
 confidence) or under the first colour threshold (±5 points).<br>***:
-significantly different from the reference category (in bold) at the 99%
-confidence level ; **: at the 95% level ; *: at the 90% level ; no star:
-not significant.
+significantly different from the reference category (in bold) at the
+99,9% confidence level ; **: at the 99% level ; *: at the 95% level ; no
+star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <table class="table">
 <thead><tr class="header">
 <th align="left">ouvrier·es spécialisé·es vs cadres</th>

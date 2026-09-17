@@ -331,7 +331,7 @@ family of model works natively on one particular measure of deviation**.
 | — | a choice among 3+ options | `multinomial` | an odds ratio — one column per option |
 | — | a choice among ordered options | `ordinal` | one odds ratio shared by every cut of the scale |
 | numeric | a continuous quantity (money, age, …) | `gaussian` | a difference of means |
-| — | a count (hours of `x`, number of `x`) | `poisson` | a rate ratio — “1.4 times more `x` per day” |
+| — | a count (hours of `x`, number of `x`) | `poisson` | a ratio of means — “1.4 times more `x` per day” |
 | — | a score counting yes/no items | `binomial` | an odds ratio |
 
 For a categorical variable — a `factor` in R’s sense — the exact model
@@ -366,7 +366,7 @@ different shape:
 
 - **as a count** — all the other chosen variables being equal, black
   arrestees appear in **1.35 times as many** databases as white
-  arrestees (a rate ratio, IRR);
+  arrestees (a ratio of means, `RoM`);
 - **as a score out of six** — for **any one database**, their odds of
   being on it rather than not are **1.55 times higher** (an odds ratio);
 - **as a continuous quantity** — they appear in **0.5 more databases**
@@ -395,8 +395,8 @@ car_arrests |>
          )
 ```
 
-Regression models: checks_gaussian, checks_poisson +1 more by colour,
-employed +1 more
+Regression models: checks_gaussian, checks_poisson and checks_binomial
+by colour, employed and citizen
 
 [TABLE]
 
@@ -431,9 +431,9 @@ reg_measures(car_arrests, "checks")
 #>  5 binomial (any)      difference marginal|at_reference Model_mRD   marginal ri…
 #>  6 binomial (any)      ratio      marginal|at_reference Model_mRR   marginal ri…
 #>  7 binomial (any)      odds_ratio marginal|at_reference Model_mOR   marginal od…
-#>  8 poisson  ratio      ratio      conditional           Model_IRR   incidence-r…
+#>  8 poisson  ratio      ratio      conditional           Model_RoM   ratio of me…
 #>  9 poisson  (any)      difference marginal|at_reference Model_mdiff marginal me…
-#> 10 poisson  (any)      ratio      marginal|at_reference Model_mIRR  marginal in…
+#> 10 poisson  (any)      ratio      marginal|at_reference Model_mRoM  marginal ra…
 ```
 
 Every family comes with its own default `link`, its preferred way of
@@ -479,7 +479,7 @@ model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citize
 model
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -499,10 +499,10 @@ approximation of the cross-table or a summary of it: it *is* the
 cross-table — the odds ratio computed directly on the observed
 percentages, printed next to the model. The stars were added to say in
 so many words what the greying already encodes: a level with no star at
-all is not significantly different from its reference level, even at the
-90 % confidence level the lowest star marks. (The two ladders are not
-the same one: the stars run 90 / 95 / 99 %, while the greying is decided
-at 95 %.)
+all is not significantly different from its reference level. The lowest
+star marks the 95 % confidence level, which is where the greying is
+decided too, so a greyed cell never carries a star; the two above it, 99
+% and 99.9 %, say how much further the interval clears the reference.
 
 That is what makes the comparison fair, and it is worth stating as a
 rule: **in tabxplor, the observed deviation is always the same quantity
@@ -536,7 +536,7 @@ more. Section 5 is about reading it.
 model
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -606,7 +606,7 @@ change.
 tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -635,7 +635,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"),
         empirical = FALSE, stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -666,7 +666,7 @@ stop treating the variable as a number and cut it into categories.
 tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -690,7 +690,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"),
         ref = c(checks = 0), multiplier = c(checks = 1), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -722,7 +722,7 @@ it.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
 ```
 
-Logistic regression: released by colour, sex +2 more
+Logistic regression: released, by 4 predictors
 
 [TABLE]
 
@@ -817,7 +817,7 @@ odds. Comparable with the published literature, hard to say aloud.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -839,7 +839,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "ratio", stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -858,7 +858,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "ratio", stats=NULL, outcome_level = "No")
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -872,7 +872,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "difference", stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -1050,7 +1050,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "difference", stats = NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -1205,7 +1205,7 @@ tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
         family = "binomial", trials = 6)
 ```
 
-Logistic regression: checks by colour, sex +2 more
+Logistic regression: checks, by 4 predictors
 
 [TABLE]
 
@@ -1287,7 +1287,7 @@ tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
-Linear regression: salary by sex, discipline +2 more
+Linear regression: salary, by 4 predictors
 
 [TABLE]
 
@@ -1326,7 +1326,7 @@ university equal:
 tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
 ```
 
-Logistic regression: Admit by Gender, Dept
+Logistic regression: Admit by Gender and Dept
 
 [TABLE]
 
@@ -1381,7 +1381,7 @@ Cross it with social class:
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
 ```
 
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 
 [TABLE]
 
@@ -1422,7 +1422,7 @@ that does not have the problem:
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
 ```
 
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 
 [TABLE]
 

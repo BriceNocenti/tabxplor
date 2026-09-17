@@ -2,7 +2,7 @@
 
 Fits one regression model per column and returns a `tabxplor` table of
 the per-family effect measure — a linear **mean difference** (gaussian),
-**odds ratios** (binomial), **incidence-rate ratios** (poisson), one
+**odds ratios** (binomial), **ratios of means** (poisson counts), one
 **odds-ratio column per outcome category** (nominal 3+ level), a
 **cumulative odds ratio** (ordinal) — one row per predictor level,
 grouped by predictor, with the **observed (crude)** effect beside each
@@ -165,10 +165,10 @@ tab_reg(
 
   - `"odds_ratio"` (`"OR"`) — the odds of the outcome, times what.
 
-  - `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) — how many times as likely, as
-    frequent, as large. Reach for it when the outcome is **common**,
-    where an odds ratio is far from the risk ratio people hear in it,
-    and because a risk ratio stays comparable across nested models.
+  - `"ratio"` (`"RR"`, `"RoM"`) — how many times as likely, as frequent,
+    as large. Reach for it when the outcome is **common**, where an odds
+    ratio is far from the risk ratio people hear in it, and because a
+    risk ratio stays comparable across nested models.
 
   - `"difference"` (`"RD"`, `"diff"`) — how much more, in the outcome's
     own units.
@@ -545,8 +545,9 @@ vignette](https://bricenocenti.github.io/tabxplor/articles/tabxplor-reg.html)
 New to regressions with tabxplor? A first model needs three arguments:
 `data`, `outcome` and `predictors`. The model follows the outcome's type
 — a two-level factor gives logistic **odds ratios**, a numeric a linear
-**mean difference**, a count Poisson **rate ratios**, a 3+ level factor
-multinomial or ordinal odds ratios — so you rarely set `family` by hand.
+**mean difference**, a count Poisson **ratios of means**, a 3+ level
+factor multinomial or ordinal odds ratios — so you rarely set `family`
+by hand.
 
 **The estimand is a cascade**: `family` -\> `link` -\> `measure` -\>
 `effect`, where `"auto"` means *follow from the left*. `family` says
@@ -601,9 +602,7 @@ measure alone (`Obs_RR`).
 
 - `RD` — risk difference (binomial, multinomial)
 
-- `IRR` — incidence-rate ratio (poisson)
-
-- `RoM` — ratio of means (gaussian)
+- `RoM` — ratio of means (gaussian, poisson)
 
 - `diff` — mean difference (gaussian, poisson)
 
@@ -677,7 +676,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"))
 #> 4 checks   per 3.08 (2SD), at 1.64 (mean)             1/3.71*** 1/3.47***      
 #> # Model: logistic regression; OR: odds ratio (vs the reference category); obs%: observed proportion; adj%: adjusted/predicted proportion.
 #> # Obs_OR, Model_OR: OR (ref.): 1/4 1/2 1/1.5 1/1.2 1.2 1.5 2 4 [grey: non-significant or under ×1.2]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level (from 1 for the Constant); **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level (from 1 for the Constant); **: at the 99% level; *: at the 95% level; no star: not significant.
 
 # \donttest{
 # Linear: a mean difference in dollars.
@@ -701,19 +700,19 @@ tab_reg(car_salaries, "salary", c("sex", "discipline", "rank"))
 #> 1 Constant   Reference profile   6                                 68 224   
 #> 
 #> 2 sex        Female             39 (101 002)       0          0    (109 656)
-#> 3 sex        Male              358 (115 090) +14 088***  +4 492    (114 148)
+#> 3 sex        Male              358 (115 090) +14 088**   +4 492    (114 148)
 #> 
 #> 4 discipline A                 181 (108 548)       0          0    (106 248)
-#> 5 discipline B                 216 (118 029)  +9 480*** +13 709*** (119 957)
+#> 5 discipline B                 216 (118 029)  +9 480**  +13 709*** (119 957)
 #> 
 #> 6 rank       AsstProf           67 ( 80 776)       0          0    ( 79 733)
-#> 7 rank       AssocProf          64 ( 93 876) +13 100*** +13 723*** ( 93 456)
+#> 7 rank       AssocProf          64 ( 93 876) +13 100**  +13 723*** ( 93 456)
 #> 8 rank       Prof              266 (126 772) +45 996*** +47 403*** (127 136)
 #> # Model: linear regression; diff: mean difference (vs the reference category); obs mean: observed mean; adj mean: adjusted/predicted mean.
 #> # Obs_diff, Model_diff: diff in SD (ref.): -0.8 -0.4 -0.2 -0.1 +0.1 +0.2 +0.4 +0.8 [grey: non-significant or under ±0.1 SD]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 
-# A count outcome: incidence-rate ratios.
+# A count outcome: ratios of mean counts.
 tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 #> | predictors       | Model fit                    | checks |
 #> |:-----------------|:-----------------------------|-------:|
@@ -730,7 +729,7 @@ tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 #> # A tabxplor tab: 5 × 5
 #> # Outcome:        checks
 #> # Groups:         var [3]
-#>   var      levels                n            Obs_IRR          Model_IRR
+#>   var      levels                n            Obs_RoM          Model_RoM
 #>                                <n> <(obs mean) ratio> <ratio (adj mean)>
 #> 1 Constant Reference profile 3 200                                1.3   
 #> 
@@ -739,9 +738,9 @@ tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 #> 
 #> 4 employed Yes               4 111     (1.4)     1            1    (1.5)
 #> 5 employed No                1 115     (2.4) ×1.63***     ×1.57*** (2.3)
-#> # Model: Poisson regression; IRR: incidence-rate ratio (vs the reference category); obs mean: observed mean; adj mean: adjusted/predicted mean.
-#> # Obs_IRR, Model_IRR: IRR (ref.): ÷4 ÷2 ÷1.15 ×1.15 ×2 ×4 [grey: non-significant or under ×1.15]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # Model: Poisson regression; RoM: ratio of means (vs the reference category); obs mean: observed mean; adj mean: adjusted/predicted mean.
+#> # Obs_RoM, Model_RoM: RoM (ref.): ÷4 ÷2 ÷1.15 ×1.15 ×2 ×4 [grey: non-significant or under ×1.15]
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 
 # `measure` reports another measure WITHOUT changing the model: a MARGINAL risk ratio,
 # averaged over the sample, still from the logistic fit.
@@ -770,7 +769,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"), measure = "ratio")
 #> 4 checks   per 3.08 (2SD), at 1.64 (mean)             ÷1.40*** ÷1.36***      
 #> # Model: logistic regression; mRR: marginal risk ratio (the ratio of adjusted proportions, sample-averaged); obs%: observed proportion; adj%: adjusted/predicted proportion.
 #> # Obs_RR, Model_mRR: RR (ref.): ×2 [grey: non-significant or under ×2]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 
 # `link` changes the model: the CONDITIONAL risk ratio of a modified-Poisson fit.
 tab_reg(car_arrests, "released", c("colour", "checks"), link = "ratio")
@@ -795,7 +794,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"), link = "ratio")
 #> 4 checks   per 3.08 (2SD), at 1.64 (mean)             ÷1.26*** ÷1.24***      
 #> # Model: modified Poisson regression; RR: risk ratio (vs the reference category); obs%: observed proportion; adj%: adjusted/predicted proportion.
 #> # Obs_RR, Model_RR: RR (ref.): ×2 [grey: non-significant or under ×2]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 
 # A named list of predictor sets: one column per model, compared in the footer.
 tab_reg(car_salaries, "salary",
@@ -818,22 +817,22 @@ tab_reg(car_salaries, "salary",
 #> # A tabxplor tab: 8 × 6
 #> # Outcome:        salary
 #> # Groups:         var [4]
-#>   var        levels                    n `sex alone`  `+ field`   `+ rank`
-#>                                <n_range>      <diff>     <diff>     <diff>
-#> 1 Constant   Reference profile      6-39  101 002     95 914     68 224   
+#>   var        levels                    n `sex alone` `+ field`   `+ rank`
+#>                                <n_range>      <diff>    <diff>     <diff>
+#> 1 Constant   Reference profile      6-39   101 002    95 914    68 224   
 #> 
-#> 2 sex        Female                   39        0          0          0   
-#> 3 sex        Male                    358  +14 088*** +14 029***  +4 492   
+#> 2 sex        Female                   39         0         0         0   
+#> 3 sex        Male                    358   +14 088** +14 029**  +4 492   
 #> 
-#> 4 discipline A                       181                   0          0   
-#> 5 discipline B                       216              +9 449*** +13 709***
+#> 4 discipline A                       181                   0         0   
+#> 5 discipline B                       216              +9 449** +13 709***
 #> 
-#> 6 rank       AsstProf                 67                              0   
-#> 7 rank       AssocProf                64                        +13 723***
-#> 8 rank       Prof                    266                        +47 403***
+#> 6 rank       AsstProf                 67                             0   
+#> 7 rank       AssocProf                64                       +13 723***
+#> 8 rank       Prof                    266                       +47 403***
 #> # Model: linear regression of salary; diff: mean difference (vs the reference category).
 #> # diff in SD (ref.): -0.8 -0.4 -0.2 -0.1 +0.1 +0.2 +0.4 +0.8 [grey: non-significant or under ±0.1 SD]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 
 # A continuous predictor cut into groups, on French survey data:
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"), shape = c(age = "quartiles"))
@@ -863,15 +862,15 @@ tab_reg(questionr_hdv, "cinema", c("qualif", "age"), shape = c(age = "quartiles"
 #>  5 qualif   Technicien                86 (43%) 1/2.50*** 1/3.73*** (40%)
 #>  6 qualif   Profession intermediaire 160 (46%) 1/2.25*** 1/2.76*** (47%)
 #>  7 qualif   Employe                  594 (44%) 1/2.39*** 1/3.40*** (42%)
-#>  8 qualif   Autre                     58 (47%) 1/2.17*** 1/3.28*** (43%)
+#>  8 qualif   Autre                     58 (47%) 1/2.17**  1/3.28*** (43%)
 #> 
 #>  9 age      18 to 34                 368 (62%)      1         1    (62%)
-#> 10 age      35 to 47                 457 (55%) 1/1.33**  1/1.43**  (54%)
+#> 10 age      35 to 47                 457 (55%) 1/1.33*   1/1.43*   (54%)
 #> 11 age      48 to 59                 432 (32%) 1/3.39*** 1/3.90*** (32%)
 #> 12 age      60 to 97                 396 (18%) 1/7.37*** 1/9.45*** (18%)
 #> # Model: logistic regression; OR: odds ratio (vs the reference category); obs%: observed proportion; adj%: adjusted/predicted proportion.
 #> # Obs_OR, Model_OR: OR (ref.): 1/4 1/2 1/1.5 1/1.2 1.2 1.5 2 4 [grey: non-significant or under ×1.2]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level (from 1 for the Constant); **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level (from 1 for the Constant); **: at the 99% level; *: at the 95% level; no star: not significant.
 # }
 options(.opt)
 ```

@@ -3,6 +3,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -12,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -98,7 +105,9 @@ or <code><a href="tab_plain.html">tab_plain</a></code>.</p></dd>
 
 
 <dt id="arg-subtext">subtext<a class="anchor" aria-label="anchor" href="#arg-subtext"></a></dt>
-<dd><p>A character vector to print legend lines under the table.</p></dd>
+<dd><p>The footer's text, as a template: one element per line, every
+<code>&lt;placeholder&gt;</code> <span class="pkg">tabxplor</span> generates and every line you write, in the order they print.
+See <code><a href="set_subtext.html">set_subtext</a></code>.</p></dd>
 
 
 <dt id="arg-test">test<a class="anchor" aria-label="anchor" href="#arg-test"></a></dt>
@@ -111,27 +120,17 @@ ANOVA F for mean columns), filled by <code><a href="tab_chi2.html">tab_chi2</a><
 
 
 <dt id="arg-meta">meta<a class="anchor" aria-label="anchor" href="#arg-meta"></a></dt>
-<dd><p>The table's metadata, as a single named list gathering (all optional, <code>NULL</code>
-when unset):</p><ul><li><p><code>render_extras</code> – display-only intent for the base count and the <code>add_pct</code>
-companion, <code>list(n =, add_pct =)</code>, materialised at print/export time from this attribute
-rather than baked into the table.</p></li>
-<li><p><code>spec</code> – the table's identity, <code>list(kind =, vars =, call =)</code>: its <code>kind</code>
-(<code>"crosstab"</code> or <code>"regression"</code>); <code>vars</code>, what no column can carry
-(<code>list(wt =, caption =, outcomes =, var_labels =)</code> – see <code><a href="set_caption.html">set_caption</a></code>), the rest of the
-variable model being derived from the declared index columns and from the columns' own
-<code>col_var</code>; and <code>call</code>, the producer's own recipe (a regression's model record –
-family, outcome, predictors, reference level, and the <code>fit_spec</code>
-<code><a href="reg_check_plots.html">reg_check_plots</a></code> refits from).</p></li>
-<li><p><code>empirical_tips</code> – multinomial crude-companion tooltip data (a <code>tibble</code> keyed by
-column, predictor and level), set by <code>tab_reg(empirical = TRUE)</code>.</p></li>
-<li><p><code>assumptions</code> – one record PER OUTCOME, keyed by it, each holding the observed curve
-of every continuous predictor (weighted quantile bins of the outcome on the family's link
-scale, one block per <code>tab_vars</code> group), set by <code><a href="tab_reg.html">tab_reg</a></code>: the data behind the
-sparkline – drawn in a continuous predictor's <code>n</code> cell, or in the shape table below the
-footer – and behind <code><a href="reg_check_plots.html">reg_check_plots</a></code>'s linearity panel.</p></li>
-<li><p><code>color_breaks</code> – a per-table override of the colour break scales (see
-<code><a href="set_color_palette.html">set_color_breaks</a></code>), merged over the global option at render time.</p></li>
-</ul><p><code>meta</code> sub-fields left <code>NULL</code> are dropped, so a table given nothing carries no attribute.</p></dd>
+<dd><p>The table's metadata, as a single named list gathering (all optional,
+<code>NULL</code> when unset):</p><ul><li><p><code>spec</code> — the table's identity, <code>list(kind =, vars =, call =)</code>: its <code>kind</code> (<code>"crosstab"</code> or <code>"regression"</code>); <code>vars</code>, what no column can carry (the weight, the caption, the outcomes, the variable labels — see <code><a href="set_caption.html">set_caption</a></code>), the rest of the variable model being derived from the declared index columns and from the columns' own <code>col_var</code>; and <code>call</code>, the producer's own recipe (a regression's model record — family, outcome, predictors, reference level, and the <code>fit_spec</code> <code><a href="reg_check_plots.html">reg_check_plots</a></code> refits from).</p></li>
+<li><p><code>render_extras</code> — display-only intent for the base count and the <code>add_pct</code> companion, <code>list(n =, add_pct =)</code>, materialised at print/export time rather than baked into the table.</p></li>
+<li><p><code>empirical_tips</code> — multinomial crude-companion tooltip data (a <code>tibble</code> keyed by column, predictor and level), set by <code>tab_reg(empirical = TRUE)</code>.</p></li>
+<li><p><code>assumptions</code> — one record PER OUTCOME, keyed by it, each holding the observed curve of every continuous predictor (weighted quantile bins of the outcome on the family's link scale, one block per <code>tab_vars</code> group), set by <code><a href="tab_reg.html">tab_reg</a></code>: the data behind the shape table under the footer, and behind <code><a href="reg_check_plots.html">reg_check_plots</a></code>'s linearity panel.</p></li>
+<li><p><code>color_breaks</code> — a per-table override of the colour break scales, set by <code>tab(color_breaks =)</code> and merged over the global option (<code><a href="set_color_palette.html">set_color_breaks</a></code>) at render time.</p></li>
+<li><p><code>legend_words</code> — what this table's colour legend CALLS each measure — naming only, never a number (see <code><a href="set_legend_words.html">set_legend_words</a></code>).</p></li>
+<li><p><code>footer_tabs</code> — the tables and notes rendered UNDER this one by every medium, set by <code><a href="set_footer_tabs.html">set_footer_tabs</a></code>: a <code>tabxplor_tab</code> renders as a table, any other data.frame as a grey note (<code><a href="tab_note.html">tab_note</a></code>). In the console they print ABOVE the table, so the last thing printed is the object you can go on to pipe. A footer table's own are never rendered.</p></li>
+<li><p><code>bars</code> — the columns drawn as data bars in html and in Excel, each named with the ceiling a full bar means (<code>NA</code> = the column's own largest data cell, so that one reference serves the whole column — <code><a href="set_bars.html">set_bars</a></code>).</p></li>
+</ul><p><code>meta</code> sub-fields left <code>NULL</code> are dropped, so a table given nothing carries no
+attribute.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

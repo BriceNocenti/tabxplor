@@ -33,6 +33,13 @@ Everything else keeps its name and meaning — see tab().'><!-- PURPOSE: what tx
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -42,7 +49,7 @@ Everything else keeps its name and meaning — see tab().'><!-- PURPOSE: what tx
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -194,8 +201,8 @@ apply to the data frame first — see <code><a href="tab.html">tab()</a></code>.
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> White   8 610-16 395     <span style="color: #949494;">51%</span>              <span style="color: #949494;">36%</span>                 <span style="color: #949494;">13%</span>        <span style="color: #949494;">50%</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> Total  11 337-21 483     47%              34%                 11%        50%</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 2 more variables: age &lt;mean (cv)&gt;, tvhours &lt;mean (cv)&gt;</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>marital, rincome, partyid, relig: difference (Total): <span style="color: #FF0000; font-weight: bold;">-30</span> <span style="color: #FF5F00; font-weight: bold;">-15</span> <span style="color: #FFAF5F; font-weight: bold;">-5</span> <span style="color: #00AFD7; font-weight: bold;">+5</span> <span style="color: #0087D7; font-weight: bold;">+15</span> <span style="color: #5F00FF; font-weight: bold;">+30</span>; bg ratio: <span style="background-color: #D7D7FF;">×2</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>age, tvhours: ratio (Total): <span style="color: #FF0000; font-weight: bold;">÷4</span> <span style="color: #FF5F00; font-weight: bold;">÷2</span> <span style="color: #FFAF5F; font-weight: bold;">÷1.15</span> <span style="color: #00AFD7; font-weight: bold;">×1.15</span> <span style="color: #0087D7; font-weight: bold;">×2</span> <span style="color: #5F00FF; font-weight: bold;">×4</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="font-weight: bold;">marital, rincome, partyid, relig</span>: difference (Total): <span style="color: #FF0000; font-weight: bold;">-30</span> <span style="color: #FF5F00; font-weight: bold;">-15</span> <span style="color: #FFAF5F; font-weight: bold;">-5</span> <span style="color: #00AFD7; font-weight: bold;">+5</span> <span style="color: #0087D7; font-weight: bold;">+15</span> <span style="color: #5F00FF; font-weight: bold;">+30</span>; bg ratio: <span style="background-color: #D7D7FF;">×2</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="font-weight: bold;">age, tvhours</span>: ratio (Total): <span style="color: #FF0000; font-weight: bold;">÷4</span> <span style="color: #FF5F00; font-weight: bold;">÷2</span> <span style="color: #FFAF5F; font-weight: bold;">÷1.15</span> <span style="color: #00AFD7; font-weight: bold;">×1.15</span> <span style="color: #0087D7; font-weight: bold;">×2</span> <span style="color: #5F00FF; font-weight: bold;">×4</span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Can be used with map and tribble to program several tables with different parameters</span></span></span>
@@ -228,7 +235,7 @@ apply to the data frame first — see <code><a href="tab.html">tab()</a></code>.
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> Total           0%             25%        3%      16%      8%     47%</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ℹ 1 more variable: Total &lt;row% (n)&gt;</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>difference (Total): <span style="color: #FF0000; font-weight: bold;">-30</span> <span style="color: #FF5F00; font-weight: bold;">-15</span> <span style="color: #FFAF5F; font-weight: bold;">-5</span> <span style="color: #00AFD7; font-weight: bold;">+5</span> <span style="color: #0087D7; font-weight: bold;">+15</span> <span style="color: #5F00FF; font-weight: bold;">+30</span>; bg ratio: <span style="background-color: #D7D7FF;">×2</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Source: GSS 2000-2014</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="color: #949494; font-weight: bold;">Source</span><span style="color: #949494;">: GSS 2000-2014</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [[2]]</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> |       | Tests                    |     race |   |         age |</span>
@@ -256,9 +263,9 @@ apply to the data frame first — see <code><a href="tab.html">tab()</a></code>.
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">14</span> Catholic                   <span style="color: #00AFD7; background-color: #D7D7FF;">18%</span>     <span style="color: #FFAF5F;">4%</span>    <span style="color: #949494;">78%</span> 100%<span style="color: #444444;"> ( 4 055- 4 074)</span> <span style="color: #949494;">46</span><span style="color: #444444;"> (cv 37%)</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">15</span> Protestant                  <span style="color: #FFAF5F;">3%</span>    <span style="color: #00AFD7;">21%</span>    <span style="color: #949494;">76%</span> 100%<span style="color: #444444;"> ( 8 779- 8 805)</span> <span style="color: #949494;">49</span><span style="color: #444444;"> (cv 35%)</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">16</span> Total                       9%    14%    77% 100%<span style="color: #444444;"> (16 909-16 971)</span> 47<span style="color: #444444;"> (cv 37%)</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>race: difference (Total): <span style="color: #FF0000; font-weight: bold;">-30</span> <span style="color: #FF5F00; font-weight: bold;">-15</span> <span style="color: #FFAF5F; font-weight: bold;">-5</span> <span style="color: #00AFD7; font-weight: bold;">+5</span> <span style="color: #0087D7; font-weight: bold;">+15</span> <span style="color: #5F00FF; font-weight: bold;">+30</span>; bg ratio: <span style="background-color: #D7D7FF;">×2</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>age: ratio (Total): <span style="color: #FF0000; font-weight: bold;">÷4</span> <span style="color: #FF5F00; font-weight: bold;">÷2</span> <span style="color: #FFAF5F; font-weight: bold;">÷1.15</span> <span style="color: #00AFD7; font-weight: bold;">×1.15</span> <span style="color: #0087D7; font-weight: bold;">×2</span> <span style="color: #5F00FF; font-weight: bold;">×4</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Source: GSS 2000-2010</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="font-weight: bold;">race</span>: difference (Total): <span style="color: #FF0000; font-weight: bold;">-30</span> <span style="color: #FF5F00; font-weight: bold;">-15</span> <span style="color: #FFAF5F; font-weight: bold;">-5</span> <span style="color: #00AFD7; font-weight: bold;">+5</span> <span style="color: #0087D7; font-weight: bold;">+15</span> <span style="color: #5F00FF; font-weight: bold;">+30</span>; bg ratio: <span style="background-color: #D7D7FF;">×2</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="font-weight: bold;">age</span>: ratio (Total): <span style="color: #FF0000; font-weight: bold;">÷4</span> <span style="color: #FF5F00; font-weight: bold;">÷2</span> <span style="color: #FFAF5F; font-weight: bold;">÷1.15</span> <span style="color: #00AFD7; font-weight: bold;">×1.15</span> <span style="color: #0087D7; font-weight: bold;">×2</span> <span style="color: #5F00FF; font-weight: bold;">×4</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="color: #949494; font-weight: bold;">Source</span><span style="color: #949494;">: GSS 2000-2010</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [[3]]</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 2 × 5</span></span>
@@ -266,7 +273,7 @@ apply to the data frame first — see <code><a href="tab.html">tab()</a></code>.
 <span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">      </span>       <span style="color: #949494; font-style: italic;">&lt;n&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;n&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;n&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;n&gt;</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> no_row_var <span style="color: #949494;">1 959</span> <span style="color: #949494;">3 129</span> <span style="color: #949494;">16 395</span> 21 483</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> Total      1 959 3 129 16 395 21 483</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Source: GSS 2000-2014</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="color: #949494; font-weight: bold;">Source</span><span style="color: #949494;">: GSS 2000-2014</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>

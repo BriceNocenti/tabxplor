@@ -3,6 +3,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -12,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -90,7 +97,7 @@
       </dl></div><div class="section level2">
       <h2 id="point-and-click-interface-jamovi-">Point-and-click interface (jamovi)<a class="anchor" aria-label="anchor" href="#point-and-click-interface-jamovi-"></a></h2>
 
-      <div class="section-desc"><p>The two analyses tabxplor adds to <a href="https://www.jamovi.org/" class="external-link">jamovi</a> – everything the package does, driven by menus. Install jamovi, open the modules menu (the <code>+</code> at the top-right), choose <em>jamovi library</em>, and install <strong>tabxplor</strong>.</p></div>
+      <div class="section-desc"><p>The two analyses tabxplor adds to <a href="https://www.jamovi.org/" class="external-link">jamovi</a> – everything the package does, driven by menus. The module is not in jamovi’s library: it is a file you sideload, one per system and per jamovi line – <a href="../index.html#the-jamovi-module">how to install it</a>.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -180,10 +187,75 @@
 
         <dt>
 
+          <code><a href="tab_pipe.html">tab_pipe()</a></code>
+
+        </dt>
+        <dd>Render a table as a plain pipe table</dd>
+
+        <dt>
+
           <code><a href="tab_css.html">tab_css()</a></code>
 
         </dt>
         <dd>The stylesheet an html table needs</dd>
+      </dl></div><div class="section level2">
+      <h2 id="what-is-written-under-a-table">What is written under a table<a class="anchor" aria-label="anchor" href="#what-is-written-under-a-table"></a></h2>
+
+      <div class="section-desc"><p>The footer is one region and its text is a template the table carries: everything tabxplor generates is a <code>&lt;placeholder&gt;</code>, everything you write is a line, and the order of the lines is the order of the footer.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="tabxplor-footer.html">tabxplor-footer</a></code>
+
+        </dt>
+        <dd>The lines under a table</dd>
+
+        <dt>
+
+          <code><a href="set_subtext.html">set_subtext()</a></code> <code><a href="set_subtext.html">get_subtext()</a></code>
+
+        </dt>
+        <dd>The lines printed under a table</dd>
+
+        <dt>
+
+          <code><a href="set_legend_words.html">set_legend_words()</a></code> <code><a href="set_legend_words.html">get_legend_words()</a></code>
+
+        </dt>
+        <dd>Re-state what the colour legend calls a measure</dd>
+
+        <dt>
+
+          <code><a href="tab_footer_text.html">tab_footer_text()</a></code>
+
+        </dt>
+        <dd>Read the footer a table would print</dd>
+
+        <dt>
+
+          <code><a href="tab_note.html">tab_note()</a></code>
+
+        </dt>
+        <dd>A note under a table</dd>
+
+        <dt>
+
+          <code><a href="set_footer_tabs.html">set_footer_tabs()</a></code> <code><a href="set_footer_tabs.html">get_footer_tabs()</a></code>
+
+        </dt>
+        <dd>Attach subordinate tables under a table</dd>
+
+        <dt>
+
+          <code><a href="set_bars.html">set_bars()</a></code> <code><a href="set_bars.html">get_bars()</a></code>
+
+        </dt>
+        <dd>Draw a column as data bars</dd>
       </dl></div><div class="section level2">
       <h2 id="charts">Charts<a class="anchor" aria-label="anchor" href="#charts"></a></h2>
 
@@ -218,6 +290,13 @@
 
 
       <dl><dt>
+
+          <code><a href="fct_recode_helper.html">fct_recode_helper()</a></code>
+
+        </dt>
+        <dd>Write the code to recode several factors</dd>
+
+        <dt>
 
           <code><a href="score_from_lv1.html">score_from_lv1()</a></code>
 

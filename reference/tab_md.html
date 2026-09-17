@@ -3,6 +3,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -12,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -78,10 +85,10 @@
 <span>  caption <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  transpose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  var_names <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  css <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  css <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  clipboard <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  file <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  print <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  print <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  title <span class="op">=</span> <span class="fu">lifecycle</span><span class="fu">::</span><span class="fu"><a href="https://lifecycle.r-lib.org/reference/deprecated.html" class="external-link">deprecated</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  col_var_names <span class="op">=</span> <span class="fu">lifecycle</span><span class="fu">::</span><span class="fu"><a href="https://lifecycle.r-lib.org/reference/deprecated.html" class="external-link">deprecated</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
@@ -162,11 +169,12 @@ are the spanning row above their level columns. Level headers always keep their 
 
 
 <dt id="arg-css">css<a class="anchor" aria-label="anchor" href="#arg-css"></a></dt>
-<dd><p>When <code>TRUE</code> (the default), prepend an inline <code>&lt;style&gt;</code> block so the exported markdown is
-self-contained and renders coloured and compact on its own. Set <code>FALSE</code> inside an <code>.Rmd</code>/<code>.qmd</code>
-document once the host page brings the stylesheet (or call <code><a href="tab_css.html">tab_css</a></code> once at the top
-for the whole document) – otherwise the <code>&lt;style&gt;</code> block is duplicated per table. A plain
-uncoloured table renders byte-identical either way.</p></dd>
+<dd><p>Prepend an inline <code>&lt;style&gt;</code> block so the exported markdown is self-contained and
+renders coloured and compact on its own (default, from
+<code>getOption("tabxplor.tab_kable_css")</code>). Set <code>FALSE</code> inside an <code>.Rmd</code>/<code>.qmd</code> document once
+the host page brings the stylesheet (or call <code><a href="tab_css.html">tab_css</a></code> once at the top for the
+whole document) – otherwise the <code>&lt;style&gt;</code> block is duplicated per table. A plain uncoloured
+table renders byte-identical either way.</p></dd>
 
 
 <dt id="arg-clipboard">clipboard<a class="anchor" aria-label="anchor" href="#arg-clipboard"></a></dt>
@@ -178,7 +186,9 @@ uncoloured table renders byte-identical either way.</p></dd>
 
 
 <dt id="arg-print">print<a class="anchor" aria-label="anchor" href="#arg-print"></a></dt>
-<dd><p>If <code>TRUE</code>, print via <code><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat()</a></code> and return invisibly; if <code>FALSE</code>, return the string.</p></dd>
+<dd><p>By default (<code>NULL</code>), <code><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat()</a></code> the markdown and return it invisibly – except while a
+document is being knitted, where the object is returned instead, so the chunk emits raw markdown
+rather than a verbatim block. <code>TRUE</code> or <code>FALSE</code> forces either.</p></dd>
 
 
 <dt id="arg-title">title<a class="anchor" aria-label="anchor" href="#arg-title"></a></dt>
@@ -198,7 +208,8 @@ Anything else is an error naming the argument you meant, as it already was in <c
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A character string (visible or invisible depending on <code>print</code>).</p>
+    <p>A <code>tabxplor_md</code>: the markdown as a character string, which prints as the text it is
+and reaches a knitted document raw.</p>
     </div>
 
     <div class="section level2">
@@ -209,7 +220,9 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{margin-bottom:1.2em;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox&gt;.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab&gt;caption{caption-side:top;padding:0;margin:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tfoot{font-size:80%;text-align:left;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}</span>
@@ -253,6 +266,11 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .popover-body,.popover-content{padding:6px;white-space:pre;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{color:#000000;background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g2,.tabxplor-tab .g2{color:#444444;}</span>
@@ -279,10 +297,119 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u2,.tabxplor-tab .u2{background-color:#F6CFB0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u3,.tabxplor-tab .u3{background-color:#FCBDA5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u4,.tabxplor-tab .u4{background-color:#FEAC9F;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> @media print {</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tx-scrollbox{max-width:none;overflow:visible;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab{color:#000000;background:#ffffff;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab tbody tr:hover{background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g2,.tabxplor-tab .g2{color:#444444;}</span>
@@ -329,7 +456,9 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{margin-bottom:1.2em;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox&gt;.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab&gt;caption{caption-side:top;padding:0;margin:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tfoot{font-size:80%;text-align:left;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}</span>
@@ -373,6 +502,11 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .popover-body,.popover-content{padding:6px;white-space:pre;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{color:#000000;background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g2,.tabxplor-tab .g2{color:#444444;}</span>
@@ -399,10 +533,119 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u2,.tabxplor-tab .u2{background-color:#F6CFB0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u3,.tabxplor-tab .u3{background-color:#FCBDA5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u4,.tabxplor-tab .u4{background-color:#FEAC9F;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> @media print {</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tx-scrollbox{max-width:none;overflow:visible;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab{color:#000000;background:#ffffff;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab tbody tr:hover{background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g2,.tabxplor-tab .g2{color:#444444;}</span>
@@ -453,7 +696,9 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{margin-bottom:1.2em;}</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tx-scrollbox&gt;.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab&gt;caption{caption-side:top;padding:0;margin:0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tfoot{font-size:80%;text-align:left;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}</span>
@@ -497,6 +742,11 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .popover-body,.popover-content{padding:6px;white-space:pre;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab{color:#000000;background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .g2,.tabxplor-tab .g2{color:#444444;}</span>
@@ -523,10 +773,119 @@ Anything else is an error naming the argument you meant, as it already was in <c
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u2,.tabxplor-tab .u2{background-color:#F6CFB0;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u3,.tabxplor-tab .u3{background-color:#FCBDA5;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> .u4,.tabxplor-tab .u4{background-color:#FEAC9F;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g1{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .g2{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> :root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> @media print {</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tx-scrollbox{max-width:none;overflow:visible;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab{color:#000000;background:#ffffff;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .tabxplor-tab tbody tr:hover{background:transparent;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g1,.tabxplor-tab .g1{color:#949494;}</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>   .g2,.tabxplor-tab .g2{color:#444444;}</span>

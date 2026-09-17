@@ -52,7 +52,8 @@ print(
 - get_text:
 
   Set to `TRUE` to get the text as a character vector instead of a
-  printed output.
+  printed output – the lines of whatever medium
+  `getOption("tabxplor.print")` names.
 
 ## Value
 

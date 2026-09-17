@@ -1,12 +1,17 @@
-# fct_recode helper to recode multiple variables
+# Write the code to recode several factors
 
-**\[deprecated\]**
-
-Printed a ready-to-paste `mutate()` call recoding a set of factor
-columns via
+Recoding a factor with
 [`forcats::fct_recode()`](https://forcats.tidyverse.org/reference/fct_recode.html)
-– unrelated to cross-tabulation, and unused elsewhere in tabxplor.
-Removed in 2.1.0; copy it into your own project if you rely on it.
+means typing every level name exactly, and a typo is silently ignored.
+`fct_recode_helper()` writes that code for you: it prints a
+ready-to-paste `mutate()` call with one `fct_recode()` per variable,
+each level already written as `"level" = "level"`. You then only edit
+the new names on the left, and delete the lines you keep.
+
+With a few variables, each level carries its frequency and count as a
+comment, which is what tells you which small levels to merge. A column
+with a `label` attribute (data imported by haven) gets that label as a
+comment title.
 
 ## Usage
 
@@ -32,7 +37,7 @@ fct_recode_helper(
 - .cols:
 
   \<[tidy-select](https://tidyr.tidyverse.org/reference/tidyr_tidy_select.html)\>
-  The variables to recode.
+  The variables to recode. Default: every non-numeric column.
 
 - name_in:
 
@@ -40,7 +45,8 @@ fct_recode_helper(
 
 - name_out:
 
-  The output data frame's name, if different from `name_in`.
+  The output data frame's name, if different from `name_in` (used by
+  `style = "base"`).
 
 - freq:
 
@@ -66,5 +72,30 @@ fct_recode_helper(
 
 With `cat = TRUE` (default), the text printed to console (or written to
 a temp R file for more than 5 variables), returned invisibly. With
-`cat = FALSE`, a `tibble` of the recode text is returned instead. A
-column carrying a `label` attribute is used as its comment title.
+`cat = FALSE`, a `tibble` of the recode text.
+
+## Examples
+
+``` r
+fct_recode_helper(forcats::gss_cat, c(marital, race))
+#> forcats::gss_cat |>
+#> mutate(
+#>  marital = fct_recode(   # "new" = "old" 
+#> marital,
+#> "No answer"     = "No answer"    , #  0%     17
+#> "Never married" = "Never married", # 25%  5 416
+#> "Separated"     = "Separated"    , #  3%    743
+#> "Divorced"      = "Divorced"     , # 16%  3 383
+#> "Widowed"       = "Widowed"      , #  8%  1 807
+#> "Married"       = "Married"      , # 47% 10 117
+#> ),
+#> 
+#>  race = fct_recode(   # "new" = "old" 
+#> race,
+#> "Other" = "Other", #  9%  1 959
+#> "Black" = "Black", # 15%  3 129
+#> "White" = "White", # 76% 16 395
+#> ),
+#> 
+#>  )
+```

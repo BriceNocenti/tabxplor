@@ -28,12 +28,12 @@ helpers. Underlying heavy computations run on `data.table`
 
 **No R needed, if you prefer menus.** Everything below is also available
 point-and-click, through a module for [jamovi](https://www.jamovi.org/)
-— a free, open-source statistical software. Install it, open the modules
-menu (the **`+`** at the top right), choose **jamovi library**, and
-install *tabxplor*: it adds a **Crosstables** analysis and a
-**Regressions** analysis, with the same coloured, exportable tables. The
-options carry the same names as the arguments taught here, so this
-vignette reads as its manual.
+— a free, open-source statistical software. The module is a file you
+sideload, one per system and per jamovi line: [how to install
+it](https://bricenocenti.github.io/tabxplor/#the-jamovi-module). It adds
+a **Crosstables** analysis and a **Regressions** analysis, with the same
+coloured, exportable tables. The options carry the same names as the
+arguments taught here, so this vignette reads as its manual.
 
 Throughout this vignette we use `gss_simple`, a cleaned-up version of
 the US General Social Survey
@@ -381,8 +381,8 @@ rest of the layouts.
 
 `display = "ci"` prints that interval on its own. Add significance stars
 with `stars = TRUE`: they tell the same story as the interval of the
-deviation from the reference, but at fixed confidence levels (99 %, 95
-%, 90 %) :
+deviation from the reference, but at fixed confidence levels (95 %, 99
+%, 99.9 %) :
 
 ``` r
 
@@ -977,7 +977,9 @@ script, or in your `.Rprofile`. Each one has a per-call argument too;
 the option just changes the default. The everyday ones:
 
 - `options(tabxplor.print = "html")` — print tables not in console, but
-  as html in RStudio or Positron Viewer Pane by default (recommended)
+  as html in RStudio or Positron Viewer Pane by default (recommended);
+  `"md"` prints them as Markdown instead, which is what a notebook
+  knitted straight to `.md` wants.
 - `options(tabxplor.cleannames = TRUE)` — strip `"1-"`-style prefixes
   from level names everywhere.
 - `options(tabxplor.parallel = 8)` — parallelise tables with multiples

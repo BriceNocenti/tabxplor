@@ -38,24 +38,24 @@ print time, so the remaining ones are read as spacings from it.
 scales of `color = "adjustment"` / `"between_groups"` – how far a
 modelled effect sits from the observed one (or from the reference
 group's). Which one a column reads follows the estimate's own scale:
-`adj_ratio` for a multiplicative effect (odds / risk / rate ratio),
-`adj_diff` for a probability-scale marginal effect (in percentage
-points), and `adj_diff_std` for an additive effect in the outcome's own
-units (a gaussian beta, a count marginal effect), where the gap is
-divided by SD(Y) so the same threshold means the same thing whatever
-unit the outcome is recorded in. An empty/`NULL` scale drops that
-measure for its column type.
+`adj_ratio` for a multiplicative effect (odds / risk ratio or ratio of
+means), `adj_diff` for a probability-scale marginal effect (in
+percentage points), and `adj_diff_std` for an additive effect in the
+outcome's own units (a gaussian beta, a count marginal effect), where
+the gap is divided by SD(Y) so the same threshold means the same thing
+whatever unit the outcome is recorded in. An empty/`NULL` scale drops
+that measure for its column type.
 
 Two rules shape a default, and a custom one is free to break them. A
 ladder is MIRRORED unless the quantity it grades is bounded above: a
 percentage ratio is capped at `1 / base`, so a cell can sit far below
 its reference and never far above it, and `pct_ratio` is stricter below
 (`list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))`) – a
-mean ratio, a rate ratio and a ratio of two estimates have no ceiling
-and stay symmetric. And a fill is read at a glance, so on the BACKGROUND
-channel the two ratio scales keep their two loudest rungs only: with the
-default `color = TRUE` the text grades every deviation and the
-background flags the ones whose RELATIVE size is out of proportion.
+ratio of means and a ratio of two estimates have no ceiling and stay
+symmetric. And a fill is read at a glance, so on the BACKGROUND channel
+the two ratio scales keep their two loudest rungs only: with the default
+`color = TRUE` the text grades every deviation and the background flags
+the ones whose RELATIVE size is out of proportion.
 
 ## Usage
 

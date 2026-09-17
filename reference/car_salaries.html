@@ -7,6 +7,13 @@ then a mediator: rank explains the gap away, but rank is itself part of what is 
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -16,7 +23,7 @@ then a mediator: rank explains the gap away, but rank is itself part of what is 
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -127,18 +134,18 @@ assistant to full professor.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 5 × 5</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Outcome:        salary</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         var [3]</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   var        levels              n             Obs_diff           Model_diff</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">     </span>      <span style="color: #949494; font-style: italic;">      </span>            <span style="color: #949494; font-style: italic;">&lt;n&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;(obs mean) diff&gt;</span>    <span style="color: #949494; font-style: italic;">&lt;diff (adj mean)&gt;</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> Constant   Reference profile  18                                 95 914<span style="color: #444444;">   </span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   var        levels              n            Obs_diff          Model_diff</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">     </span>      <span style="color: #949494; font-style: italic;">      </span>            <span style="color: #949494; font-style: italic;">&lt;n&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;(obs mean) diff&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;diff (adj mean)&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> Constant   Reference profile  18                                95 914<span style="color: #444444;">  </span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> sex        Female             39 <span style="color: #444444;">(101 002) </span>      0<span style="color: #444444;">   </span>       0<span style="color: #444444;">    (101 056)</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> sex        Male              358 <span style="color: #444444;">(115 090) </span><span style="color: #0000BB;">+14 088</span><span style="color: #444444;">***</span> <span style="color: #0000BB;">+14 029</span><span style="color: #444444;">*** (115 085)</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> sex        Female             39 <span style="color: #444444;">(101 002) </span>      0<span style="color: #444444;">  </span>       0<span style="color: #444444;">   (101 056)</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">3</span> sex        Male              358 <span style="color: #444444;">(115 090) </span><span style="color: #0000BB;">+14 088</span><span style="color: #444444;">**</span> <span style="color: #0000BB;">+14 029</span><span style="color: #444444;">** (115 085)</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> discipline A                 181 <span style="color: #444444;">(108 548) </span>      0<span style="color: #444444;">   </span>       0<span style="color: #444444;">    (108 565)</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> discipline B                 216 <span style="color: #444444;">(118 029) </span><span style="color: #00BBBB;"> +9 480</span><span style="color: #444444;">***</span> <span style="color: #00BBBB;"> +9 449</span><span style="color: #444444;">*** (118 014)</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">4</span> discipline A                 181 <span style="color: #444444;">(108 548) </span>      0<span style="color: #444444;">  </span>       0<span style="color: #444444;">   (108 565)</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">5</span> discipline B                 216 <span style="color: #444444;">(118 029) </span><span style="color: #00BBBB;"> +9 480</span><span style="color: #444444;">**</span> <span style="color: #00BBBB;"> +9 449</span><span style="color: #444444;">** (118 014)</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Model: linear regression; diff: mean difference (vs the reference category); obs mean: observed mean; adj mean: adjusted/predicted mean.</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span>Obs_diff, Model_diff: diff in SD (ref.): <span style="color: #BB0000; font-weight: bold;">-0.8</span> <span style="color: #BB0000; font-weight: bold;">-0.4</span> <span style="color: #BB0000; font-weight: bold;">-0.2</span> <span style="color: #BBBB00; font-weight: bold;">-0.1</span> <span style="color: #00BBBB; font-weight: bold;">+0.1</span> <span style="color: #00BBBB; font-weight: bold;">+0.2</span> <span style="color: #0000BB; font-weight: bold;">+0.4</span> <span style="color: #0000BB; font-weight: bold;">+0.8</span> [grey: non-significant or under ±0.1 SD]</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># </span><span style="font-weight: bold;">Obs_diff, Model_diff</span>: diff in SD (ref.): <span style="color: #BB0000; font-weight: bold;">-0.8</span> <span style="color: #BB0000; font-weight: bold;">-0.4</span> <span style="color: #BB0000; font-weight: bold;">-0.2</span> <span style="color: #BBBB00; font-weight: bold;">-0.1</span> <span style="color: #00BBBB; font-weight: bold;">+0.1</span> <span style="color: #00BBBB; font-weight: bold;">+0.2</span> <span style="color: #0000BB; font-weight: bold;">+0.4</span> <span style="color: #0000BB; font-weight: bold;">+0.8</span> [grey: non-significant or under ±0.1 SD]</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.</span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

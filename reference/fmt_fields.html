@@ -13,6 +13,13 @@ table. To reach a field these do not name, use x$&amp;lt;field&amp;gt; or vctrs:
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -22,7 +29,7 @@ table. To reach a field these do not name, use x$&amp;lt;field&amp;gt; or vctrs:
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -161,8 +168,7 @@ data.frame, a getter answers once per <code>fmt</code> column.</p>
 <li><p><code>is_totrow()</code>: test function to detect cells in total rows
 (at <code>fmt</code> level or <code>tab</code> level)</p></li>
 <li><p><code>get_row_kind()</code>: get the "row_kind" field: what kind of row each cell sits in
-(one of <code>"data"</code>, <code>"total"</code>, <code>"n"</code>, <code>"pct"</code>, <code>"pvalue"</code>,
-<code>"gof"</code>, <code>"blank"</code>).</p></li>
+(see the <em>Row kinds</em> section).</p></li>
 <li><p><code>set_row_kind()</code>: set the "row_kind" field</p></li>
 <li><p><code>as_totrow()</code>: set the "total" row kind (belong to total row)</p></li>
 <li><p><code>is_tottab()</code>: test function to detect cells in total tables
@@ -179,6 +185,33 @@ all of them in the whole tibble.</p></li>
 <li><p><code>set_pvalue()</code>: set the per-cell p-value. <code>set_pvalue(x, NA_real_)</code> is how a duplicated,
 purely descriptive copy of a column loses its stars: the stored p-value is their only source.</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="row-kinds">Row kinds<a class="anchor" aria-label="anchor" href="#row-kinds"></a></h2>
+
+
+<p>The <code>row_kind</code> field says what kind of row a cell sits in.</p><dl><dt><code>"data"</code></dt>
+<dd><p>a real body row.</p></dd>
+
+<dt><code>"total"</code></dt>
+<dd><p>a total row (the only kind is_totrow() asks about).</p></dd>
+
+<dt><code>"n"</code></dt>
+<dd><p>the base-count row.</p></dd>
+
+<dt><code>"pct"</code></dt>
+<dd><p>the add_pct percentage row.</p></dd>
+
+<dt><code>"pvalue"</code></dt>
+<dd><p>an appended test row: a crosstab's chi2 or F, a regression's per-term test.</p></dd>
+
+<dt><code>"gof"</code></dt>
+<dd><p>a regression goodness-of-fit / model-summary footer row.</p></dd>
+
+<dt><code>"blank"</code></dt>
+<dd><p>a spacer row between footer blocks.</p></dd>
+
+
+</dl></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="fmt.html">fmt()</a></code> for what every field means and how to build a cell; <a href="fmt_attributes.html">fmt_attributes</a> for the

@@ -168,11 +168,17 @@ tab_xl(
 
 - wrap_rows:
 
-  By default, rownames are wrapped when larger than 30 characters.
+  Row labels are wrapped past this width (35 characters by default).
 
 - wrap_cols:
 
-  By default, colnames are wrapped when larger than 12 characters.
+  Column headers are wrapped past this width (15 characters by default),
+  at the seams a compound name is built from (`_`, `.`, `*`, a camelCase
+  boundary). A col_var's spanning name is measured against the width its
+  own columns leave it first: past that it wraps, and past what wrapping
+  can do it is shown from the prefix it shares with the block before it
+  (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`), and held to this width in the
+  last resort — never while there is room for the whole name.
 
 - ratio_cells:
 
@@ -254,6 +260,6 @@ if (requireNamespace("openxlsx2", quietly = TRUE)) {
     tab(marital, race, pct = "row", color = "difference") |>
     tab_xl()
 }
-#> ✔ Excel file written to /tmp/RtmpMe8d2k/Tab.xlsx
+#> ✔ Excel file written to /tmp/RtmpPxMHqM/Tab.xlsx
 # }
 ```

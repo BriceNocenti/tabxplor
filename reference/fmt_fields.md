@@ -98,8 +98,7 @@ vector. Given a data.frame, a getter answers once per `fmt` column.
   level or `tab` level)
 
 - `get_row_kind()`: get the "row_kind" field: what kind of row each cell
-  sits in (one of `"data"`, `"total"`, `"n"`, `"pct"`, `"pvalue"`,
-  `"gof"`, `"blank"`).
+  sits in (see the *Row kinds* section).
 
 - `set_row_kind()`: set the "row_kind" field
 
@@ -128,6 +127,39 @@ vector. Given a data.frame, a getter answers once per `fmt` column.
 - `set_pvalue()`: set the per-cell p-value. `set_pvalue(x, NA_real_)` is
   how a duplicated, purely descriptive copy of a column loses its stars:
   the stored p-value is their only source.
+
+## Row kinds
+
+The `row_kind` field says what kind of row a cell sits in.
+
+- `"data"`:
+
+  a real body row.
+
+- `"total"`:
+
+  a total row (the only kind is_totrow() asks about).
+
+- `"n"`:
+
+  the base-count row.
+
+- `"pct"`:
+
+  the add_pct percentage row.
+
+- `"pvalue"`:
+
+  an appended test row: a crosstab's chi2 or F, a regression's per-term
+  test.
+
+- `"gof"`:
+
+  a regression goodness-of-fit / model-summary footer row.
+
+- `"blank"`:
+
+  a spacer row between footer blocks.
 
 ## See also
 

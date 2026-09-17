@@ -13,9 +13,10 @@
 ## Point-and-click interface (jamovi)
 
 The two analyses tabxplor adds to [jamovi](https://www.jamovi.org/) –
-everything the package does, driven by menus. Install jamovi, open the
-modules menu (the `+` at the top-right), choose *jamovi library*, and
-install **tabxplor**.
+everything the package does, driven by menus. The module is not in
+jamovi’s library: it is a file you sideload, one per system and per
+jamovi line – [how to install
+it](https://bricenocenti.github.io/tabxplor/index.html#the-jamovi-module).
 
 - [`jmvtab()`](https://bricenocenti.github.io/tabxplor/reference/jmvtab.md)
   : Crosstables
@@ -44,8 +45,35 @@ Change the shape of a finished table; nothing is recomputed.
   : Render a table as Markdown
 - [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md)
   : Write a table to an Excel workbook
+- [`tab_pipe()`](https://bricenocenti.github.io/tabxplor/reference/tab_pipe.md)
+  : Render a table as a plain pipe table
 - [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
   : The stylesheet an html table needs
+
+## What is written under a table
+
+The footer is one region and its text is a template the table carries:
+everything tabxplor generates is a `<placeholder>`, everything you write
+is a line, and the order of the lines is the order of the footer.
+
+- [`tabxplor-footer`](https://bricenocenti.github.io/tabxplor/reference/tabxplor-footer.md)
+  : The lines under a table
+- [`set_subtext()`](https://bricenocenti.github.io/tabxplor/reference/set_subtext.md)
+  [`get_subtext()`](https://bricenocenti.github.io/tabxplor/reference/set_subtext.md)
+  : The lines printed under a table
+- [`set_legend_words()`](https://bricenocenti.github.io/tabxplor/reference/set_legend_words.md)
+  [`get_legend_words()`](https://bricenocenti.github.io/tabxplor/reference/set_legend_words.md)
+  : Re-state what the colour legend calls a measure
+- [`tab_footer_text()`](https://bricenocenti.github.io/tabxplor/reference/tab_footer_text.md)
+  : Read the footer a table would print
+- [`tab_note()`](https://bricenocenti.github.io/tabxplor/reference/tab_note.md)
+  : A note under a table
+- [`set_footer_tabs()`](https://bricenocenti.github.io/tabxplor/reference/set_footer_tabs.md)
+  [`get_footer_tabs()`](https://bricenocenti.github.io/tabxplor/reference/set_footer_tabs.md)
+  : Attach subordinate tables under a table
+- [`set_bars()`](https://bricenocenti.github.io/tabxplor/reference/set_bars.md)
+  [`get_bars()`](https://bricenocenti.github.io/tabxplor/reference/set_bars.md)
+  : Draw a column as data bars
 
 ## Charts
 
@@ -60,6 +88,8 @@ Change the shape of a finished table; nothing is recomputed.
 
 Small utilities for preparing data or laying out a table.
 
+- [`fct_recode_helper()`](https://bricenocenti.github.io/tabxplor/reference/fct_recode_helper.md)
+  : Write the code to recode several factors
 - [`score_from_lv1()`](https://bricenocenti.github.io/tabxplor/reference/score_from_lv1.md)
   : Score a set of factors by counting their first level
 - [`shape_numeric_var()`](https://bricenocenti.github.io/tabxplor/reference/shape_numeric_var.md)

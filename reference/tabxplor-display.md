@@ -5,12 +5,15 @@ Every function that builds a table takes a `display` argument, and
 changes it afterwards. This page is its vocabulary: the fields a cell
 may show, and the named layouts that arrange them.
 
-Choosing a display never triggers a computation and never changes a
-number — every field is already stored in the cell (see
+Asking for a layout **in the call** computes what it prints: one naming
+a confidence interval or a contribution to the chi-squared turns that
+on, so `display = "base_ci"` needs no `ci =` beside it. Every other
+field is already stored in the cell (see
 [fmt](https://bricenocenti.github.io/tabxplor/reference/fmt.md)), so
 [`set_display()`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
-on a finished table gives exactly what asking for it in the call would
-have.
+on a finished table changes no number — it only says which of them is
+shown, and names the argument that would have filled a field the table
+does not carry.
 
 ## Details
 
@@ -52,11 +55,12 @@ a note says which argument would have filled it.
 The fields a [`{}`](https://rdrr.io/r/base/Paren.html) template may
 name, and `display` may name on their own.
 
-- `pct` — the percentage.
+- `pct` — the percentage. Needs a factor col_var and percentages: pct =
+  "row" / "col" / "all".
 
 - `n` — the count.
 
-- `wn` — the weighted count.
+- `wn` — the weighted count. Needs weights (`wt =`).
 
 - `mean` — the mean. Needs a numeric col_var.
 
@@ -70,26 +74,33 @@ name, and `display` may name on their own.
   column that has a level beside its estimate.
 
 - `diff` — the difference from the reference. Needs a `ref` to compare
-  to, and pct = "row" / "col".
+  to and something to compare: pct = "row" / "col", or a numeric
+  col_var.
 
 - `ratio` — the ratio to the reference (relative risk, or a ratio of
-  means). Needs a `ref` to compare to, and pct = "row" / "col".
+  means). Needs a `ref` to compare to and something to compare: pct =
+  "row" / "col", or a numeric col_var.
 
 - `ci` — the confidence interval of whatever the column compares, as
-  `[low;high]`. Needs ci = "ref" (or ci = "cell" for each cell's own
-  interval).
+  `[low;high]`.
 
 - `moe` — the margin of error — the same interval as `ci`, written as
   the half-width `+/-x` around the estimate. Void where the column
   compares a RATIO: a ratio's interval is symmetric on the LOG scale, so
-  it has no half-width. Needs ci = "ref" (or ci = "cell" for each cell's
-  own interval).
+  it has no half-width.
 
-- `or` — the odds ratio. Needs pct = "row" / "col" (an odds ratio needs
-  a percentage base).
+- `or` — the odds ratio. Needs a factor col_var and a percentage base:
+  pct = "row" / "col".
 
-- `ctr` — the cell's contribution to the chi-squared. Needs test = TRUE
-  (the contributions come from the chi-squared).
+- `odds` — the odds — `pct / (1 - pct)`, the quantity an odds ratio is a
+  ratio of. Printed on the odds ratio's own ladder, so a cell below 1
+  reads its inverse ("1/2.60") unless
+  `options(tabxplor.ratio_print = "raw")` asks for the plain number.
+  Void where the percentage is 1 and the odds infinite. Needs a factor
+  col_var and a percentage base: pct = "row" / "col".
+
+- `ctr` — the cell's contribution to the chi-squared. Needs a factor
+  col_var.
 
 - `var` — the variance. Needs a numeric col_var.
 
@@ -102,8 +113,7 @@ name, and `display` may name on their own.
 
 - `resid` — the adjusted standardized residual – whether the cell
   departs from independence. Derived from the p-value and the sign of
-  `ctr`, so it is read-only. Needs test = TRUE (the residual comes from
-  the chi-squared).
+  `ctr`, so it is read-only. Needs a factor col_var.
 
 - `obs` — the OBSERVED (crude) effect a modelled one is compared to.
   [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
@@ -120,8 +130,8 @@ name, and `display` may name on their own.
 - `gap` — how far adjustment moved the effect: the gap between the
   modelled estimate and its observed counterpart, on the estimate's own
   scale. What `color = "adjustment"` grades — readable in print and
-  Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE) (a
-  model effect and its observed counterpart).
+  Excel, not only in an html tooltip. Needs tab_reg(empirical = TRUE)
+  (an observed effect to compare the model to).
 
 ## Display layouts
 

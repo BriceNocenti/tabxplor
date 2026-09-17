@@ -124,7 +124,7 @@ relevant quantity was not requested). The user-facing ones are:
 | `ratio` | ratio to the reference (relative risk, or a ratio of means) |
 | `ci_inf`, `ci_sup` | confidence-interval bounds |
 | `pvalue` | per-cell significance p-value (feeds the stars) |
-| `or` | odds ratio / relative-risk ratio |
+| `or` | odds ratio |
 | `ctr` | contribution to the chi-squared (`color = "contrib"`) |
 | `var` | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n` | the cell’s own base — the count its percentage is computed on |
@@ -642,10 +642,14 @@ Beyond the everyday defaults
 and the build. HTML /
 [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md):
 
-- `tabxplor.tab_kable_css` — inline the stylesheet with each table
-  (`TRUE`); set `FALSE` in a many-table document and call
+- `tabxplor.tab_kable_css` — inline the stylesheet with each
+  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
+  *and*
+  [`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md)
+  table (`TRUE`); set `FALSE` in a many-table document and call
   [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
-  once instead (this vignette does).
+  once instead (this vignette does), or in a plain-Markdown notebook
+  that wants no stylesheet at all.
 - `tabxplor.tab_kable_tooltips` — the per-cell hover tooltips (`TRUE`);
   set `FALSE` once per document to switch them off everywhere.
 - `tabxplor.tab_kable_num_font` — the number CSS font stack (everything

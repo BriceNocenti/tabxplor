@@ -14,7 +14,7 @@ library(dplyr)
 # test_pvalue_descriptor / test_es_measure) passent par gettext, que seul LANGUAGE atteint. Sans
 # lui, une ligne de diagnostic s'intitule "Linearity" et non "Linearite" des que le document est
 # construit sur une machine anglaise. (La notation n'est deliberement PAS traduite : "LR vs null",
-# OR/IRR/beta restent tels quels.)
+# OR/RoM/beta restent tels quels.)
 options(tabxplor.print = "html")
 options(tabxplor.tab_kable_css = FALSE)
 options(tabxplor.tab_kable_tooltips = FALSE)
@@ -85,7 +85,7 @@ le détecte le plus souvent :
 |:---|:---|:---|
 | facteur à 2 modalités | binomial (logistique) | rapport de cotes (`OR`) |
 | numérique (continue) | gaussien (linéaire) | différence de moyennes (`diff`) |
-| comptage | poisson | rapport de taux d’incidence (`IRR`) |
+| comptage | poisson | ratio de moyennes (`RoM`) |
 | facteur non ordonné à 3 modalités ou plus | multinomial | une colonne `OR` par catégorie, contre la référence |
 | facteur ordonné à 3 modalités ou plus | ordinal (cotes proportionnelles) | `OR` cumulé, ou `D` de Somers |
 
@@ -124,7 +124,8 @@ fier.
 - 3 modalités ou plus, logistique (multinomial) → les OR observés sont
   affichés en infobulle sur les cases du modèle, dans les exports html
 - gaussien (linéaire) → moyennes de groupe et leur différence
-- poisson (comptages) → taux observé et rapport de taux observé
+- poisson (comptages) → comptage moyen observé et ratio de moyennes
+  observé
 
 Un prédicteur continu n’a pas de modalités : sa case ne montre que
 l’**effet** — il n’y a pas de pourcentage ni de moyenne observés à
@@ -189,7 +190,7 @@ tab_reg(gss_simple, "rincome", c("race", "relig"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Ordinal logistic regression: rincome by race, relig
+Ordinal logistic regression: rincome by race and relig
 
 [TABLE]
 
@@ -217,7 +218,7 @@ tab_reg(gss_simple, "rincome", c("race", "relig"), measure = "difference",
         empirical = TRUE, display = "est_base", color = c(TRUE, "adjustment"))
 ```
 
-Ordinal logistic regression: rincome by race, relig
+Ordinal logistic regression: rincome by race and relig
 
 [TABLE]
 
@@ -233,7 +234,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Multinomial logistic regression: party3 by race, relig
+Multinomial logistic regression: party3 by race and relig
 
 [TABLE]
 
@@ -257,7 +258,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: tea_where by sex, SPC +1 more
+Logistic regression: tea_where by sex, SPC and Sport
 
 [TABLE]
 
@@ -286,7 +287,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
         color_signif = "grey_non_signif")
 ```
 
-Multinomial logistic regression: party3 by race, relig
+Multinomial logistic regression: party3 by race and relig
 
 [TABLE]
 
@@ -309,7 +310,7 @@ variable à expliquer ──auto──▶ family ──auto──▶ link ──
 Seul **`link`** change le modèle estimé. `measure` et `effect` changent
 ce qu’on y *lit*, et `display` ne change que ce que la case **affiche**.
 Dans un tableau croisé, chaque mesure vient des mêmes effectifs :
-demander un rapport plutôt qu’une différence y est un choix d’affichage.
+demander un ratio plutôt qu’une différence y est un choix d’affichage.
 Dans une régression, c’est une étape de calcul — le modèle dérive la
 mesure demandée de ses prédictions — mais c’est toujours le *même
 ajustement*. Un risque relatif et un rapport de cotes peuvent donc être
@@ -334,8 +335,8 @@ Les trois valeurs d’`effect` nomment trois quantités :
 | `"at_reference"` | la même chose, pour une personne au profil de référence | effet au profil de référence |
 
 À la main, on les obtiendrait avec `coef(glm(...))` (exponentié quand la
-mesure est un rapport), avec `marginaleffects::avg_comparisons(model)`,
-et avec le même appel sur un profil d’une seule ligne où chaque autre
+mesure est un ratio), avec `marginaleffects::avg_comparisons(model)`, et
+avec le même appel sur un profil d’une seule ligne où chaque autre
 prédicteur est à sa modalité de référence ou à sa moyenne. On n’en
 tapera presque jamais aucun : `"auto"` choisit `"conditional"` chaque
 fois que la mesure rapportée *est* celle du modèle — c’est-à-dire
@@ -380,7 +381,7 @@ n’affleure jamais. † marque le lien propre à la famille, celui auquel
 | numérique, score | `binomial`+trials | un pourcent. | les trois mêmes | les mêmes, par item | `OR`/`RR`/`RD` |
 | numérique | `gaussian` | une moyenne | `"difference"` † | régression linéaire | `diff` |
 |  |  |  | `"ratio"` | pseudo-Poisson à lien log | `RoM` |
-| numér., comptage | `poisson` | un comptage | `"ratio"` † | Poisson, ET quasi-Poisson | `IRR` |
+| numér., comptage | `poisson` | un comptage | `"ratio"` † | Poisson, ET quasi-Poisson | `RoM` |
 | facteur, 3+ n.o. | `multinomial` | un pourcent. | `"odds_ratio"` † | logit multinomial | `OR` |
 | facteur ordonné | `ordinal` | un rang | `"odds_ratio"` † | modèle à cotes proport. | `cumOR` |
 
@@ -406,7 +407,7 @@ colonne, après le préfixe constant `Model_`.
 | une moyenne | `"difference"` | `diff` | `mdiff` | `refdiff` |
 | une moyenne | `"ratio"` | `RoM` | `mRoM` | `refRoM` |
 | une moyenne | `"odds_ratio"` | non défini | non défini | non défini |
-| un comptage | `"ratio"` | `IRR` | `mIRR` | `refIRR` |
+| un comptage | `"ratio"` | `RoM` | `mRoM` | `refRoM` |
 | un comptage | `"difference"` | — | `mdiff` | `refdiff` |
 | un comptage | `"odds_ratio"` | non défini | non défini | non défini |
 | un rang | `"difference"` | — | `mD` | non proposé ² |
@@ -436,7 +437,7 @@ population**, et un profil n’en contient qu’une.
 variable à expliquer, et n’affiche que ce qui est constructible : une
 combinaison *non définie* n’a pas de ligne, et le message au-dessus du
 tableau dit pourquoi. Ses deux refus ne sont pas le même — une quantité
-n’a pas de cotes dont prendre le rapport, quoi qu’on implémente, tandis
+n’a pas de cotes dont prendre le ratio, quoi qu’on implémente, tandis
 que *non proposé* signifie que tabxplor ne le construit pas et que
 l’erreur liste ce que cette variable à expliquer offre, sur ce modèle et
 sur les autres.
@@ -449,7 +450,7 @@ proportion il bascule sur le modèle de probabilité linéaire.
 **le coefficient du modèle lui-même**, la quantité estimée montrée non
 transformée. Là où la mesure rapportée est multiplicative, c’est son
 logarithme, et l’en-tête dit lequel il logarithme (`Model_log(OR)`,
-`Model_log(IRR)`, `Model_log(RoM)`) ; là où le modèle est déjà additif,
+`Model_log(RR)`, `Model_log(RoM)`) ; là où le modèle est déjà additif,
 il n’y a rien à dé-exponentier et le coefficient EST l’estimation
 additive que la colonne montre déjà. Il répond donc pour toutes les
 familles — ce qui permet de demander ses coefficients à un tableau
@@ -472,8 +473,7 @@ marque à lire par-dessus.
 | `cumOR` | rapport de cotes cumulé | `exp(coef(MASS::polr(...)))`, le modèle à cotes proportionnelles |
 | `RR` | risque relatif | Poisson modifiée, ET robuste (Zou 2004) |
 | `RD` | différence de proportion, en points | `glm(y ~ ., binomial("identity"))`, ET robuste |
-| `IRR` | rapport de taux d’incidence | `exp(coef(glm(y ~ ., poisson)))` |
-| `RoM` | rapport de moyennes | pseudo-Poisson à lien log, ET robuste (Santos Silva & Tenreyro 2006) |
+| `RoM` | ratio de moyennes | un comptage : `exp(coef(glm(y ~ ., poisson)))` ; une moyenne : pseudo-Poisson à lien log, ET robuste (Santos Silva & Tenreyro 2006) |
 | `diff` | différence de moyennes | `coef(lm(...))` |
 
 | marque | se lit | exemple |
@@ -502,8 +502,8 @@ d’une hypothèse :
 | binomial · `"ratio"` | Poisson modifiée, ET robuste | un risque relatif constant |
 | binomial · `"difference"` | binomiale à lien identité, ET robuste | une différence de proportion constante |
 | gaussian · `"difference"` *(défaut)* | régression linéaire | une différence de moyennes constante |
-| gaussian · `"ratio"` | pseudo-MV de Poisson à lien log, ET robuste | E(y) = exp(xβ), un rapport de moyennes constant |
-| poisson · `"ratio"` *(défaut)* | Poisson, ET quasi-Poisson | un rapport de taux constant |
+| gaussian · `"ratio"` | pseudo-MV de Poisson à lien log, ET robuste | E(y) = exp(xβ), un ratio de moyennes constant |
+| poisson · `"ratio"` *(défaut)* | Poisson, ET quasi-Poisson | un ratio de moyennes constant |
 | ordinal · `"odds_ratio"` *(défaut)* | modèle à cotes proportionnelles | un seul rapport de cotes, à chaque seuil |
 | multinomial · `"odds_ratio"` *(défaut)* | logit multinomial | un rapport de cotes constant par catégorie |
 
@@ -524,7 +524,7 @@ Ce que dit la littérature sur les trois liens non-défaut :
   modèle de probabilité linéaire à la place et le bas de tableau le dit
   — les deux visent la même quantité, mais ce sont des estimateurs
   différents, qui ne coïncident que si le modèle est juste.
-- **Le rapport de moyennes est consistant dès que la fonction de moyenne
+- **Le ratio de moyennes est consistant dès que la fonction de moyenne
   est juste.** La pseudo-vraisemblance de Poisson ne prétend pas que la
   variable à expliquer est un comptage : c’est un dispositif pour le
   lien log, et son erreur-type robuste n’exige pas que la variance de
@@ -570,10 +570,9 @@ dit quel modèle a tourné.
   relatif *conditionnel* de la Poisson modifiée) et `measure = "ratio"`
   (le *marginal*).
 - **`link = "ratio"` sur une variable numérique s’arrête sur une
-  variable négative.** Un rapport de moyennes n’y est pas défini ;
-  l’appel suggère de modéliser le
-  [`log()`](https://rdrr.io/r/base/Log.html) d’une variable positive, ou
-  de laisser `link` tranquille.
+  variable négative.** Un ratio de moyennes n’y est pas défini ; l’appel
+  suggère de modéliser le [`log()`](https://rdrr.io/r/base/Log.html)
+  d’une variable positive, ou de laisser `link` tranquille.
 - **`Model_RD` et `Model_mRD` sont tous deux en points de pourcentage,
   et ce ne sont pas le même nombre.** `Model_RD` est une différence de
   proportion conditionnelle issue d’un ajustement à lien identité
@@ -706,7 +705,7 @@ référence de chaque prédicteur affiche la valeur neutre `1`).
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"))
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -719,7 +718,7 @@ brut** dont il est calculé.
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -802,7 +801,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "difference", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -835,7 +834,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "ratio", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -861,7 +860,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "odds_ratio", effect = "marginal", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -891,7 +890,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         link = "ratio", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -926,7 +925,7 @@ reg_formulas(tab_reg(gss_simple, "married", c("race", "age"), link    = "ratio")
 ```
 
 Deux colonnes répondent. `link` est la mesure que le modèle estime —
-`odds_ratio` pour le premier, dont le rapport est donc calculé à partir
+`odds_ratio` pour le premier, dont le ratio est donc calculé à partir
 des prédictions ; `ratio` pour le second, qui l’estime directement — et
 c’est le mot que prend `link =`. `fit` est l’appel R :
 `glm(binomial("logit"))` contre `svyglm(quasipoisson("log"))`, un tout
@@ -940,7 +939,7 @@ presque tous les cas : le modèle logistique converge toujours, ne peut
 jamais prédire une probabilité supérieure à 100 %, et le nombre qu’il
 donne décrit les personnes réellement interrogées. Recourir à
 **`link = "ratio"`** quand c’est le risque relatif *conditionnel* qu’il
-faut — celui qui suppose que le même rapport vaut pour tout le monde, ce
+faut — celui qui suppose que le même ratio vaut pour tout le monde, ce
 qu’attend un lecteur venu de l’épidémiologie, et ce qu’il faut employer
 pour s’aligner sur une estimation publiée en Poisson modifiée. Ce sont
 deux quantités différentes, pas deux écritures d’une seule.
@@ -972,7 +971,7 @@ comptage) :
 tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian")
 ```
 
-Linear regression: age by race, marital +2 more
+Linear regression: age, by 4 predictors
 
 [TABLE]
 
@@ -986,7 +985,7 @@ du prédicteur, comparée à la modalité de référence.
 tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian", empirical = TRUE)
 ```
 
-Linear regression: age by race, marital +2 more
+Linear regression: age, by 4 predictors
 
 [TABLE]
 
@@ -1017,12 +1016,12 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-Poisson regression: tvhours by race, marital +2 more
+Poisson regression: tvhours, by 4 predictors
 
 [TABLE]
 
-Un **rapport de taux d’incidence** (IRR) de 1,5 signifie « 50 % d’heures
-de télévision de plus par jour ». Les modèles de Poisson non pondérés
+Un **ratio de moyennes** (`RoM`) de 1,5 signifie « 50 % d’heures de
+télévision de plus par jour ». Les modèles de Poisson non pondérés
 utilisent automatiquement des erreurs-types proportionnelles à la
 dispersion observée (quasi-Poisson), si bien que les comptages
 surdispersés obtiennent des intervalles honnêtes, plus larges.
@@ -1036,28 +1035,27 @@ ajusté à la main ne réserve donc jamais de surprise.
 
 Dans le cas d’une régression de Poisson, la **contrepartie observée du
 coefficient exponentié du modèle** pour un prédicteur catégoriel est le
-**rapport de moyennes** : ici, le rapport des heures moyennes de
-télévision comparé à la modalité de référence.
+**ratio de moyennes** : ici, le ratio des heures moyennes de télévision
+comparé à la modalité de référence.
 
 ``` r
 
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
 ```
 
-Poisson regression: tvhours by race, marital +2 more
+Poisson regression: tvhours, by 4 predictors
 
 [TABLE]
 
-Les heures moyennes observées de télévision par jour, et les rapports de
-taux de visionnage à la référence, se calculent dans un simple tableau
-de moyennes avec :
+Les heures moyennes observées de télévision par jour, et leurs ratios à
+la référence, se calculent dans un simple tableau de moyennes avec :
 
 ``` r
 
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |>
-  mutate(IRR = set_display(tvhours, "ratio"))
+  mutate(RoM = set_display(tvhours, "ratio"))
 ```
 
 [TABLE]
@@ -1065,7 +1063,7 @@ tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
 ``` r
 
 # la methode par defaut pour les intervalles de confiance
-#   est le rapport de moyennes robuste a variance inegale ;
+#   est le ratio de moyennes robuste a variance inegale ;
 #  on utilise "quasipoisson" pour correspondre a ceux calcules
 #   par la regression quasi-poisson -- une dispersion estimee sur tous les niveaux
 #   (hypothese : la variance est proportionnelle a la moyenne).
@@ -1091,7 +1089,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
         family = "binomial", trials = length(tea_where_vars))
 ```
 
-Logistic regression: tea_where by sex, SPC +1 more
+Logistic regression: tea_where by sex, SPC and Sport
 
 [TABLE]
 
@@ -1121,7 +1119,7 @@ l’hypothèse de cotes proportionnelles rend identique à chaque seuil :
 tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
 
-Ordinal logistic regression: rincome by race, age +1 more
+Ordinal logistic regression: rincome by race, age and relig
 
 [TABLE]
 
@@ -1139,12 +1137,12 @@ tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
         measure = "difference", display = "est_base")
 ```
 
-Ordinal logistic regression: rincome by race, age +1 more
+Ordinal logistic regression: rincome by race, age and relig
 
 [TABLE]
 
 `measure = "ratio"` lit la même paire de façon multiplicative, comme un
-**rapport de victoires** (*win ratio*, victoires sur défaites). Les deux
+**ratio de victoires** (*win ratio*, victoires sur défaites). Les deux
 tiennent encore en une colonne, parce que les deux lisent toute la
 distribution prédite plutôt qu’une seule de ses tranches — et les deux
 sont robustes là où le rapport de cotes cumulé ne l’est pas : ils
@@ -1162,25 +1160,23 @@ répond sans supposer les cotes proportionnelles.
 Une variable à expliquer nominale, à trois modalités non ordonnées ou
 plus, est estimée comme un seul modèle logistique **multinomial**,
 donnant une colonne de rapport de cotes par catégorie de la variable à
-expliquer contre sa catégorie de référence (aussi appelés rapports de
-risques relatifs) :
+expliquer contre sa catégorie de référence :
 
 ``` r
 
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
 ```
 
-Multinomial logistic regression: party3 by race, age +2 more
+Multinomial logistic regression: party3, by 4 predictors
 
 [TABLE]
 
-Les rapports de risques relatifs peuvent être assez difficiles à lire,
-parce qu’ils sont relatifs à **deux** modalités de référence : non
-seulement celle choisie pour le prédicteur, mais aussi celle choisie
-pour la variable à expliquer. C’est particulièrement difficile quand il
-est ardu de trouver une bonne modalité de référence correspondant à la
-situation la plus commune (comme « married » pour le statut
-matrimonial).
+Ces rapports de cotes peuvent être assez difficiles à lire, parce qu’ils
+sont relatifs à **deux** modalités de référence : non seulement celle
+choisie pour le prédicteur, mais aussi celle choisie pour la variable à
+expliquer. C’est particulièrement difficile quand il est ardu de trouver
+une bonne modalité de référence correspondant à la situation la plus
+commune (comme « married » pour le statut matrimonial).
 
 La plupart du temps, demander des points de pourcentage est plus facile
 à interpréter, parce que cela fait disparaître la seconde modalité de
@@ -1196,7 +1192,7 @@ marginaux moyens :
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), measure = "difference", empirical = TRUE) # |> tab_export()
 ```
 
-Multinomial logistic regression: party3 by race, age +2 more
+Multinomial logistic regression: party3, by 4 predictors
 
 [TABLE]
 
@@ -1225,7 +1221,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1269,7 +1265,7 @@ tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
   set_display("{est} (obs {obs})")
 ```
 
-Logistic regression: married by race, rincome
+Logistic regression: married by race and rincome
 
 [TABLE]
 
@@ -1303,7 +1299,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         measure = "ratio", empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1324,7 +1320,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1376,7 +1372,7 @@ tab_reg(small, "married", c("race", "rincome", "relig"),
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1391,7 +1387,7 @@ tableau tranche de lui-même :
 | `measure = "difference"` — toute variable à expliquer | **oui** |
 | `measure = "ratio"`, ou `link = "ratio"` (risques relatifs) | **oui** |
 | `measure = "odds_ratio", effect = "marginal"` (binaire ou score sommé) | **oui** |
-| rapports de taux d’incidence de Poisson, différence de moyennes linéaire | **oui** |
+| ratios de moyennes de Poisson, différence de moyennes linéaire | **oui** |
 | rapports de cotes **conditionnels** — binomial, multinomial, ordinal cumulé | non (non collapsible) |
 | une `formula =` composée | non |
 | une variable à 3 modalités ou plus *pondérée* | elle ne se lit que sur ses coefficients |
@@ -1401,11 +1397,11 @@ les couleurs se lisent descriptivement : le tableau ne feint jamais une
 significativité qu’il n’a pas.
 
 L’hypothèse nulle est l’égalité de l’effet modélisé et de l’effet
-observé, sur l’échelle propre de l’effet : le log du rapport pour un
-risque relatif, un rapport de cotes ou un rapport de taux d’incidence ;
-la différence simple pour une différence de moyennes ou un effet
-marginal en points. C’est l’échelle autour de laquelle la couleur se
-replie déjà, de sorte que le test et la couleur ne peuvent pas diverger.
+observé, sur l’échelle propre de l’effet : le log du ratio pour un
+risque relatif, un rapport de cotes ou un ratio de moyennes ; la
+différence simple pour une différence de moyennes ou un effet marginal
+en points. C’est l’échelle autour de laquelle la couleur se replie déjà,
+de sorte que le test et la couleur ne peuvent pas diverger.
 
 Les deux estimations proviennent des mêmes lignes : elles sont donc
 corrélées, et leur différence a une erreur-type plus petite que chacune
@@ -1476,7 +1472,7 @@ dans la même grammaire [`{}`](https://rdrr.io/r/base/Paren.html).
 tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1492,7 +1488,7 @@ l’effet, et `"base"` n’affiche que les prédictions :
 tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1519,7 +1515,7 @@ colonne se lit d’un trait :
 tab_reg(gss_simple, "married", c("race", "age"))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1533,7 +1529,7 @@ du bas au haut de la distribution), ou un nombre d’unités.
 tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1558,7 +1554,7 @@ laquelle il est **ancré** :
 tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1609,7 +1605,7 @@ variable peut être contrôlée sur tout l’échantillon. Elle s’écrit dans
 tab_reg(gss_simple, "married", c(race*party3, relig), empirical = TRUE)
 ```
 
-Logistic regression: married by race\*party3, relig
+Logistic regression: married by race\*party3 and relig
 
 [TABLE]
 
@@ -1674,7 +1670,7 @@ l’unité que la ligne nomme :
 tab_reg(gss_simple, "married", c(age*race, relig), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age\*race +1 more
+Logistic regression: married by race, age\*race and relig
 
 [TABLE]
 
@@ -1703,7 +1699,7 @@ ligne :
 tab_reg(gss_simple, "married", c(age*tvhours, race), empirical = TRUE)
 ```
 
-Logistic regression: married by tvhours, age\*tvhours +1 more
+Logistic regression: married by tvhours, age\*tvhours and race
 
 [TABLE]
 
@@ -1768,8 +1764,8 @@ estimations indépendantes (Altman & Bland 2003). Les deux erreurs-types
 sont relues dans les intervalles de confiance que le tableau affiche
 déjà : le test et les intervalles imprimés ne peuvent donc pas se
 contredire. L’écart est mesuré sur l’échelle propre de l’effet — le log
-du rapport pour un rapport de cotes, un risque relatif ou un rapport de
-taux, la différence simple pour un bêta ou un effet marginal — et
+du ratio pour un rapport de cotes, un risque relatif ou un ratio de
+moyennes, la différence simple pour un bêta ou un effet marginal — et
 comparé à un seuil normal (z), légèrement conservateur sur petits
 effectifs.
 
@@ -1831,7 +1827,7 @@ côte, plus faciles à comparer :
 tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
 ```
 
-Logistic regression: married by race, rincome (tabbed by year)
+Logistic regression: married by race and rincome (tabbed by year)
 
 [TABLE]
 
@@ -1856,7 +1852,7 @@ tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
         color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome (tabbed by party3)
+Logistic regression: married by race and rincome (tabbed by party3)
 
 [TABLE]
 
@@ -1963,7 +1959,7 @@ façon à l’écran (voir le tableau des formes ci-dessous).
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -2033,7 +2029,7 @@ coefficient ne peut exprimer**.
 tab_reg(gss_simple, "married", c("race", "age", "tvhours"), family = "binomial")
 ```
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and tvhours
 
 [TABLE]
 
@@ -2113,7 +2109,7 @@ small <- gss_simple[sample(nrow(gss_simple), 200), ]
 tab_reg(small, "married", c("race", "age", "tvhours"), family = "binomial")
 ```
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and tvhours
 
 [TABLE]
 
@@ -2155,7 +2151,7 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
         shape = c(age = "quintiles"), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -2170,7 +2166,7 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
         shape = c(age = "quadratic"))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -2317,8 +2313,10 @@ plus haut).
 - [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
   est aussi disponible **sans écrire de code R**, comme une analyse
   **Modèles de régression** dans le module
-  [jamovi](https://www.jamovi.org/) — installer *tabxplor* depuis la
-  bibliothèque de modules de jamovi (voir [Introduction à
+  [jamovi](https://www.jamovi.org/) — un fichier à installer soi-même :
+  [la marche à
+  suivre](https://bricenocenti.github.io/tabxplor/index.html#the-jamovi-module)
+  (voir aussi [Introduction à
   tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-fr.md)).
 - [`?tab_reg`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md)
   pour chaque argument (groupés par usage), et

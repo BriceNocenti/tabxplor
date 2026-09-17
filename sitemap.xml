@@ -50,6 +50,7 @@
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/pillar_shaft.tabxplor_fmt.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/print.tabxplor_grouped_tab.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/print.tabxplor_kable.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/print.tabxplor_md.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/print.tabxplor_tab.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/print.tabxplor_tabs.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/questionr_hdv.html</loc></url>
@@ -63,8 +64,12 @@
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/rowwise.tabxplor_tab.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/score_from_lv1.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/select.tabxplor_grouped_tab.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/set_bars.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/set_caption.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/set_color_palette.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/set_footer_tabs.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/set_legend_words.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/set_subtext.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/shape_numeric_var.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/sub-.tabxplor_grouped_tab.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/sub-subset-.tabxplor_grouped_tab.html</loc></url>
@@ -81,14 +86,17 @@
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_css.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_estimates.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_export.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_footer_text.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_get_vars.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_get_wrapped_dimensions.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_html.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_many.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_md.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_note.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_num.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_parallel_stop.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_pct.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_pipe.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_plain.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_plot.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tab_prepare.html</loc></url>
@@ -105,6 +113,7 @@
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-base-coercion.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-data.table.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-display.html</loc></url>
+<url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-footer.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-options.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-package.html</loc></url>
 <url><loc>https://bricenocenti.github.io/tabxplor/reference/tabxplor-type.html</loc></url>

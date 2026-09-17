@@ -9,6 +9,13 @@ set_color_breaks.'><!-- PURPOSE: what txtheme adds to a consumer's <head>, so th
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -18,7 +25,7 @@ set_color_breaks.'><!-- PURPOSE: what txtheme adds to a consumer's <head>, so th
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -216,11 +223,16 @@ are the spanning row above their level columns. Level headers always keep their 
 
 
 <dt id="arg-wrap-rows">wrap_rows<a class="anchor" aria-label="anchor" href="#arg-wrap-rows"></a></dt>
-<dd><p>By default, rownames are wrapped when larger than 30 characters.</p></dd>
+<dd><p>Row labels are wrapped past this width (35 characters by default).</p></dd>
 
 
 <dt id="arg-wrap-cols">wrap_cols<a class="anchor" aria-label="anchor" href="#arg-wrap-cols"></a></dt>
-<dd><p>By default, colnames are wrapped when larger than 12 characters.</p></dd>
+<dd><p>Column headers are wrapped past this width (15 characters by default), at the seams a
+compound name is built from (<code>_</code>, <code>.</code>, <code>*</code>, a camelCase boundary). A col_var's spanning
+name is measured against the width its own columns leave it first: past that it wraps,
+and past what wrapping can do it is shown from the prefix it shares with the block before
+it (<code>MUS_CONCERT_CLASSIQUE</code>, then <code>_ROCK</code>), and held to this width in the last resort —
+never while there is room for the whole name.</p></dd>
 
 
 <dt id="arg-ratio-cells">ratio_cells<a class="anchor" aria-label="anchor" href="#arg-ratio-cells"></a></dt>
@@ -290,7 +302,7 @@ ratio back, with no macro and no add-in:</p>
 <span class="r-in"><span>    <span class="fu"><a href="tab.html">tab</a></span><span class="op">(</span><span class="va">marital</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>    <span class="fu">tab_xl</span><span class="op">(</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span></span></span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Excel file written to <span style="color: #0000BB;">/tmp/RtmpMe8d2k/Tab.xlsx</span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BB00;">✔</span> Excel file written to <span style="color: #0000BB;">/tmp/RtmpPxMHqM/Tab.xlsx</span></span>
 <span class="r-in"><span><span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

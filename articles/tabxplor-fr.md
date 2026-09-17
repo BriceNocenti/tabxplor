@@ -26,13 +26,14 @@ modifiable avec tous les verbes `dplyr` habituels. Il s’exporte vers
 Excel, HTML et Markdown avec ses repères de couleur.
 
 **Pas besoin de R pour qui préfère utiliser une interface graphique.**
-Tout ce qui suit existe aussi en version « presse-bouton », via un
-module pour le logiciel libre [jamovi](https://www.jamovi.org/).
-L’installer, ouvrir le menu des modules (le **`+`** en haut à droite),
-choisir **bibliothèque de jamovi**, chercher *tabxplor* dans la barre de
-recherche et l’installer : cela ajoute une analyse **Tableaux croisés**
-et une analyse **Modèles de régression**. Les boutons y portent le nom
-des arguments enseignés ici.
+Tout ce qui suit existe aussi en version « presse-bouton », via un
+module pour le logiciel libre [jamovi](https://www.jamovi.org/). Le
+module n’est pas dans la bibliothèque de jamovi : c’est un fichier à
+installer soi-même, un par système et par version de jamovi — [la marche
+à
+suivre](https://bricenocenti.github.io/tabxplor/index.html#the-jamovi-module).
+Il ajoute une analyse **Tableaux croisés** et une analyse **Modèles de
+régression**. Les boutons y portent le nom des arguments enseignés ici.
 
 Tout au long de cette introduction, nous utilisons `gss_simple`, une
 version du *General Social Survey* états-unien
@@ -394,7 +395,7 @@ affiche l’intervalle de confiance seul.
 
 `stars = TRUE` ajoute des étoiles de significativité. Elles racontent la
 même histoire que les intervalles de confiance de l’écart avec la
-référence, mais pour d’autres seuils de confiance (99 %, 95 %, 90 %) :
+référence, mais pour d’autres seuils de confiance (95 %, 99 %, 99,9 %) :
 
 ``` r
 
@@ -592,7 +593,7 @@ Passer une liste de plusieurs tableaux dans
 les affiche les uns à la suite des autres, ou dans différentes feuilles
 Excel.
 
-**Une seule feuille de style pour tout un document.** Dans un rapport
+**Une seule feuille de style pour tout un document.** Dans un document
 `.Rmd`/`.qmd`,
 [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
 écrit le CSS des couleurs une seule fois, et chaque tableau html suivant
@@ -647,7 +648,7 @@ La voie la plus rapide est d’utiliser les presets suivants :
 | `"base_ci"` | la base seule et son intervalle de confiance, `48.6 [45.1; 52.1]` |
 | `"base_moe"` | la base seule et sa marge d’erreur, `48.6 ± 3.5` |
 | `"base_diff"` | la base seule et, entre crochets, sa différence à la référence |
-| `"base_ratio"` | la base seule et la même comparaison, sous forme de rapport |
+| `"base_ratio"` | la base seule et la même comparaison, sous forme de ratio |
 | `"mean_sd"` | une moyenne et son écart-type (colonnes numériques) |
 | `"mean_cv"` | une moyenne et son coefficient de variation — la dispersion divisée par la moyenne de chaque catégorie, en pourcentage, ce qui la rend comparable entre plusieurs catégories (le défaut sur les colonnes numériques) |
 
@@ -695,9 +696,9 @@ tabxplor](https://bricenocenti.github.io/tabxplor/articles/tabxplor-programming-
 
 Chaque tableau html porte, au survol de chaque case, une **infobulle**
 avec les chiffres sous-jacents : l’effectif non pondéré, l’écart à la
-référence, le rapport, l’intervalle de confiance, etc. Elles sont
-actives par défaut dans le Viewer de RStudio/Positron et dans les
-rapports .Rmd/.qmd (`options(tabxplor.tab_kable_tooltips = FALSE)` pour
+référence, le ratio, l’intervalle de confiance, etc. Elles sont actives
+par défaut dans le Viewer de RStudio/Positron et dans les documents
+.Rmd/.qmd (`options(tabxplor.tab_kable_tooltips = FALSE)` pour
 désactiver cette fonctionnalité, comme ci-dessus).
 
 ``` r
@@ -872,7 +873,8 @@ en haut d’un script, ou dans un fichier `.Rprofile`. Les plus courantes
 
 - `options(tabxplor.print = "html")` — par défaut, afficher les tableaux
   non pas dans la console, mais en html dans le panneau Viewer de
-  RStudio ou Positron (recommandé)
+  RStudio ou Positron (recommandé) ; `"md"` les affiche en Markdown, ce
+  que demande un carnet knité directement en `.md`.
 - `options(tabxplor.cleannames = TRUE)` — retirer partout les préfixes
   de type `"1-"` des noms de modalités.
 - `options(tabxplor.parallel = 4)` — paralléliser par défaut les

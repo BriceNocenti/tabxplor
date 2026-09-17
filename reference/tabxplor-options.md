@@ -13,20 +13,32 @@ function, which always wins over the option.
 
 - `tabxplor.print`:
 
-  `"console"` (default): how a table auto-prints. `"html"` renders the
+  `"console"` (default): the medium a table auto-prints in. `"html"`
+  renders the
   [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
   table (in the Viewer pane in RStudio/Positron, and as a real html
   table in rmarkdown/Quarto documents) — recommended when you work in an
-  IDE with a Viewer. `"kable"` is an accepted synonym of `"html"` (the
-  pre-2.0.0 name).
+  IDE with a Viewer; `"kable"` is an accepted synonym of it (the
+  pre-2.0.0 name). `"md"` renders the
+  [`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md)
+  table, so a bare
+  [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
+  comes out as markdown — on standard output in a script, and raw (not
+  as a verbatim block) in a knitted document, which is what an
+  exploration notebook knitted straight to `.md` wants. Both media call
+  their exporter bare, so `tabxplor.theme` and `tabxplor.tab_kable_css`
+  govern them exactly as they govern an explicit call:
+  `options(tabxplor.tab_kable_css = FALSE)` is what stops each table
+  carrying its own stylesheet. There is no `"xl"` and no `"forest"`: one
+  writes a file, the other is a chart — ask for those by name.
 
 - `tabxplor.stars`:
 
   `FALSE` (default): whether cells show significance stars, and at which
   cut-offs. `FALSE` (no stars), `TRUE` (the default ladder
-  `c("*" = 0.10, "**" = 0.05, "***" = 0.01)`), or a named numeric giving
-  your own – names are the glyphs, values the p-value cut-offs, e.g.
-  `options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))`. Off for
+  `c("*" = 0.05, "**" = 0.01, "***" = 0.001)`), or a named numeric
+  giving your own – names are the glyphs, values the p-value cut-offs,
+  e.g. `options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))`. Off for
   [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md),
   on for
   [`tab_reg()`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md).
@@ -243,6 +255,14 @@ function, which always wins over the option.
   `"prose"` (full sentences) or `"terse"` (the compact one-line form the
   console uses). The console itself is always terse.
 
+- `tabxplor.subtext_bold_label`:
+
+  `TRUE` (default): whether a note line opening on a short label and a
+  colon (`"Champ : adults"`, `"Source: GSS"`) has that label set in
+  bold, in every medium. `FALSE` prints the note as written. The label
+  is at most four words, with no digit, so a free sentence is left
+  alone.
+
 - `tabxplor.test_lines`:
 
   `"summary"` (default): how many crosstab test rows the exporters
@@ -312,13 +332,13 @@ function, which always wins over the option.
 
 - `tabxplor.output_kable`:
 
-  `FALSE` (default): make
+  `FALSE` (default): **\[superseded\]** makes
   [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md)
-  render its result with
-  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
-  before returning it — a convenience for `.Rmd`/`.qmd` documents. Since
-  2.0.0 it only *renders*: it no longer changes the shape of the built
-  object (that is `output_list`).
+  return an html table instead of a table: the value can no longer be
+  piped, filtered or re-coloured. Use
+  `options(tabxplor.print = "html")`, which renders the same html at
+  print time and leaves the object a table. Still honoured, with one
+  message per session.
 
 ## Excel / [`tab_xl()`](https://bricenocenti.github.io/tabxplor/reference/tab_xl.md) export
 

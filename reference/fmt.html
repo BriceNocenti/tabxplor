@@ -29,6 +29,13 @@ using vctrs."><!-- PURPOSE: what txtheme adds to a consumer's <head>, so the con
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -38,7 +45,7 @@ using vctrs."><!-- PURPOSE: what txtheme adds to a consumer's <head>, so the con
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -169,7 +176,7 @@ null value is, whether the scale is additive or multiplicative, and which colour
 <li><p><code>"mean_diff"</code>: a difference between two means, in the outcome's own units</p></li>
 <li><p><code>"raw_diff"</code>: a regression coefficient / marginal effect in the outcome's units</p></li>
 <li><p><code>"pct_ratio"</code>, <code>"mean_ratio"</code>: the ratio of two percentages / two means</p></li>
-<li><p><code>"odds_ratio"</code>: a multiplicative effect (odds ratio, risk ratio, rate ratio)</p></li>
+<li><p><code>"odds_ratio"</code>: a multiplicative effect (odds ratio, risk ratio, ratio of means)</p></li>
 <li><p><code>"log_coef"</code>: a link-scale coefficient (a log-odds, a log-rate)</p></li>
 <li><p><code>"mixed"</code>: what binding columns of unlike scales collapses to</p></li>
 </ul></dd>
@@ -354,7 +361,7 @@ residual — see <code><a href="tab.html">tab</a></code>.</p></li>
 which compare a cell to <em>another column</em> rather than to a reference row. A hand-built
 column may carry them, provided it fills the <code>obs</code> field they score.</p></li>
 </ul><p>The value is <strong>validated and normalised</strong>: every accepted spelling — the discipline's
-acronyms included (<code>"RD"</code>, <code>"RR"</code>, <code>"IRR"</code>, <code>"RoM"</code>, <code>"OR"</code> and their
+acronyms included (<code>"RD"</code>, <code>"RR"</code>, <code>"RoM"</code>, <code>"OR"</code> and their
 lowercase twins) — is stored as its canonical measure name, and an unknown one is an error.
 The tabxplor 1.x combined strings <code>"diff_ci"</code> / <code>"after_ci"</code> still work but are
 superseded by the <code>color</code> + <code>color_signif</code> pair; here they resolve to their
@@ -473,6 +480,7 @@ the last few are not meant to be typed:</p><ul><li><p><code>est</code> — the e
 <li><p><code>base</code> — the level the estimate sits on: the percentage, the mean or the count. On a plain percentage table it is the same number as <code>est</code>; beside a regression effect it is the adjusted prediction.</p></li>
 <li><p><code>ci</code> — the confidence interval of whatever the column compares, as <code>[low;high]</code>.</p></li>
 <li><p><code>moe</code> — the margin of error — the same interval as <code>ci</code>, written as the half-width <code>+/-x</code> around the estimate. Void where the column compares a RATIO: a ratio's interval is symmetric on the LOG scale, so it has no half-width.</p></li>
+<li><p><code>odds</code> — the odds — <code>pct / (1 - pct)</code>, the quantity an odds ratio is a ratio of. Printed on the odds ratio's own ladder, so a cell below 1 reads its inverse ("1/2.60") unless <code>options(tabxplor.ratio_print = "raw")</code> asks for the plain number. Void where the percentage is 1 and the odds infinite.</p></li>
 <li><p><code>sd</code> — the standard deviation, in the variable's own unit.</p></li>
 <li><p><code>cv</code> — the coefficient of variation — the standard deviation as a percentage of the mean.</p></li>
 <li><p><code>resid</code> — the adjusted standardized residual – whether the cell departs from independence. Derived from the p-value and the sign of <code>ctr</code>, so it is read-only.</p></li>
@@ -765,7 +773,7 @@ accepts; <a href="fmt_fields.html">fmt_fields</a> and <a href="fmt_attributes.ht
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tabxplor tab: 25 × 6</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># Groups:         marital [7]</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    marital     race                          age       tvhours age_sd tvhours_sd</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>    <span style="color: #949494; font-style: italic;">     </span>       <span style="color: #949494; font-style: italic;">      </span>                <span style="color: #949494; font-style: italic;">&lt;mean (cv)&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;mean (cv)&gt;</span> <span style="color: #949494; font-style: italic;">&lt;mean&gt;</span> <span style="color: #949494; font-style: italic;">&lt;mean-var&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    <span style="color: #949494; font-style: italic;">     </span>       <span style="color: #949494; font-style: italic;">      </span>                <span style="color: #949494; font-style: italic;">&lt;mean (cv)&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;mean (cv)&gt;</span>  <span style="color: #949494; font-style: italic;">&lt;var&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;var&gt;</span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 1</span> No answer   Other               <span style="color: #BB0000;">34.0</span><span style="color: #444444;"> (cv 25%)</span> <span style="color: #BB0000;">2.0</span><span style="color: #444444;">          </span>   8.49           </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 2</span> No answer   Black               <span style="color: #00BBBB;">64.0</span><span style="color: #444444;">         </span>                                </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;"> 3</span> No answer   White               <span style="color: #00BBBB;">56.0</span><span style="color: #444444;"> (cv 28%)</span> <span style="color: #BBBB00;">2.6</span><span style="color: #444444;"> (cv  45%)</span>  15.71       1.19</span>

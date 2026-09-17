@@ -88,7 +88,7 @@ mostly detects it:
 |:---|:---|:---|
 | 2-level factor | binomial (logistic) | odds ratio (`OR`) |
 | numeric (continuous) | gaussian (linear) | mean difference (`diff`) |
-| count | poisson | incidence-rate ratio (`IRR`) |
+| count | poisson | ratio of means (`RoM`) |
 | 3+ level unordered factor | multinomial | one `OR` column per category vs. the reference |
 | 3+ level ordered factor | ordinal (proportional odds) | cumulative `OR`, or Somers’ `D` |
 
@@ -125,7 +125,7 @@ it.
 - 3+ levels logistic (multinomial) → the observed ORs are shown as a
   tooltip on the model cells in html exports
 - gaussian (linear) → group means and their difference
-- poisson (counts) → observed rate and observed rate ratio
+- poisson (counts) → observed mean count and observed ratio of means
 
 A continuous predictor has no levels, so its cell shows the effect alone
 — there is no observed percentage or mean to put beside it — and its
@@ -185,7 +185,7 @@ tab_reg(gss_simple, "rincome", c("race", "relig"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Ordinal logistic regression: rincome by race, relig
+Ordinal logistic regression: rincome by race and relig
 
 [TABLE]
 
@@ -211,7 +211,7 @@ tab_reg(gss_simple, "rincome", c("race", "relig"), measure = "difference",
         empirical = TRUE, display = "est_base", color = c(TRUE, "adjustment"))
 ```
 
-Ordinal logistic regression: rincome by race, relig
+Ordinal logistic regression: rincome by race and relig
 
 [TABLE]
 
@@ -227,7 +227,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Multinomial logistic regression: party3 by race, relig
+Multinomial logistic regression: party3 by race and relig
 
 [TABLE]
 
@@ -250,7 +250,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: tea_where by sex, SPC +1 more
+Logistic regression: tea_where by sex, SPC and Sport
 
 [TABLE]
 
@@ -277,7 +277,7 @@ tab_reg(gss_simple, "party3", c("race", "relig"), family = "multinomial",
         color_signif = "grey_non_signif")
 ```
 
-Multinomial logistic regression: party3 by race, relig
+Multinomial logistic regression: party3 by race and relig
 
 [TABLE]
 
@@ -366,7 +366,7 @@ own link, which is what `link = "auto"` resolves to.
 | numeric, score | `binomial`+trials | percentage | the same three | the same, per item | `OR`/`RR`/`RD` |
 | numeric | `gaussian` | a mean | `"difference"` † | linear regression | `diff` |
 |  |  |  | `"ratio"` | log-link Poisson pseudo-ML | `RoM` |
-| numeric, count | `poisson` | a count | `"ratio"` † | Poisson, quasi-Poisson SEs | `IRR` |
+| numeric, count | `poisson` | a count | `"ratio"` † | Poisson, quasi-Poisson SEs | `RoM` |
 | factor, 3+ un. | `multinomial` | percentage | `"odds_ratio"` † | multinomial logit | `OR` |
 | factor, ord. | `ordinal` | a rank | `"odds_ratio"` † | proportional-odds model | `cumOR` |
 
@@ -391,7 +391,7 @@ prefix.
 | a mean     | `"difference"` | `diff`             | `mdiff`       | `refdiff`        |
 | a mean     | `"ratio"`      | `RoM`              | `mRoM`        | `refRoM`         |
 | a mean     | `"odds_ratio"` | not defined        | not defined   | not defined      |
-| a count    | `"ratio"`      | `IRR`              | `mIRR`        | `refIRR`         |
+| a count    | `"ratio"`      | `RoM`              | `mRoM`        | `refRoM`         |
 | a count    | `"difference"` | —                  | `mdiff`       | `refdiff`        |
 | a count    | `"odds_ratio"` | not defined        | not defined   | not defined      |
 | a rank     | `"difference"` | —                  | `mD`          | not offered ²    |
@@ -430,7 +430,7 @@ back to the linear probability model.
 `measure = "raw_coefficient"` is not a fourth column: it is **the
 model’s own coefficient**, the estimand shown un-transformed. Where the
 reported measure is multiplicative that is its log, and the header says
-which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`);
+which one it logs (`Model_log(OR)`, `Model_log(RR)`, `Model_log(RoM)`);
 where the model is already additive there is nothing to un-exponentiate,
 and the coefficient IS the additive estimate the column already shows.
 So it answers for every family — which is what lets a table mixing a
@@ -452,8 +452,7 @@ top of it.
 | `cumOR` | cumulative odds ratio | `exp(coef(MASS::polr(...)))`, the proportional-odds model |
 | `RR` | risk ratio | modified Poisson, robust SE (Zou 2004) |
 | `RD` | risk difference, in points | `glm(y ~ ., binomial("identity"))`, robust SE |
-| `IRR` | incidence-rate ratio | `exp(coef(glm(y ~ ., poisson)))` |
-| `RoM` | ratio of means | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
+| `RoM` | ratio of means | a count: `exp(coef(glm(y ~ ., poisson)))`; a mean: log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
 | `diff` | mean difference | `coef(lm(...))` |
 
 | marker | reads | example |
@@ -482,7 +481,7 @@ directly readable coefficient at the price of one:
 | binomial · `"difference"` | identity-link binomial, robust SE | a constant risk difference |
 | gaussian · `"difference"` *(default)* | linear regression | a constant mean difference |
 | gaussian · `"ratio"` | log-link Poisson pseudo-ML, robust SE | E(y) = exp(xβ), so a constant ratio of means |
-| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant rate ratio |
+| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant ratio of means |
 | ordinal · `"odds_ratio"` *(default)* | proportional-odds model | one odds ratio, shared by every cut |
 | multinomial · `"odds_ratio"` *(default)* | multinomial logit | a constant odds ratio per category |
 
@@ -673,7 +672,7 @@ value `1`).
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"))
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -686,7 +685,7 @@ computed from.
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -763,7 +762,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "difference", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -793,7 +792,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "ratio", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -817,7 +816,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         measure = "odds_ratio", effect = "marginal", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -846,7 +845,7 @@ tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"),
         link = "ratio", empirical = TRUE)
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -923,7 +922,7 @@ could also be modelled as a count):
 tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian")
 ```
 
-Linear regression: age by race, marital +2 more
+Linear regression: age, by 4 predictors
 
 [TABLE]
 
@@ -937,7 +936,7 @@ the predictor, compared to the reference level.
 tab_reg(gss_simple, "age", c("race", "marital", "relig", "rincome"), family = "gaussian", empirical = TRUE)
 ```
 
-Linear regression: age by race, marital +2 more
+Linear regression: age, by 4 predictors
 
 [TABLE]
 
@@ -967,11 +966,11 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-Poisson regression: tvhours by race, marital +2 more
+Poisson regression: tvhours, by 4 predictors
 
 [TABLE]
 
-An **incidence-rate ratio** (IRR) of 1.5 means “50% more hours of TV per
+A **ratio of means** (`RoM`) of 1.5 means “50% more hours of TV per
 day”. Unweighted Poisson models automatically use dispersion-scaled
 (quasi-Poisson) standard errors, so over-dispersed counts get honest,
 wider intervals. Concretely: with an over-dispersed outcome,
@@ -991,20 +990,19 @@ hours compared to the reference level.
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
 ```
 
-Poisson regression: tvhours by race, marital +2 more
+Poisson regression: tvhours, by 4 predictors
 
 [TABLE]
 
-The empirical average TV hours per day, and differences of rate of
-television watching from reference, can be computed in a simple table
-with :
+The empirical average TV hours per day, and their ratios to the
+reference, can be computed in a simple table with :
 
 ``` r
 
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |> 
-  mutate(IRR = set_display(tvhours, "ratio"))
+  mutate(RoM = set_display(tvhours, "ratio"))
 ```
 
 [TABLE]
@@ -1036,7 +1034,7 @@ tab_reg(tea, "tea_where", c("sex", "SPC", "Sport"),
         family = "binomial", trials = length(tea_where_vars))
 ```
 
-Logistic regression: tea_where by sex, SPC +1 more
+Logistic regression: tea_where by sex, SPC and Sport
 
 [TABLE]
 
@@ -1063,7 +1061,7 @@ the proportional-odds assumption makes the same at every cut:
 tab_reg(gss_simple, "rincome", c("race", "age", "relig"))
 ```
 
-Ordinal logistic regression: rincome by race, age +1 more
+Ordinal logistic regression: rincome by race, age and relig
 
 [TABLE]
 
@@ -1080,7 +1078,7 @@ tab_reg(gss_simple, "rincome", c("race", "age", "relig"),
         measure = "difference", display = "est_base")
 ```
 
-Ordinal logistic regression: rincome by race, age +1 more
+Ordinal logistic regression: rincome by race, age and relig
 
 [TABLE]
 
@@ -1108,7 +1106,7 @@ ratios) :
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"))
 ```
 
-Multinomial logistic regression: party3 by race, age +2 more
+Multinomial logistic regression: party3, by 4 predictors
 
 [TABLE]
 
@@ -1132,7 +1130,7 @@ marginal effects:
 tab_reg(gss_simple, "party3", c("race", "age", "rincome", "relig"), measure = "difference", empirical = TRUE) # |> tab_export()
 ```
 
-Multinomial logistic regression: party3 by race, age +2 more
+Multinomial logistic regression: party3, by 4 predictors
 
 [TABLE]
 
@@ -1159,7 +1157,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1201,7 +1199,7 @@ tab_reg(gss_simple, "married", c("race", "rincome"), empirical = TRUE) |>
   set_display("{est} (obs {obs})")
 ```
 
-Logistic regression: married by race, rincome
+Logistic regression: married by race and rincome
 
 [TABLE]
 
@@ -1234,7 +1232,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         measure = "ratio", empirical = TRUE, color = c(TRUE, "adjustment"))
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1254,7 +1252,7 @@ tab_reg(gss_simple, "married", c("race", "rincome", "relig"),
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1304,7 +1302,7 @@ tab_reg(small, "married", c("race", "rincome", "relig"),
         color = c(TRUE, "adjustment"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome +1 more
+Logistic regression: married by race, rincome and relig
 
 [TABLE]
 
@@ -1319,7 +1317,7 @@ decides for you:
 | `measure = "difference"` — any outcome | **yes** |
 | `measure = "ratio"`, or `link = "ratio"` (risk ratios) | **yes** |
 | `measure = "odds_ratio", effect = "marginal"` (binary or summed score) | **yes** |
-| Poisson incidence-rate ratios, a linear mean difference | **yes** |
+| Poisson ratios of means, a linear mean difference | **yes** |
 | **conditional** odds ratios — binomial, multinomial, ordinal cumulative | no (non-collapsible) |
 | a compound `formula =` | no |
 | a *weighted* 3+ level outcome | it can only be read on its coefficients |
@@ -1329,10 +1327,10 @@ the colours read descriptively — the table never pretends to a
 significance it does not have.
 
 The null is that the modelled and observed effects are equal, on the
-effect’s own scale: the log-ratio for a risk ratio, an odds ratio or an
-incidence-rate ratio, the plain difference for a mean difference or a
-marginal effect in points. That is the scale the colour already folds
-around, so the test and the colour cannot drift apart.
+effect’s own scale: the log-ratio for a risk ratio, an odds ratio or a
+ratio of means, the plain difference for a mean difference or a marginal
+effect in points. That is the scale the colour already folds around, so
+the test and the colour cannot drift apart.
 
 The two estimates come from the same rows, so they are correlated and
 their difference has a smaller standard error than either alone. The
@@ -1399,7 +1397,7 @@ family):
 tab_reg(gss_simple, "married", c("race", "age"), display = "est_ci")
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1414,7 +1412,7 @@ graded by the effect, and `"base"` shows the predictions alone:
 tab_reg(gss_simple, "married", c("race", "age"), display = "est_base")
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1439,7 +1437,7 @@ footing, so a whole table can be read down its column:
 tab_reg(gss_simple, "married", c("race", "age"))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1453,7 +1451,7 @@ gives the raw per-one-unit effect:
 tab_reg(gss_simple, "married", c("race", "age"), multiplier = c(age = 10))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1477,7 +1475,7 @@ compared against; for a continuous predictor, the value it is
 tab_reg(gss_simple, "married", c("race", "age"), ref = c(race = "Black", age = 40))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -1524,7 +1522,7 @@ variable can be adjusted for across the whole sample. Write it in
 tab_reg(gss_simple, "married", c(race*party3, relig), empirical = TRUE)
 ```
 
-Logistic regression: married by race\*party3, relig
+Logistic regression: married by race\*party3 and relig
 
 [TABLE]
 
@@ -1584,7 +1582,7 @@ straight out of the fit, in the unit the row names:
 tab_reg(gss_simple, "married", c(age*race, relig), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age\*race +1 more
+Logistic regression: married by race, age\*race and relig
 
 [TABLE]
 
@@ -1612,7 +1610,7 @@ all, so the second one is cut into quartiles, again in one line:
 tab_reg(gss_simple, "married", c(age*tvhours, race), empirical = TRUE)
 ```
 
-Logistic regression: married by tvhours, age\*tvhours +1 more
+Logistic regression: married by tvhours, age\*tvhours and race
 
 [TABLE]
 
@@ -1673,8 +1671,8 @@ independent estimates (Altman & Bland 2003). Both standard errors are
 read back from the confidence intervals the table already prints, so the
 test and the printed intervals cannot disagree. The difference is
 measured on the effect’s own scale — the log-ratio for an odds ratio, a
-risk ratio or an incidence-rate ratio, the plain difference for a beta
-or a marginal effect — and compared to a normal (z) threshold, which is
+risk ratio or a ratio of means, the plain difference for a beta or a
+marginal effect — and compared to a normal (z) threshold, which is
 mildly conservative in small samples.
 
 The three `color_signif` policies then read that interval exactly as
@@ -1731,7 +1729,7 @@ comparison :
 tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "year")
 ```
 
-Logistic regression: married by race, rincome (tabbed by year)
+Logistic regression: married by race and rincome (tabbed by year)
 
 [TABLE]
 
@@ -1754,7 +1752,7 @@ tab_reg(gss_simple, "married", c("race", "rincome"), tab_vars = "party3",
         color = c(TRUE, "between_groups"), color_signif = "grey_non_signif")
 ```
 
-Logistic regression: married by race, rincome (tabbed by party3)
+Logistic regression: married by race and rincome (tabbed by party3)
 
 [TABLE]
 
@@ -1854,7 +1852,7 @@ shape table below).
 tab_reg(gss_simple, "married", c("race", "age", "rincome", "relig"), stats = c("n", "linearity", "dispersion", "influence", "collinearity"))
 ```
 
-Logistic regression: married by race, age +2 more
+Logistic regression: married, by 4 predictors
 
 [TABLE]
 
@@ -1917,7 +1915,7 @@ straight fall, so its single number describes it honestly — while
 tab_reg(gss_simple, "married", c("race", "age", "tvhours"), family = "binomial")
 ```
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and tvhours
 
 [TABLE]
 
@@ -1991,7 +1989,7 @@ small <- gss_simple[sample(nrow(gss_simple), 200), ]
 tab_reg(small, "married", c("race", "age", "tvhours"), family = "binomial")
 ```
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and tvhours
 
 [TABLE]
 
@@ -2031,7 +2029,7 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
         shape = c(age = "quintiles"), empirical = TRUE)
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 
@@ -2046,7 +2044,7 @@ tab_reg(gss_simple, "married", c("race", "age"), family = "binomial",
         shape = c(age = "quadratic"))
 ```
 
-Logistic regression: married by race, age
+Logistic regression: married by race and age
 
 [TABLE]
 

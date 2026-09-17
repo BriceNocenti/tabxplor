@@ -102,7 +102,7 @@ is_fmt(x)
     means
 
   - `"odds_ratio"`: a multiplicative effect (odds ratio, risk ratio,
-    rate ratio)
+    ratio of means)
 
   - `"log_coef"`: a link-scale coefficient (a log-odds, a log-rate)
 
@@ -322,13 +322,12 @@ is_fmt(x)
     the `obs` field they score.
 
   The value is **validated and normalised**: every accepted spelling —
-  the discipline's acronyms included (`"RD"`, `"RR"`, `"IRR"`, `"RoM"`,
-  `"OR"` and their lowercase twins) — is stored as its canonical measure
-  name, and an unknown one is an error. The tabxplor 1.x combined
-  strings `"diff_ci"` / `"after_ci"` still work but are superseded by
-  the `color` + `color_signif` pair; here they resolve to their
-  *measure* half only, so pass the significance policy through
-  `color_signif`.
+  the discipline's acronyms included (`"RD"`, `"RR"`, `"RoM"`, `"OR"`
+  and their lowercase twins) — is stored as its canonical measure name,
+  and an unknown one is an error. The tabxplor 1.x combined strings
+  `"diff_ci"` / `"after_ci"` still work but are superseded by the
+  `color` + `color_signif` pair; here they resolve to their *measure*
+  half only, so pass the significance policy through `color_signif`.
 
 - color_signif:
 
@@ -501,6 +500,12 @@ last few are not meant to be typed:
   the half-width `+/-x` around the estimate. Void where the column
   compares a RATIO: a ratio's interval is symmetric on the LOG scale, so
   it has no half-width.
+
+- `odds` — the odds — `pct / (1 - pct)`, the quantity an odds ratio is a
+  ratio of. Printed on the odds ratio's own ladder, so a cell below 1
+  reads its inverse ("1/2.60") unless
+  `options(tabxplor.ratio_print = "raw")` asks for the plain number.
+  Void where the percentage is 1 and the odds infinite.
 
 - `sd` — the standard deviation, in the variable's own unit.
 
@@ -820,7 +825,7 @@ tab(forcats::gss_cat, race, c(age, tvhours), marital, digits = 1L, comp = "all",
 #> # A tabxplor tab: 25 × 6
 #> # Groups:         marital [7]
 #>    marital     race                          age       tvhours age_sd tvhours_sd
-#>                                      <mean (cv)>   <mean (cv)> <mean> <mean-var>
+#>                                      <mean (cv)>   <mean (cv)>  <var>      <var>
 #>  1 No answer   Other               34.0 (cv 25%) 2.0             8.49           
 #>  2 No answer   Black               64.0                                         
 #>  3 No answer   White               56.0 (cv 28%) 2.6 (cv  45%)  15.71       1.19

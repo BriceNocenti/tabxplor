@@ -29,6 +29,38 @@ statistically solid, to spot the structure of your data immediately.
 install.packages("tabxplor", dependencies = TRUE)
 ```
 
+### The jamovi module
+
+The point-and-click interface is a jamovi module, installed by
+**sideloading** a file. Install
+[jamovi](https://www.jamovi.org/download.html) first – the **solid**
+release its download page recommends – then take the file for your
+computer:
+
+|  | jamovi 2.7 (*solid*) | jamovi 28 (*current*) |
+|:---|:---|:---|
+| Windows | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_win-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_win-x64.jmo) |
+| Mac, Apple silicon | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-arm64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-arm64.jmo) |
+| Mac, Intel | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-x64.jmo) | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_macos-x64.jmo) |
+| Linux | – | [download](https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-28_linux-x64.jmo) |
+
+Your jamovi line is the number in its *About* box: `2.7.x` is *solid*,
+`28.x` is *current*. On a Mac, Apple menu `>>` *About This Mac*: *Chip:
+Apple M…* is Apple silicon, *Processor: Intel* is Intel.
+
+Then, in jamovi: `Modules` (the **`+`**, top right) `>>` *Manage
+installed modules* `>>` *Sideload* `>>` the arrow in the middle `>>` the
+file you downloaded. It adds a **Crosstables** and a **Regressions**
+analysis, whose options carry the names of the arguments documented
+here.
+
+*Two symptoms worth knowing: if jamovi says the module needs an update,
+or that it “is either missing or incompatible”, the file is for another
+jamovi line; if an analysis errors about a package that cannot be
+loaded, it is for another system. The full, current list of files is
+always on the [releases
+page](https://github.com/BriceNocenti/tabxplor/releases/latest).*
+
 ## A quick look
 
 A simple cross-table with row percentages: shades of blue mean the cell
@@ -73,7 +105,7 @@ counterparts.
 tab_reg(gss, outcome = "married", predictors = c("race", "age", "rincome"))
 ```
 
-Logistic regression: married by race, age +1 more
+Logistic regression: married by race, age and rincome
 
 [TABLE]
 

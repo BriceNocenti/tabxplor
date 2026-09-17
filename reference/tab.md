@@ -142,8 +142,8 @@ tab(
     reference (percentage points for factors, Glass's \\\Delta\\ for
     means).
 
-  - `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`): relative risk (factors) or
-    mean ratio (numerics) vs the reference.
+  - `"ratio"` (`"RR"`, `"RoM"`): relative risk (factors) or mean ratio
+    (numerics) vs the reference.
 
   - `"odds_ratio"` (`"OR"`): the odds ratio, on percentage tables,
     coloured on its own symmetric scale.
@@ -388,9 +388,10 @@ tab(
   is in
   [tabxplor-display](https://bricenocenti.github.io/tabxplor/reference/tabxplor-display.md);
   [`set_display`](https://bricenocenti.github.io/tabxplor/reference/fmt_fields.md)
-  changes it on a table already built. A layout showing an interval
-  prints the one the table computed, so pair it with a `ci = ` value or
-  a `color` that needs one.
+  changes it on a table already built. A layout that names a confidence
+  interval or a contribution to the chi-squared COMPUTES it, so
+  `display = "base_ci"` needs no `ci = ` beside it; an explicit
+  `ci = "no"` still stands.
 
 - color_breaks:
 

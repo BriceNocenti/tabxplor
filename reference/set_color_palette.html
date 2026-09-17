@@ -27,7 +27,7 @@ adj_diff_std are the
 tab_reg-only scales of color = &quot;adjustment&quot; / &quot;between_groups&quot; –
 how far a modelled effect sits from the observed one (or from the reference group's). Which one a
 column reads follows the estimate's own scale: adj_ratio for a multiplicative effect (odds /
-risk / rate ratio), adj_diff for a probability-scale marginal effect (in percentage points),
+risk ratio or ratio of means), adj_diff for a probability-scale marginal effect (in percentage points),
 and adj_diff_std for an additive effect in the outcome's own units (a gaussian beta, a count
 marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 whatever unit the outcome is recorded in. An empty/NULL scale
@@ -35,7 +35,7 @@ drops that measure for its column type.
 Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
 quantity it grades is bounded above: a percentage ratio is capped at 1 / base, so a cell can
 sit far below its reference and never far above it, and pct_ratio is stricter below
-(list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))) – a mean ratio, a rate ratio
+(list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))) – a ratio of means
 and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
 on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
 color = TRUE the text grades every deviation and the background flags the ones whose
@@ -67,7 +67,7 @@ adj_diff_std are the
 tab_reg-only scales of color = &quot;adjustment&quot; / &quot;between_groups&quot; –
 how far a modelled effect sits from the observed one (or from the reference group's). Which one a
 column reads follows the estimate's own scale: adj_ratio for a multiplicative effect (odds /
-risk / rate ratio), adj_diff for a probability-scale marginal effect (in percentage points),
+risk ratio or ratio of means), adj_diff for a probability-scale marginal effect (in percentage points),
 and adj_diff_std for an additive effect in the outcome's own units (a gaussian beta, a count
 marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 whatever unit the outcome is recorded in. An empty/NULL scale
@@ -75,7 +75,7 @@ drops that measure for its column type.
 Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
 quantity it grades is bounded above: a percentage ratio is capped at 1 / base, so a cell can
 sit far below its reference and never far above it, and pct_ratio is stricter below
-(list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))) – a mean ratio, a rate ratio
+(list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))) – a ratio of means
 and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
 on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
 color = TRUE the text grades every deviation and the background flags the ones whose
@@ -83,6 +83,13 @@ RELATIVE size is out of proportion."><!-- PURPOSE: what txtheme adds to a consum
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -92,7 +99,7 @@ RELATIVE size is out of proportion."><!-- PURPOSE: what txtheme adds to a consum
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -168,7 +175,7 @@ the remaining ones are read as spacings from it. <code>adj_ratio</code>, <code>a
 <code><a href="tab_reg.html">tab_reg</a></code>-only scales of <code>color = "adjustment"</code> / <code>"between_groups"</code> –
 how far a modelled effect sits from the observed one (or from the reference group's). Which one a
 column reads follows the estimate's own scale: <code>adj_ratio</code> for a multiplicative effect (odds /
-risk / rate ratio), <code>adj_diff</code> for a probability-scale marginal effect (in percentage points),
+risk ratio or ratio of means), <code>adj_diff</code> for a probability-scale marginal effect (in percentage points),
 and <code>adj_diff_std</code> for an additive effect in the outcome's own units (a gaussian beta, a count
 marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 whatever unit the outcome is recorded in. An empty/<code>NULL</code> scale
@@ -176,7 +183,7 @@ drops that measure for its column type.</p>
 <p>Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
 quantity it grades is bounded above: a percentage ratio is capped at <code>1 / base</code>, so a cell can
 sit far below its reference and never far above it, and <code>pct_ratio</code> is stricter below
-(<code>list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))</code>) – a mean ratio, a rate ratio
+(<code>list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))</code>) – a ratio of means
 and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
 on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
 <code>color = TRUE</code> the text grades every deviation and the background flags the ones whose

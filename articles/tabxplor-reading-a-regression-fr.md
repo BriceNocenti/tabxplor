@@ -14,8 +14,8 @@ tous les étudiants ne savent pas dire *quelles* choses ont été
 maintenues égales, ni ce que cela a changé au résultat. Les méthodes de
 régression ne sont-elles pas, trop souvent, enseignées comme des
 machines à prédire ? : on y verse des variables, il en sort des nombres
-— coefficients, rapports de cotes — dont le rapport avec ce qu’on
-pouvait lire dans les données reste souvent mystérieux.
+— coefficients, rapports de cotes — dont le lien avec ce qu’on pouvait
+lire dans les données reste souvent mystérieux.
 
 `tabxplor` prend le chemin inverse : son objectif est de construire un
 modèle de régression sur des données d’enquête (ou des bases de données
@@ -209,7 +209,7 @@ Chacune des trois dernières colonnes correspond à une mesure de l’écart.
 
 - une **différence** de −12 points de pourcentage — on soustrait l’un de
   l’autre ;
-- un **rapport** de ÷1.16 — les personnes noires ont été relâchées 1,2
+- un **ratio** de ÷1.16 — les personnes noires ont été relâchées 1,2
   fois moins souvent que les personnes blanches (risque relatif) ;
 - un **rapport de cotes** (*odds ratio*) de $`1/2.11`$ — les personnes
   noires ont 2,11 fois *moins* de chances (*odds*) que la population
@@ -230,18 +230,18 @@ C’est l’argument qu’on utilise le plus régulièrement (l’équivalent de
 **La cote, c’est le mot des paris sportifs.** Le terme vient du turf :
 dire qu’un cheval est *coté à 3 contre 1*, c’est dire que sa probabilité
 de gagner est trois fois plus grande que sa probabilité de perdre. Une
-cote met en rapport une situation dissymétrique — au numérateur la
+cote met en regard une situation dissymétrique — au numérateur la
 réussite, au dénominateur l’échec. Ici : sur 100 personnes blanches
 interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de
 **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8
-contre 1**. Le rapport de ces deux quantités est le *rapport de cotes* :
+contre 1**. Le ratio de ces deux quantités est le *rapport de cotes* :
 $`2.8/6.1 = 0.46`$. Comme il tombe du mauvais côté de 1, on en prend
 l’inverse, $`1/0.46`$ — et on inverse aussi la formulation : `1/2.11`,
 soit 2,11 fois *moins* de chances.
 
 **Ce sont trois mesures du *même* écart**, et pourtant elles ne se
 lisent pas du tout de la même façon : le rapport de cotes fait sonner
-l’écart environ cinq fois plus fort que le rapport. Ce n’est pas une
+l’écart environ cinq fois plus fort que le ratio. Ce n’est pas une
 déformation, c’est que l’un divise des *cotes* et l’autre des
 pourcentages. Mais c’est le contresens le plus répandu des sciences
 sociales, et autant le rappeler : un rapport de cotes de 2 ne veut pas
@@ -298,7 +298,7 @@ tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
 
 Une case est **significative** quand l’intervalle de sa déviation par
 rapport à la référence exclut la valeur neutre, celle qui signifierait
-aucun écart du tout : 0 pour une différence, 1 pour un rapport ou un
+aucun écart du tout : 0 pour une différence, 1 pour un ratio ou un
 rapport de cotes. L’intervalle, les étoiles et le grisé sont cohérents
 parce qu’ils lisent tous le résultat du même calcul.
 
@@ -351,7 +351,7 @@ mesure de l’écart**.
 | — | choix parmi 3 modalités ou plus | `multinomial` | rapport de cotes – avec une colonne par catégorie |
 | — | choix parmi des catégories ordonnées | `ordinal` | rapport de cotes – un seul partagé par toutes les modalités |
 | variable numérique | quantité continue (argent, âge…) | `gaussian` | différence de moyennes |
-| — | décompte (heures de `x`, nombre de `x`) | `poisson` | rapport de taux d’incidence — « 1,4 fois plus de `x`/jour » |
+| — | décompte (heures de `x`, nombre de `x`) | `poisson` | ratio de moyennes — « 1,4 fois plus de `x`/jour » |
 | — | score comptant un nombre de réponses Oui/Non | `binomial` | rapport de cotes |
 
 Pour une variable catégorielle, un `factor` au sens de R, le modèle
@@ -388,8 +388,8 @@ entre catégories d’un prédicteur d’une manière spécifique :
 
 - **comme décompte** — les autres variables choisies étant égales, les
   personnes racisées comme noires figurent dans **1,35 fois plus** de
-  fichiers que les personnes du groupe ethnique majoritaire (rapport de
-  taux d’incidence, IRR) ;
+  fichiers que les personnes du groupe ethnique majoritaire (ratio de
+  moyennes, `RoM`) ;
 - **comme score sur six** — pour **un fichier donné**, leur chance
   (cote, *odds*) d’y figurer plutôt que de ne pas y figurer est **1,55
   fois plus élevée** (*odds ratio*)
@@ -420,8 +420,8 @@ car_arrests |>
           )
 ```
 
-Regression models: checks_gaussian, checks_poisson +1 more by colour,
-employed +1 more
+Regression models: checks_gaussian, checks_poisson and checks_binomial
+by colour, employed and citizen
 
 [TABLE]
 
@@ -460,9 +460,9 @@ reg_measures(car_arrests, "checks")
 #>  5 binomial (any)      difference marginal|at_reference Model_mRD   marginal ri…
 #>  6 binomial (any)      ratio      marginal|at_reference Model_mRR   marginal ri…
 #>  7 binomial (any)      odds_ratio marginal|at_reference Model_mOR   marginal od…
-#>  8 poisson  ratio      ratio      conditional           Model_IRR   incidence-r…
+#>  8 poisson  ratio      ratio      conditional           Model_RoM   ratio of me…
 #>  9 poisson  (any)      difference marginal|at_reference Model_mdiff marginal me…
-#> 10 poisson  (any)      ratio      marginal|at_reference Model_mIRR  marginal in…
+#> 10 poisson  (any)      ratio      marginal|at_reference Model_mRoM  marginal ra…
 ```
 
 Chaque famille de modèle vient avec son lien (`link =`) par défaut, sa
@@ -500,7 +500,7 @@ model <- tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citize
 model
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -524,8 +524,10 @@ croisé — le rapport de cotes calculé directement sur les pourcentages
 observés, imprimé à côté du modèle. Les traditionnelles étoiles ont été
 ajoutées pour dire en toutes lettres ce que les couleurs encodent déjà :
 une catégorie sans étoile n’est pas significativement différente de la
-modalité de référence, au seuil de confiance de 90 % que marque la plus
-petite étoile (le grisé, lui, se décide à 95 %).
+modalité de référence. La plus petite étoile marque le seuil de 95 %,
+celui-là même où se décide le grisé — une case grisée ne porte donc
+jamais d’étoile —, les deux autres (99 % et 99,9 %) disant de combien
+l’intervalle dépasse encore la référence.
 
 C’est ce qui rend la comparaison possible et honnête, et cela vaut
 d’être énoncé comme une règle : **dans tabxplor, l’écart observé est
@@ -557,7 +559,7 @@ de détails sur l’ajustement.
 
 ### Lire une ligne de gauche à droite permet de suivre la logique de la modélisation
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -628,7 +630,7 @@ figure déjà — est une variable numérique : il n’a donc pas de modalités
 tab_reg(car_arrests, "released", c("colour", "checks"), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -659,7 +661,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"),
         empirical = FALSE, stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -691,7 +693,7 @@ catégories. C’est l’argument `shape =` qui le fait :
 tab_reg(car_arrests, "released", c("colour", "checks"), shape = c(checks = "quartiles"), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -710,7 +712,7 @@ tab_reg(car_arrests, "released", c("colour", "checks"),
         ref = c(checks = 0), multiplier = c(checks = 1), stats = NULL)
 ```
 
-Logistic regression: released by colour, checks
+Logistic regression: released by colour and checks
 
 [TABLE]
 
@@ -746,7 +748,7 @@ avant de la citer.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen"), empirical = FALSE, stats = NULL)
 ```
 
-Logistic regression: released by colour, sex +2 more
+Logistic regression: released, by 4 predictors
 
 [TABLE]
 
@@ -850,7 +852,7 @@ par défaut, puisqu’un modèle logistique travaille avec des *odds*.
 tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "checks"), stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -874,7 +876,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "ratio", stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -894,7 +896,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "ratio", stats=NULL, outcome_level = "No")
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -909,7 +911,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "difference", stats=NULL)
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -945,7 +947,7 @@ Cette opération porte, en statistique, le nom d’**effet marginal** — et
 il faut prendre garde à un faux ami : en sociologie française, à la
 suite de Philippe Cibois, « effet marginal » désigne souvent un effet
 *exprimé en points de pourcentage*. Originellement, le mot veut dire
-**moyenné sur l’échantillon**, et vaut pour un rapport aussi bien qu’une
+**moyenné sur l’échantillon**, et vaut pour un ratio aussi bien qu’une
 différence. On dira donc aussi bien *effet moyenné* ou *effet moyenné
 sur l’échantillon*, qui ont l’avantage de dire ce qu’ils font.
 
@@ -1069,7 +1071,7 @@ résultat réel commenté quelque part dans cet article :
 à Toronto, nous avons vu que l’effet de la couleur de peau perdait
 environ la moitié de sa taille. Une partie de ce qui ressemblait à un
 effet direct de la race assignée était l’emploi, la nationalité
-canadienne et les antécédents dans les rapports avec la police (tous
+canadienne et les antécédents dans les relations avec la police (tous
 conséquences, d’une certaine manière, d’une certaine dimension du
 racisme structurel). Mais l’autre moitié, celle qui tient, pourrait
 *aussi* s’expliquer par une forme de racisation plus directe se jouant
@@ -1088,7 +1090,7 @@ tab_reg(car_arrests, "released", c("colour", "sex", "employed", "citizen", "chec
         measure = "difference")
 ```
 
-Logistic regression: released by colour, sex +3 more
+Logistic regression: released, by 5 predictors
 
 [TABLE]
 
@@ -1164,10 +1166,9 @@ Logistic regressions (models comparison): released, ‘Yes’ (mRD)
 Les nuances du jaune au rouge disent que l’ajustement a ramené l’écart
 **plus près de la valeur nulle** (0 = « aucun effet »), voire parfois
 qu’il en a **inversé le sens** (par exemple, on passe d’un écart négatif
-à un écart positif). Pour un rapport ou un **odds ratio** la valeur
-nulle est 1, et inverser l’effet consisterait à passer de « A a *moins*
-de chances de X que B » (`÷`) à « A a *plus* de chances de X que B »
-(`×`).
+à un écart positif). Pour un ratio ou un **odds ratio** la valeur nulle
+est 1, et inverser l’effet consisterait à passer de « A a *moins* de
+chances de X que B » (`÷`) à « A a *plus* de chances de X que B » (`×`).
 
 Des bleus de plus en plus foncés diraient, pour leur part, que
 l’ajustement a poussé l’écart **plus loin de la valeur nulle** (0 = «
@@ -1255,7 +1256,7 @@ tab_reg(car_arrests, "checks", c("colour", "sex", "employed", "citizen"),
         family = "binomial", trials = 6)
 ```
 
-Logistic regression: checks by colour, sex +2 more
+Logistic regression: checks, by 4 predictors
 
 [TABLE]
 
@@ -1346,7 +1347,7 @@ tab_reg(car_salaries, "salary", c("sex", "discipline", "yrs.service", "rank"),
         family = "gaussian", display = "est_ci", empirical = FALSE)
 ```
 
-Linear regression: salary by sex, discipline +2 more
+Linear regression: salary, by 4 predictors
 
 [TABLE]
 
@@ -1387,7 +1388,7 @@ départements de l’université :
 tab_reg(ucb, "Admit", c("Gender", "Dept"), measure = "difference")
 ```
 
-Logistic regression: Admit by Gender, Dept
+Logistic regression: Admit by Gender and Dept
 
 [TABLE]
 
@@ -1442,7 +1443,7 @@ s’ils allaient au cinéma. Croisons cela avec la catégorie sociale :
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"))
 ```
 
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 
 [TABLE]
 
@@ -1471,7 +1472,7 @@ supplémentaire ?
 
 Le coupable est le rapport de cotes lui-même. **Un rapport de cotes se
 déplace dès qu’on ajoute au modèle n’importe quel prédicteur fort de la
-variable à expliquer, même sans le moindre rapport avec la variable qui
+variable à expliquer, même sans le moindre lien avec la variable qui
 nous intéresse.** Cette propriété porte un nom, la non-collapsibilité,
 et elle relève de l’arithmétique. L’avertissement de Carina Mood aux
 sociologues est exactement celui-là : pour cette raison, on ne peut pas
@@ -1488,7 +1489,7 @@ pourcentages :
 tab_reg(questionr_hdv, "cinema", c("qualif", "age"), measure = "difference")
 ```
 
-Logistic regression: cinema by qualif, age
+Logistic regression: cinema by qualif and age
 
 [TABLE]
 

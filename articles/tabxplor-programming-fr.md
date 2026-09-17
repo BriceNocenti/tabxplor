@@ -98,10 +98,10 @@ destinés à l’utilisateur sont :
 | `pct` | pourcentage |
 | `mean` | moyenne (variables en colonne numériques) |
 | `diff` | différence avec la case Total / de référence |
-| `ratio` | rapport à la référence (risque relatif, ou rapport de moyennes) |
+| `ratio` | ratio à la référence (risque relatif, ou ratio de moyennes) |
 | `ci_inf`, `ci_sup` | bornes de l’intervalle de confiance |
 | `pvalue` | p-valeur de significativité par case (alimente les étoiles) |
-| `or` | rapport de cotes / rapport de risques relatifs |
+| `or` | rapport de cotes |
 | `ctr` | contribution au Chi2 (`color = "contrib"`) |
 | `var` | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n` | la base propre à la case — l’effectif sur lequel son pourcentage est calculé |
@@ -353,7 +353,7 @@ Outre les champs de chaque case, chaque colonne `fmt` porte quelques
   : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`,
   `"level_mean"`), une différence (`"points"` pour des points de
   pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de
-  régression dans l’unité de la variable à expliquer), un rapport
+  régression dans l’unité de la variable à expliquer), un ratio
   (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur
   l’échelle du lien (`"log_coef"`). Il indique quel champ contient
   l’estimation, quelle est sa valeur nulle, et sur quelle échelle de
@@ -525,8 +525,9 @@ fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
 ## Tableaux à partir d’effectifs déjà agrégés
 
 Parfois, les données arrivent déjà croisées — un tableau d’effectifs
-issu d’un rapport, une [`table()`](https://rdrr.io/r/base/table.html),
-une matrice de fréquences.
+issu d’une publication, une
+[`table()`](https://rdrr.io/r/base/table.html), une matrice de
+fréquences.
 [`tab_counts()`](https://bricenocenti.github.io/tabxplor/reference/tab_counts.md)
 construit le même tableau `tabxplor` que
 [`tab()`](https://bricenocenti.github.io/tabxplor/reference/tab.md),
@@ -649,10 +650,15 @@ HTML /
 :
 
 - `tabxplor.tab_kable_css` — inclure la feuille de style avec chaque
-  tableau (`TRUE`) ; la mettre à `FALSE` dans un document à plusieurs
-  tableaux, et appeler
+  tableau
+  [`tab_html()`](https://bricenocenti.github.io/tabxplor/reference/tab_html.md)
+  *et*
+  [`tab_md()`](https://bricenocenti.github.io/tabxplor/reference/tab_md.md)
+  (`TRUE`) ; la mettre à `FALSE` dans un document à plusieurs tableaux,
+  et appeler
   [`tab_css()`](https://bricenocenti.github.io/tabxplor/reference/tab_css.md)
-  une seule fois à la place (comme cette page).
+  une seule fois à la place (comme cette page) — ou dans un carnet en
+  Markdown brut, qui n’en veut aucune.
 - `tabxplor.tab_kable_tooltips` — les infobulles au survol des cases
   (`TRUE`) ; la mettre à `FALSE` une fois par document pour les couper
   partout.
@@ -669,7 +675,7 @@ Excel / `tab_export("xl")` :
   et des nombres avec étoiles.
 - `tabxplor.xl_ratio_cells` — sous quelle forme une case multiplicative
   arrive dans Excel : `"fold"` (le défaut, l’écart signé comme nombre),
-  `"raw"` (le rapport non transformé) ou `"text"` (la chaîne d’affichage
+  `"raw"` (le ratio non transformé) ou `"text"` (la chaîne d’affichage
   exacte).
 
 Console, statistiques et chemins :

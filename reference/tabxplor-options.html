@@ -11,6 +11,13 @@ relevant function, which always wins over the option."><!-- PURPOSE: what txthem
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -20,7 +27,7 @@ relevant function, which always wins over the option."><!-- PURPOSE: what txthem
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,10 +88,10 @@ relevant function, which always wins over the option.</p>
 
 
 <dl><dt><code>tabxplor.print</code></dt>
-<dd><p><code>"console"</code> (default): how a table auto-prints. <code>"html"</code> renders the <code><a href="tab_html.html">tab_html()</a></code> table (in the Viewer pane in RStudio/Positron, and as a real html table in rmarkdown/Quarto documents) — recommended when you work in an IDE with a Viewer. <code>"kable"</code> is an accepted synonym of <code>"html"</code> (the pre-2.0.0 name).</p></dd>
+<dd><p><code>"console"</code> (default): the medium a table auto-prints in. <code>"html"</code> renders the <code><a href="tab_html.html">tab_html()</a></code> table (in the Viewer pane in RStudio/Positron, and as a real html table in rmarkdown/Quarto documents) — recommended when you work in an IDE with a Viewer; <code>"kable"</code> is an accepted synonym of it (the pre-2.0.0 name). <code>"md"</code> renders the <code><a href="tab_md.html">tab_md()</a></code> table, so a bare <code><a href="tab.html">tab()</a></code> comes out as markdown — on standard output in a script, and raw (not as a verbatim block) in a knitted document, which is what an exploration notebook knitted straight to <code>.md</code> wants. Both media call their exporter bare, so <code>tabxplor.theme</code> and <code>tabxplor.tab_kable_css</code> govern them exactly as they govern an explicit call: <code>options(tabxplor.tab_kable_css = FALSE)</code> is what stops each table carrying its own stylesheet. There is no <code>"xl"</code> and no <code>"forest"</code>: one writes a file, the other is a chart — ask for those by name.</p></dd>
 
 <dt><code>tabxplor.stars</code></dt>
-<dd><p><code>FALSE</code> (default): whether cells show significance stars, and at which cut-offs. <code>FALSE</code> (no stars), <code>TRUE</code> (the default ladder <code>c("*" = 0.10, "**" = 0.05, "***" = 0.01)</code>), or a named numeric giving your own – names are the glyphs, values the p-value cut-offs, e.g. <code>options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))</code>. Off for <code><a href="tab.html">tab()</a></code>, on for <code><a href="tab_reg.html">tab_reg()</a></code>. The LADDER is a render-time reading of each cell's stored p-value, so it is this option alone — change it and every table already built shows the new glyphs. Per-call <code>stars =</code>.</p></dd>
+<dd><p><code>FALSE</code> (default): whether cells show significance stars, and at which cut-offs. <code>FALSE</code> (no stars), <code>TRUE</code> (the default ladder <code>c("*" = 0.05, "**" = 0.01, "***" = 0.001)</code>), or a named numeric giving your own – names are the glyphs, values the p-value cut-offs, e.g. <code>options(tabxplor.stars = c("*" = 0.05, "**" = 0.01))</code>. Off for <code><a href="tab.html">tab()</a></code>, on for <code><a href="tab_reg.html">tab_reg()</a></code>. The LADDER is a render-time reading of each cell's stored p-value, so it is this option alone — change it and every table already built shows the new glyphs. Per-call <code>stars =</code>.</p></dd>
 
 <dt><code>tabxplor.ratio_print</code></dt>
 <dd><p><code>"inverse"</code> (default): prints a multiplicative value below its reference as the inverse — an odds ratio of 0.37 as <code>1/2.67</code>, a mean ratio of 0.42 as <code>/2.4</code> — so "2.7 times less" reads as strongly as "2.7 times more", and the same in a bracket. <code>"raw"</code> prints the plain number (<code>0.37</code>), the convention of most journals.</p></dd>
@@ -152,6 +159,9 @@ relevant function, which always wins over the option.</p>
 <dt><code>tabxplor.legend_style</code></dt>
 <dd><p><code>"prose"</code> (default): the colour-legend style in exports (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_html()</a></code>, <code><a href="tab_xl.html">tab_xl()</a></code>): <code>"prose"</code> (full sentences) or <code>"terse"</code> (the compact one-line form the console uses). The console itself is always terse.</p></dd>
 
+<dt><code>tabxplor.subtext_bold_label</code></dt>
+<dd><p><code>TRUE</code> (default): whether a note line opening on a short label and a colon (<code>"Champ : adults"</code>, <code>"Source: GSS"</code>) has that label set in bold, in every medium. <code>FALSE</code> prints the note as written. The label is at most four words, with no digit, so a free sentence is left alone.</p></dd>
+
 <dt><code>tabxplor.test_lines</code></dt>
 <dd><p><code>"summary"</code> (default): how many crosstab test rows the exporters (<code><a href="tab_md.html">tab_md()</a></code>, <code><a href="tab_html.html">tab_html()</a></code>, <code><a href="tab_xl.html">tab_xl()</a></code>) append: <code>"summary"</code> (p-value + effect size), <code>"all"</code> (+ the raw statistic), <code>"stat"</code> (p-value + statistic), or <code>"pvalue"</code> (the single p-value row). The p-value row name states the test used ("pvalue (Chi2, Welch F; survey-design)") and the effect-size row its measure ("Cramer's V, eta2"). N is never added – it is already shown by the <code>n</code> column. The console block always shows N + p-value + effect size.</p></dd>
 
@@ -177,7 +187,7 @@ relevant function, which always wins over the option.</p>
 <dd><p>the HTML/markdown number-font CSS stack. Monospace by default so figures stay column-aligned (set a proportional stack to revert).</p></dd>
 
 <dt><code>tabxplor.output_kable</code></dt>
-<dd><p><code>FALSE</code> (default): make <code><a href="tab.html">tab()</a></code> render its result with <code><a href="tab_html.html">tab_html()</a></code> before returning it — a convenience for <code>.Rmd</code>/<code>.qmd</code> documents. Since 2.0.0 it only <em>renders</em>: it no longer changes the shape of the built object (that is <code>output_list</code>).</p></dd>
+<dd><p><code>FALSE</code> (default): <a href="https://lifecycle.r-lib.org/articles/stages.html#superseded" class="external-link"><img src="figures/lifecycle-superseded.svg" alt="[Superseded]"></a> makes <code><a href="tab.html">tab()</a></code> return an html table instead of a table: the value can no longer be piped, filtered or re-coloured. Use <code>options(tabxplor.print = "html")</code>, which renders the same html at print time and leaves the object a table. Still honoured, with one message per session.</p></dd>
 
 
 </dl></div>

@@ -21,6 +21,7 @@ tab_html(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -40,6 +41,7 @@ tab_kable(
   transpose = FALSE,
   var_names = NULL,
   get_data = FALSE,
+  cells = NULL,
   wrap_rows = 35,
   wrap_cols = 15,
   whitespace_only = TRUE,
@@ -144,13 +146,30 @@ tab_kable(
 
   Get the transformed data instead of the html table.
 
+- cells:
+
+  The write side of `get_data`: the same data.frame, with the cells you
+  want to replace edited. A value still equal to the one the table
+  renders means "keep", so handing the frame straight back changes
+  nothing; anything else is written verbatim into that cell, markup and
+  all. The cell keeps its classes and its tooltip, and loses the
+  decorations that belonged to the text it replaced (the bold split, the
+  background pill, the sparkline). Pass a list of one data.frame per
+  table when several are rendered at once.
+
 - wrap_rows:
 
-  By default, rownames are wrapped when larger than 30 characters.
+  Row labels are wrapped past this width (35 characters by default).
 
 - wrap_cols:
 
-  By default, colnames are wrapped when larger than 12 characters.
+  Column headers are wrapped past this width (15 characters by default),
+  at the seams a compound name is built from (`_`, `.`, `*`, a camelCase
+  boundary). A col_var's spanning name is measured against the width its
+  own columns leave it first: past that it wraps, and past what wrapping
+  can do it is shown from the prefix it shares with the block before it
+  (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`), and held to this width in the
+  last resort — never while there is room for the whole name.
 
 - whitespace_only:
 
@@ -207,7 +226,9 @@ tab_html(tabs, theme = "light")
 #> <style>.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 #> .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 #> .tabxplor-tab{margin-bottom:1.2em;}
-#> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+#> .tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}
+#> .tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}
+#> .tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}
 #> .tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}
 #> .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 #> .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
@@ -251,6 +272,11 @@ tab_html(tabs, theme = "light")
 #> .popover-body,.popover-content{padding:6px;white-space:pre;}
 #> .tabxplor-tab{color:#000000;background:transparent;}
 #> .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}
+#> .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+#> .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+#> .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+#> .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+#> .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 #> .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 #> .g1,.tabxplor-tab .g1{color:#949494;}
 #> .g2,.tabxplor-tab .g2{color:#444444;}
@@ -277,10 +303,119 @@ tab_html(tabs, theme = "light")
 #> .u2,.tabxplor-tab .u2{background-color:#F6CFB0;}
 #> .u3,.tabxplor-tab .u3{background-color:#FCBDA5;}
 #> .u4,.tabxplor-tab .u4{background-color:#FEAC9F;}
+#> :root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}
+#> :root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}
+#> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+#> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+#> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+#> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+#> :root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+#> :root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}
+#> :root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}
+#> :root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}
+#> :root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}
+#> :root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}
+#> :root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}
+#> :root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}
+#> :root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}
+#> :root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}
+#> :root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}
+#> :root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}
+#> :root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}
+#> :root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}
+#> :root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+#> :root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+#> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+#> :root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+#> :root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+#> :root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}
+#> :root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}
+#> :root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}
+#> :root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}
+#> :root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}
+#> :root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}
+#> :root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}
+#> :root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}
+#> :root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}
+#> :root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}
+#> :root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}
+#> :root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}
+#> :root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}
+#> :root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}
+#> :root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}
+#> :root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}
+#> :root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}
+#> :root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}
+#> :root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+#> :root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+#> :root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+#> :root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+#> :root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+#> :root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}
+#> :root .tabxplor-tab.tx-print_marks .g1{color:#888888;}
+#> :root .tabxplor-tab.tx-print_marks .g2{color:#444444;}
+#> :root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}
+#> :root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}
+#> :root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}
+#> :root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}
+#> :root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}
+#> :root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}
+#> :root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+#> :root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}
+#> :root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}
+#> :root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}
+#> :root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}
+#> :root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}
+#> :root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}
+#> :root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}
+#> :root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}
+#> :root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}
+#> :root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}
 #> @media print {
 #>   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+#>   .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+#>   .tx-scrollbox{max-width:none;overflow:visible;}
 #>   .tabxplor-tab{color:#000000;background:#ffffff;}
 #>   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+#>   .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+#>   .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+#>   .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+#>   .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+#>   .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
 #>   .tabxplor-tab tbody tr:hover{background:transparent;}
 #>   .g1,.tabxplor-tab .g1{color:#949494;}
 #>   .g2,.tabxplor-tab .g2{color:#444444;}
@@ -309,7 +444,7 @@ tab_html(tabs, theme = "light")
 #>   .u3,.tabxplor-tab .u3{background-color:#D0D0D0;}
 #>   .u4,.tabxplor-tab .u4{background-color:#B8B8B8;}
 #> }</style>
-#> <table class="tabxplor-tab" data-quarto-disable-processing="true"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="6">marital</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv" rowspan="2">race</th><th class="tx-r tx-num">No answer</th><th class="tx-r tx-num">Never married</th><th class="tx-r tx-num">Separated</th><th class="tx-r tx-num">Divorced</th><th class="tx-r tx-num">Widowed</th><th class="tx-r tx-num">Married</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr><tr><th class="tx-r tx-num tx-unit">&lt;row%&gt;</th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-br tx-bl tx-tot tx-unit">&lt;row% (n)&gt;</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">Other</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×16.10 ; OR: 1.00 ; n: 1">1%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +9% ; ratio: ×1.36 ; OR: 1/11.87 ; n: 60">34%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.15 ; OR: 1/14.00 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -4% ; ratio: ÷1.37 ; OR: 1/22.05 ; n: 20">11%</td><td class="tx-r tx-num m1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷2.12 ; OR: 1/34.12 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.02 ; OR: 1/16.38 ; n: 78">45%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (   175)</span></td></tr>
+#> <div class="tx-scrollbox"><table class="tabxplor-tab" data-quarto-disable-processing="true"><thead><tr><th class="tx-span" colspan="1"></th><th class="tx-span" colspan="6">marital</th><th class="tx-span" colspan="1"></th></tr><tr><th class="tx-l tx-br tx-bl tx-rv" rowspan="2">race</th><th class="tx-r tx-num">No answer</th><th class="tx-r tx-num">Never married</th><th class="tx-r tx-num">Separated</th><th class="tx-r tx-num">Divorced</th><th class="tx-r tx-num">Widowed</th><th class="tx-r tx-num">Married</th><th class="tx-r tx-num tx-br tx-bl tx-tot">Total</th></tr><tr><th class="tx-r tx-num tx-unit">&lt;row%&gt;</th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-unit"></th><th class="tx-r tx-num tx-br tx-bl tx-tot tx-unit">&lt;row% (n)&gt;</th></tr></thead><tbody><tr><td class="tx-l tx-br tx-bl tx-rv">Other</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×16.10 ; OR: 1.00 ; n: 1">1%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +9% ; ratio: ×1.36 ; OR: 1/11.87 ; n: 60">34%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.15 ; OR: 1/14.00 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -4% ; ratio: ÷1.37 ; OR: 1/22.05 ; n: 20">11%</td><td class="tx-r tx-num m1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷2.12 ; OR: 1/34.12 ; n: 8">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.02 ; OR: 1/16.38 ; n: 78">45%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (   175)</span></td></tr>
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">Black</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×0 ; n: 0">0%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +11% ; ratio: ×1.45 ; OR: Inf ; n: 157">37%</td><td class="tx-r tx-num p1 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +6% ; ratio: ×2.52 ; OR: Inf ; n: 43">10%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -2% ; ratio: ÷1.12 ; OR: Inf ; n: 60">14%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.15 ; OR: Inf ; n: 48">11%</td><td class="tx-r tx-num m3 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -17% ; ratio: ÷1.61 ; OR: Inf ; n: 121">28%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (   429)</span></td></tr>
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">White</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×0 ; n: 0">0%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -3% ; ratio: ÷1.13 ; OR: Inf ; n: 495">22%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.44 ; OR: Inf ; n: 61">3%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.04 ; OR: Inf ; n: 361">16%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1.01 ; OR: Inf ; n: 217">10%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +3% ; ratio: ×1.07 ; OR: Inf ; n: 1 079">49%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> ( 2 213)</span></td></tr>
 #> <tr class="tx-b tx-bt tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total 2000</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1">0%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 712">25%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 112">4%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 441">16%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 273">10%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 278">45%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> ( 2 817)</span></td></tr>
@@ -341,6 +476,6 @@ tab_html(tabs, theme = "light")
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">Black</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×3.29 ; OR: 1.00 ; n: 2">1%</td><td class="tx-r tx-num p3 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +17% ; ratio: ×1.63 ; OR: 1/2.02 ; n: 167">43%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +2% ; ratio: ×1.54 ; OR: 1/2.13 ; n: 19">5%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.09 ; OR: 1/3.02 ; n: 68">18%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1.04 ; OR: 1/3.17 ; n: 33">9%</td><td class="tx-r tx-num m3 tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -20% ; ratio: ÷1.82 ; OR: 1/5.97 ; n: 97">25%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (   386)</span></td></tr>
 #> <tr><td class="tx-l tx-br tx-bl tx-rv">White</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ÷1.49 ; OR: 1.00 ; n: 2">0%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -5% ; ratio: ÷1.21 ; OR: 1.24 ; n: 417">22%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: -1% ; ratio: ÷1.21 ; OR: 1.23 ; n: 50">3%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +0% ; ratio: ×1.00 ; OR: 1.49 ; n: 306">16%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +1% ; ratio: ×1.07 ; OR: 1.59 ; n: 166">9%</td><td class="tx-r tx-num g1" data-toggle="tooltip" data-container="body" data-placement="auto right" title="diff: +5% ; ratio: ×1.10 ; OR: 1.64 ; n: 949">50%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> ( 1 890)</span></td></tr>
 #> <tr class="tx-b tx-bt tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total 2014</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 4">0%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 675">27%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 81">3%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 411">16%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 209">8%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 158">46%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> ( 2 538)</span></td></tr>
-#> <tr class="tx-b tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total Ensemble</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 17">0%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 5 416">25%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 743">3%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 383">16%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 807">8%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 10 117">47%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (21 483)</span></td></tr></tbody><tfoot><tr><td colspan="8"><div class="tx-foot">Percentage points (risk) difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p3" style="font-weight:bold;">+15</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m3" style="font-weight:bold;">-15</span>; <span class="m4" style="font-weight:bold;">-30</span> points.</div></td></tr></tfoot></table>
+#> <tr class="tx-b tx-bb tx-bb2"><td class="tx-l tx-br tx-bl tx-rv">Total Ensemble</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 17">0%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 5 416">25%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 743">3%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 3 383">16%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 1 807">8%</td><td class="tx-r tx-num tx-b" data-toggle="tooltip" data-container="body" data-placement="auto right" title="ref ; n: 10 117">47%</td><td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">100%<span class="tx-sec" style="font-weight:normal;"> (21 483)</span></td></tr></tbody><tfoot><tr><td colspan="8"><div class="tx-foot">Percentage points (risk) difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p3" style="font-weight:bold;">+15</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m3" style="font-weight:bold;">-15</span>; <span class="m4" style="font-weight:bold;">-30</span> points.</div></td></tr></tfoot></table></div>
 # }
 ```

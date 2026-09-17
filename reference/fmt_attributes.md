@@ -106,7 +106,7 @@ set_color_signif(x, color_signif)
     means
 
   - `"odds_ratio"`: a multiplicative effect (odds ratio, risk ratio,
-    rate ratio)
+    ratio of means)
 
   - `"log_coef"`: a link-scale coefficient (a log-odds, a log-rate)
 
@@ -186,13 +186,12 @@ set_color_signif(x, color_signif)
     the `obs` field they score.
 
   The value is **validated and normalised**: every accepted spelling —
-  the discipline's acronyms included (`"RD"`, `"RR"`, `"IRR"`, `"RoM"`,
-  `"OR"` and their lowercase twins) — is stored as its canonical measure
-  name, and an unknown one is an error. The tabxplor 1.x combined
-  strings `"diff_ci"` / `"after_ci"` still work but are superseded by
-  the `color` + `color_signif` pair; here they resolve to their
-  *measure* half only, so pass the significance policy through
-  `color_signif`.
+  the discipline's acronyms included (`"RD"`, `"RR"`, `"RoM"`, `"OR"`
+  and their lowercase twins) — is stored as its canonical measure name,
+  and an unknown one is an error. The tabxplor 1.x combined strings
+  `"diff_ci"` / `"after_ci"` still work but are superseded by the
+  `color` + `color_signif` pair; here they resolve to their *measure*
+  half only, so pass the significance policy through `color_signif`.
 
 - color_signif:
 

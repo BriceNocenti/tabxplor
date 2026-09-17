@@ -2,6 +2,11 @@
 
    The twelve pandoc-span annotation classes: their colours from TX_PALETTE, their
    typography from inst/prose/annotations.scss, appended below unchanged.
+
+   The palette is mode-independent BY CONSTRUCTION -- every annotation hue sits at
+   medium OKLCH lightness with chroma capped, chosen to clear both #FFFFFF and a dark
+   ground. The one exception is the RESULT, which is the prose emphasis colour and so
+   follows it; that is the whole of the hooked block below.
    */
 
 :root {
@@ -18,6 +23,11 @@
   --non: #e61301;
   --comment-bg: #c6bf93;
   --comment-text: #2C2C2C;
+  --fig-rouge: #F4524B;
+  --fig-violet: #9E7ED7;
+  --fig-orange: #D87322;
+  --fig-bleu: #3798E6;
+  --fig-vert: #58A859;
 }
 
 /* PURPOSE: the twelve pandoc-span annotation classes -- their TYPOGRAPHY, which no palette can
@@ -110,3 +120,14 @@
   text-decoration-style:     double !important;
   text-underline-offset:     1px !important;
 }
+
+/* -- the five figure-legend hues ------------------------------------------------------------------
+ * `[les flèches violettes]{.fig-violet}`. NOT an annotation: an annotation says what a passage IS,
+ * these say WHICH MARK ON THE DRAWING the words name, so the hue is the figure's own and the class
+ * is named after the colour on purpose -- here the colour IS the meaning. The courses wrote them as
+ * colorize(x, "#9575cd"), a literal frozen into the prose and unreadable on a dark page.          */
+.fig-rouge  { color: var(--fig-rouge)  !important; font-weight: bold; }
+.fig-violet { color: var(--fig-violet) !important; font-weight: bold; }
+.fig-orange { color: var(--fig-orange) !important; font-weight: bold; }
+.fig-bleu   { color: var(--fig-bleu)   !important; font-weight: bold; }
+.fig-vert   { color: var(--fig-vert)   !important; font-weight: bold; }

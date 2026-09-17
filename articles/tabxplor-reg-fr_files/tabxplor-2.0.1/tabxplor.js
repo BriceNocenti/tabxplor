@@ -23,8 +23,16 @@
       }
       if (bs.Popover) {
         for (i = 0; i < pops.length; i++) {
+          /* `content` and `title` are passed EXPLICITLY, and that is the whole point of this
+             branch. Bootstrap 5 reads options from `data-bs-*` only, so the `data-content=` and
+             `title=` that tab_tooltip_attrs() writes -- the Bootstrap 3/4 spelling -- are invisible
+             to it. Left to itself BS5 builds a popover whose content is the empty default, and
+             `_isWithContent()` then refuses to show it: the markup was there, the binding was
+             there, and no bubble ever appeared. */
           new bs.Popover(pops[i], {placement: 'right', container: 'body',
-                                   trigger: 'hover focus', delay: 0});
+                                   trigger: 'hover focus', delay: 0,
+                                   title: pops[i].getAttribute('title') || '',
+                                   content: pops[i].getAttribute('data-content') || ''});
         }
       }
       return;

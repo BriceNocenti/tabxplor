@@ -3,6 +3,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -12,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -59,7 +66,33 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="2.0.0" id="tabxplor-200">tabxplor 2.0.0<a class="anchor" aria-label="anchor" href="#tabxplor-200"></a></h2>
+<h2 class="pkg-version" data-toc-text="2.0.1" id="tabxplor-201">tabxplor 2.0.1<a class="anchor" aria-label="anchor" href="#tabxplor-201"></a></h2>
+<div class="section level3">
+<h3 id="new-features-2-0-1">New features<a class="anchor" aria-label="anchor" href="#new-features-2-0-1"></a></h3>
+<ul><li><p><strong>The footer under a table is a template you can edit.</strong> Everything printed there — the weight line, the colour legend, the significance-stars key — is a <code>&lt;placeholder&gt;</code> in the table’s <code>subtext</code>, and everything you write is a line: the order of the lines is the order of the footer. <code><a href="../reference/set_subtext.html">get_subtext()</a></code> shows it, <code><a href="../reference/set_subtext.html">set_subtext()</a></code> replaces it, and dropping <code>&lt;legend&gt;</code> drops the legend, in the console too. <code><a href="../reference/set_legend_words.html">set_legend_words()</a></code> re-states what that legend calls a measure, for a table grading the same ladder on another quantity. See <code>?tabxplor-footer</code>.</p></li>
+<li><p><strong>A note, or a second table, under a table.</strong> <code><a href="../reference/set_footer_tabs.html">set_footer_tabs()</a></code> takes a <code>tabxplor_tab</code> and renders it as a table, or any other data.frame and renders it as a grey note; <code><a href="../reference/tab_note.html">tab_note()</a></code> sets that note’s headers, alignment and footnote.</p></li>
+<li><p><strong>Data bars.</strong> <code><a href="../reference/set_bars.html">set_bars()</a></code> draws a bar chart inside the table — in html and in Excel — scaled to the column’s own largest data cell, or to a ceiling you state.</p></li>
+<li><p><strong><code>options(tabxplor.print = "md")</code>.</strong> A bare table prints as markdown instead of in the console or the Viewer, which is what a Quarto or R Markdown notebook knitted without pandoc needs.</p></li>
+<li><p><strong>A wide html table scrolls instead of widening the page</strong>, in a document, on a pkgdown site, in the Viewer and in jamovi alike. Its title stays outside the box, and printing lifts the clip.</p></li>
+<li><p><strong><code>tab_html(cells = )</code> — write back what <code>get_data = TRUE</code> reads.</strong> Hand back the same data.frame with some cells edited and each edit is written verbatim into its <code>&lt;td&gt;</code>, keeping the cell’s colours, alignment and tooltip. This is the supported way to splice an input box, a link or a badge into a tabxplor table.</p></li>
+<li><p><strong>The jamovi module is now built for macOS (Apple silicon and Intel), Windows and Linux</strong>, on both jamovi lines, and published as downloadable files. It is installed by sideloading, not from jamovi’s library: the procedure and the links are in the README and on the package website.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="minor-improvements-and-fixes-2-0-1">Minor improvements and fixes<a class="anchor" aria-label="anchor" href="#minor-improvements-and-fixes-2-0-1"></a></h3>
+<ul><li><p><strong>Two bugs with weighted data, both silent.</strong> A variable whose name is not syntactic (<code>Age group</code>, <code>Household weight</code>) broke every formula built from names: with <code>design_effect = TRUE</code> the design-based tests returned <code>NA</code> with no message, and <code>tab_reg(wt = )</code> stopped on a parse error.</p></li>
+<li><p><strong>A <code>subtext</code> written by a user is escaped in html.</strong> It is now shown, never executed — which matters for a table shared inside jamovi, where an html result can run scripts.</p></li>
+<li><p><strong>Significance stars are now <code>.05</code> / <code>.01</code> / <code>.001</code></strong>, the discipline’s usual scale, instead of <code>.10</code> / <code>.05</code> / <code>.01</code>. At the default confidence level a greyed cell can therefore no longer carry a star.</p></li>
+<li><p><strong><code>display = "odds"</code></strong> prints the odds behind a percentage — the middle rung between a percentage and an odds ratio.</p></li>
+<li><p><strong>Options set in <code>.Rprofile</code> are no longer overwritten when the package loads.</strong> <code>tabxplor.print</code> and <code>tabxplor.theme</code> set before <code><a href="https://github.com/BriceNocenti/tabxplor" class="external-link">library(tabxplor)</a></code> now hold.</p></li>
+<li><p>A regression’s multiplicative count measure is named <code>RoM</code> (ratio of means) rather than <code>IRR</code>, so a column is headed <code>Model_RoM</code>; <code>measure = "IRR"</code> is still accepted.</p></li>
+<li><p>The weight footer no longer mentions intervals and tests that are not in the table: a weighted table showing none of them prints only “Weighted by <code>&lt;wt&gt;</code>.”</p></li>
+<li><p><strong>A <code>col_var</code> span header is wrapped and compacted like every other header.</strong> It was the one header no rule owned, so a long variable name widened the whole block. One visible consequence: its spaces are now narrow no-break spaces in html, as every other header’s already were — code that matches a span’s text literally has to allow for that.</p></li>
+<li><p>A host table and its subordinate share one footer, instead of printing the colour legend twice in html and not at all in the console.</p></li>
+<li><p>French translations: every multiplicative comparison that is not an odds ratio now reads <em>ratio</em>, and six mistranslated strings that were printing in English are fixed.</p></li>
+</ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="2.0.0" id="tabxplor-200">tabxplor 2.0.0<a class="anchor" aria-label="anchor" href="#tabxplor-200"></a></h2><p class="text-muted">CRAN release: 2026-08-29</p>
 <div class="section level3">
 <h3 id="new-features-2-0-0">New features<a class="anchor" aria-label="anchor" href="#new-features-2-0-0"></a></h3>
 <ul><li>
@@ -84,7 +117,7 @@
 <li>
 <strong>Redesigned colour API.</strong> Position picks the visual channel (1st value → text, 2nd → background), <code>color = TRUE</code> is the smart per-column-type default, and every ladder is the same ladder written in another measure, so a shade means the same deviation whichever measure a table is read on. OKLCH palettes, <code><a href="../reference/set_color_palette.html">set_color_palette()</a></code>, <code>color_breaks</code>, a <code>theme = "auto"</code> dark mode, and black-and-white publication palettes (<code>theme = "print_ready"</code>) saying it all typographically.</li>
 <li>
-<strong>One display grammar for both producers.</strong> Named layouts (<code>"est"</code>, <code>"est_ci"</code>, <code>"est_base"</code>, …) built on <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code> tokens — <code>display = "{pct} (n={n})"</code> — where <code>{est}</code> is whatever the column estimates and <code>{base}</code> the level it sits on. It is post-hoc: <code><a href="../reference/fmt_fields.html">set_display()</a></code> on a finished table gives the same table as asking at build time. Every cell of a percentage table now carries its odds ratio.</li>
+<strong>One display grammar for both producers.</strong> Named layouts (<code>"est"</code>, <code>"est_ci"</code>, <code>"est_base"</code>, …) built on <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code> tokens — <code>display = "{pct} (n={n})"</code> — where <code>{est}</code> is whatever the column estimates and <code>{base}</code> the level it sits on. It is post-hoc: <code><a href="../reference/fmt_fields.html">set_display()</a></code> on a finished table gives the same table as asking at build time. Every cell of a percentage table now carries its odds ratio, and <code>display = "odds"</code> prints the odds it is a ratio of.</li>
 <li>
 <strong><code>shape =</code> decides how a number enters a table</strong>: quantile groups, bands at the mean and one standard deviation either side, one level per value, or a <code>"log"</code> / <code>"sqrt"</code> transformation. A numeric <code>row_vars</code> / <code>tab_vars</code> is grouped rather than exploded; a mean cell shows <code>49 (cv 36%)</code>.</li>
 <li>
@@ -164,7 +197,7 @@
 <h4 id="hard-deprecated-defunct-in-2-0-0">Hard-deprecated (defunct in 2.1.0)<a class="anchor" aria-label="anchor" href="#hard-deprecated-defunct-in-2-0-0"></a></h4>
 <ul><li>The step-by-step chain warns on every call. What goes away is the <em>chaining API</em>, not the statistics: <code><a href="../reference/tab.html">tab()</a></code> and <code><a href="../reference/tab_num.html">tab_num()</a></code> compute the same numbers, in one pass.</li>
 <li>
-<code><a href="../reference/tab_prepare.html">tab_prepare()</a></code>, <code><a href="../reference/complete_partial_totals.html">complete_partial_totals()</a></code> and <code><a href="../reference/fct_recode_helper.html">fct_recode_helper()</a></code> will become internal or be removed; <code><a href="../reference/tab_prepare.html">tab_prepare()</a></code>’s work is done by <code><a href="../reference/tab.html">tab()</a></code> itself.</li>
+<code><a href="../reference/tab_prepare.html">tab_prepare()</a></code> and <code><a href="../reference/complete_partial_totals.html">complete_partial_totals()</a></code> will become internal or be removed; <code><a href="../reference/tab_prepare.html">tab_prepare()</a></code>’s work is done by <code><a href="../reference/tab.html">tab()</a></code> itself.</li>
 </ul></div>
 <div class="section level4">
 <h4 id="removed-now-an-error-2-0-0">Removed (now an error)<a class="anchor" aria-label="anchor" href="#removed-now-an-error-2-0-0"></a></h4>

@@ -72,16 +72,16 @@ tab_reg(car_salaries, "salary", c("sex", "discipline"))
 #> # A tabxplor tab: 5 × 5
 #> # Outcome:        salary
 #> # Groups:         var [3]
-#>   var        levels              n             Obs_diff           Model_diff
-#>                                <n>    <(obs mean) diff>    <diff (adj mean)>
-#> 1 Constant   Reference profile  18                                 95 914   
+#>   var        levels              n            Obs_diff          Model_diff
+#>                                <n>   <(obs mean) diff>   <diff (adj mean)>
+#> 1 Constant   Reference profile  18                                95 914  
 #> 
-#> 2 sex        Female             39 (101 002)       0          0    (101 056)
-#> 3 sex        Male              358 (115 090) +14 088*** +14 029*** (115 085)
+#> 2 sex        Female             39 (101 002)       0         0   (101 056)
+#> 3 sex        Male              358 (115 090) +14 088** +14 029** (115 085)
 #> 
-#> 4 discipline A                 181 (108 548)       0          0    (108 565)
-#> 5 discipline B                 216 (118 029)  +9 480***  +9 449*** (118 014)
+#> 4 discipline A                 181 (108 548)       0         0   (108 565)
+#> 5 discipline B                 216 (118 029)  +9 480**  +9 449** (118 014)
 #> # Model: linear regression; diff: mean difference (vs the reference category); obs mean: observed mean; adj mean: adjusted/predicted mean.
 #> # Obs_diff, Model_diff: diff in SD (ref.): -0.8 -0.4 -0.2 -0.1 +0.1 +0.2 +0.4 +0.8 [grey: non-significant or under ±0.1 SD]
-#> # ***: significantly different from the reference category (in bold) at the 99% confidence level; **: at the 95% level; *: at the 90% level; no star: not significant.
+#> # ***: significantly different from the reference category (in bold) at the 99.9% confidence level; **: at the 99% level; *: at the 95% level; no star: not significant.
 ```

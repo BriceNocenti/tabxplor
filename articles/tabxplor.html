@@ -19,6 +19,13 @@
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script>
 </head>
@@ -30,7 +37,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -81,7 +88,7 @@
 
 
 
-<script src="tabxplor_files/tabxplor-2.0.0/tabxplor.js"></script><div class="row">
+<script src="tabxplor_files/tabxplor-2.0.1/tabxplor.js"></script><div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>Introduction to tabxplor: crosstables with tab()</h1>
@@ -97,7 +104,9 @@
 .p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4{font-weight:bold;}
 .tabxplor-tab,.tabxplor-tab table{border-collapse:collapse;border-top-width:0;border-bottom-width:0;margin:0;font-family:"DejaVu Sans Condensed","DejaVu Sans",Arial,helvetica,sans-serif;}
 .tabxplor-tab{margin-bottom:1.2em;}
-.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-size:110%;white-space:normal;width:0;min-width:100%;}
+.tx-scrollbox{display:block;width:max-content;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;margin-bottom:1.2em;}
+.tx-scrollbox>.tabxplor-tab{display:table;overflow:visible;margin-bottom:0;}
+.tabxplor-caption{display:block;text-align:left;font-weight:bold;font-style:italic;font-size:110%;white-space:normal;width:0;min-width:100%;margin-top:1.2em;margin-bottom:0;}
 .tabxplor-tab>caption{caption-side:top;padding:0;margin:0;}
 .tabxplor-tab tfoot{font-size:80%;text-align:left;}
 .tabxplor-tab th,.tabxplor-tab td{padding:3px 4px;vertical-align:top;line-height:1.1;}
@@ -141,6 +150,11 @@
 .popover-body,.popover-content{padding:6px;white-space:pre;}
 .tabxplor-tab{color:#000000;background:transparent;}
 .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#000000;}
+.tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+.tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+.tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+.tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+.tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 .g1,.tabxplor-tab .g1{color:#949494;}
 .g2,.tabxplor-tab .g2{color:#444444;}
@@ -171,6 +185,11 @@
   .tabxplor-tab{color:#f1efe0;background:transparent;}
   .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,:is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),.tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
   .tabxplor-tab th,.tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
   .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
   .g1,.tabxplor-tab .g1{color:#919085;}
   .g2,.tabxplor-tab .g2{color:#CDCBBC;}
@@ -200,6 +219,11 @@
 }
 body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab{color:#000000;background:transparent;}
 body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td{background-color:transparent;border-color:#000000;}
+body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#0267c7;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.07);}
+body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover{background:#FFFCE5;}
 body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1{color:#949494;}
 body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2{color:#444444;}
@@ -227,8 +251,13 @@ body.quarto-light .u2,body.quarto-light .tabxplor-tab .u2,[data-bs-theme=light] 
 body.quarto-light .u3,body.quarto-light .tabxplor-tab .u3,[data-bs-theme=light] .u3,[data-bs-theme=light] .tabxplor-tab .u3,[data-theme=light] .u3,[data-theme=light] .tabxplor-tab .u3{background-color:#FCBDA5;}
 body.quarto-light .u4,body.quarto-light .tabxplor-tab .u4,[data-bs-theme=light] .u4,[data-bs-theme=light] .tabxplor-tab .u4,[data-theme=light] .u4,[data-theme=light] .tabxplor-tab .u4{background-color:#FEAC9F;}
 body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#f1efe0;background:transparent;}
-body.quarto-dark .tabxplor-tab td:not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4) .tx-pill,body.quarto-dark :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,body.quarto-dark .o2,body.quarto-dark .o3,body.quarto-dark .o4,body.quarto-dark .u1,body.quarto-dark .u2,body.quarto-dark .u3,body.quarto-dark .u4):not(.p1,body.quarto-dark .p2,body.quarto-dark .p3,body.quarto-dark .p4,body.quarto-dark .m1,body.quarto-dark .m2,body.quarto-dark .m3,body.quarto-dark .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4) .tx-pill,[data-bs-theme=dark] :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,[data-bs-theme=dark] .o2,[data-bs-theme=dark] .o3,[data-bs-theme=dark] .o4,[data-bs-theme=dark] .u1,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .u4):not(.p1,[data-bs-theme=dark] .p2,[data-bs-theme=dark] .p3,[data-bs-theme=dark] .p4,[data-bs-theme=dark] .m1,[data-bs-theme=dark] .m2,[data-bs-theme=dark] .m3,[data-bs-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4) .tx-pill,[data-theme=dark] :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,[data-theme=dark] .o2,[data-theme=dark] .o3,[data-theme=dark] .o4,[data-theme=dark] .u1,[data-theme=dark] .u2,[data-theme=dark] .u3,[data-theme=dark] .u4):not(.p1,[data-theme=dark] .p2,[data-theme=dark] .p3,[data-theme=dark] .p4,[data-theme=dark] .m1,[data-theme=dark] .m2,[data-theme=dark] .m3,[data-theme=dark] .m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4) .tx-pill,html.dark :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,html.dark .o2,html.dark .o3,html.dark .o4,html.dark .u1,html.dark .u2,html.dark .u3,html.dark .u4):not(.p1,html.dark .p2,html.dark .p3,html.dark .p4,html.dark .m1,html.dark .m2,html.dark .m3,html.dark .m4):not(.tx-pill){color:#21252b;}
+body.quarto-dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,body.quarto-dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),body.quarto-dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-bs-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-bs-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,[data-theme=dark] :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),[data-theme=dark] .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab td:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4) .tx-pill,html.dark :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill),html.dark .tabxplor-tab :is(.o1,.o2,.o3,.o4,.u1,.u2,.u3,.u4):not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4):not(.tx-pill){color:#21252b;}
 body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{background-color:transparent;border-color:#CDCBBC;}
+body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#72a7ff;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(255,255,255,.07);}
+body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 14%,transparent);}
 body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:rgba(255,242,204,.10);}
 body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#919085;}
 body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#CDCBBC;}
@@ -255,10 +284,119 @@ body.quarto-dark .u1,body.quarto-dark .tabxplor-tab .u1,[data-bs-theme=dark] .u1
 body.quarto-dark .u2,body.quarto-dark .tabxplor-tab .u2,[data-bs-theme=dark] .u2,[data-bs-theme=dark] .tabxplor-tab .u2,[data-theme=dark] .u2,[data-theme=dark] .tabxplor-tab .u2,html.dark .u2,html.dark .tabxplor-tab .u2{background-color:#F6D0B2;}
 body.quarto-dark .u3,body.quarto-dark .tabxplor-tab .u3,[data-bs-theme=dark] .u3,[data-bs-theme=dark] .tabxplor-tab .u3,[data-theme=dark] .u3,[data-theme=dark] .tabxplor-tab .u3,html.dark .u3,html.dark .tabxplor-tab .u3{background-color:#FABDA8;}
 body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4,[data-bs-theme=dark] .tabxplor-tab .u4,[data-theme=dark] .u4,[data-theme=dark] .tabxplor-tab .u4,html.dark .u4,html.dark .tabxplor-tab .u4{background-color:#FCAAA3;}
+:root .tabxplor-tab.tx-print_minimalistic{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_minimalistic th,:root .tabxplor-tab.tx-print_minimalistic td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before,:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_minimalistic td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_minimalistic tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_minimalistic .g1{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-unit{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_minimalistic.tx-shape .tx-sec{color:#949494;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_minimalistic .p1{color:#555555;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p2{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .p4{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_minimalistic .m1{color:#555555;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m2{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m3{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .m4{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_minimalistic .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_minimalistic .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_minimalistic .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_minimalistic .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_minimalistic .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_emphasis th,:root .tabxplor-tab.tx-print_emphasis td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before,:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_emphasis td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_emphasis tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_emphasis .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_emphasis.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_emphasis .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_emphasis .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_emphasis .p2{color:#000000;}
+:root .tabxplor-tab.tx-print_emphasis .p3{color:#000000;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .p4{color:#000000;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .m1{color:#000000;font-weight:normal;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m2{color:#000000;font-style:italic;}
+:root .tabxplor-tab.tx-print_emphasis .m3{color:#000000;font-style:italic;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_emphasis .m4{color:#000000;font-style:italic;text-decoration:underline double;}
+:root .tabxplor-tab.tx-print_emphasis .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_emphasis .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_emphasis .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_emphasis .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_emphasis .u4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks{color:#000000;background:#ffffff;}
+:root .tabxplor-tab.tx-print_marks th,:root .tabxplor-tab.tx-print_marks td{color:#000000;background-color:#ffffff;border-color:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before,:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+:root .tabxplor-tab.tx-print_marks td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+:root .tabxplor-tab.tx-print_marks td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
+:root .tabxplor-tab.tx-print_marks tbody tr:hover{background:transparent;}
+:root .tabxplor-tab.tx-print_marks .g1{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .g2{color:#444444;}
+:root .tabxplor-tab.tx-print_marks .tx-unit{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tabxplor-caption{color:#000000;}
+:root .tabxplor-tab.tx-print_marks .tx-foot{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape thead th{color:#444444;}
+:root .tabxplor-tab.tx-print_marks.tx-shape .tx-sec{color:#888888;}
+:root .tabxplor-tab.tx-print_marks .tx-sec{color:#444444;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .tx-mark{color:#000000;font-style:normal;text-decoration:none;display:inline-block;}
+:root .tabxplor-tab.tx-print_marks .p1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .p3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .p4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m1{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m2{color:#000000;font-weight:normal;}
+:root .tabxplor-tab.tx-print_marks .m3{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .m4{color:#000000;font-weight:normal;text-decoration:underline;}
+:root .tabxplor-tab.tx-print_marks .o1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .o2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .o3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .o4{background-color:#B8B8B8;}
+:root .tabxplor-tab.tx-print_marks .u1{background-color:#F5F5F5;}
+:root .tabxplor-tab.tx-print_marks .u2{background-color:#E4E4E4;}
+:root .tabxplor-tab.tx-print_marks .u3{background-color:#D0D0D0;}
+:root .tabxplor-tab.tx-print_marks .u4{background-color:#B8B8B8;}
 @media print {
   .tabxplor-tab .tx-pill{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tabxplor-tab td.tx-bar{print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .tx-scrollbox{max-width:none;overflow:visible;}
   .tabxplor-tab{color:#000000;background:#ffffff;}
   .tabxplor-tab th,.tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  .tabxplor-tab td.tx-bar::before,.tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   .tabxplor-tab tbody tr:hover{background:transparent;}
   .g1,.tabxplor-tab .g1{color:#949494;}
   .g2,.tabxplor-tab .g2{color:#444444;}
@@ -288,6 +426,11 @@ body.quarto-dark .u4,body.quarto-dark .tabxplor-tab .u4,[data-bs-theme=dark] .u4
   .u4,.tabxplor-tab .u4{background-color:#B8B8B8;}
   body.quarto-light .tabxplor-tab,[data-bs-theme=light] .tabxplor-tab,[data-theme=light] .tabxplor-tab,body.quarto-dark .tabxplor-tab,[data-bs-theme=dark] .tabxplor-tab,[data-theme=dark] .tabxplor-tab,html.dark .tabxplor-tab{color:#000000;background:#ffffff;}
   body.quarto-light .tabxplor-tab th,body.quarto-light .tabxplor-tab td,[data-bs-theme=light] .tabxplor-tab th,[data-bs-theme=light] .tabxplor-tab td,[data-theme=light] .tabxplor-tab th,[data-theme=light] .tabxplor-tab td,body.quarto-dark .tabxplor-tab th,body.quarto-dark .tabxplor-tab td,[data-bs-theme=dark] .tabxplor-tab th,[data-bs-theme=dark] .tabxplor-tab td,[data-theme=dark] .tabxplor-tab th,[data-theme=dark] .tabxplor-tab td,html.dark .tabxplor-tab th,html.dark .tabxplor-tab td{color:#000000;background-color:#ffffff;border-color:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar,[data-bs-theme=light] .tabxplor-tab td.tx-bar,[data-theme=light] .tabxplor-tab td.tx-bar,body.quarto-dark .tabxplor-tab td.tx-bar,[data-bs-theme=dark] .tabxplor-tab td.tx-bar,[data-theme=dark] .tabxplor-tab td.tx-bar,html.dark .tabxplor-tab td.tx-bar{position:relative;isolation:isolate;--tx-bar-ink:currentColor;}
+  body.quarto-light .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=light] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),body.quarto-dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-bs-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),[data-theme=dark] .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4),html.dark .tabxplor-tab td.tx-bar:not(.p1,.p2,.p3,.p4,.m1,.m2,.m3,.m4){--tx-bar-ink:#000000;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar-on::after{content:"";position:absolute;z-index:-1;box-sizing:border-box;top:2px;bottom:2px;left:0;}
+  body.quarto-light .tabxplor-tab td.tx-bar::before,[data-bs-theme=light] .tabxplor-tab td.tx-bar::before,[data-theme=light] .tabxplor-tab td.tx-bar::before,body.quarto-dark .tabxplor-tab td.tx-bar::before,[data-bs-theme=dark] .tabxplor-tab td.tx-bar::before,[data-theme=dark] .tabxplor-tab td.tx-bar::before,html.dark .tabxplor-tab td.tx-bar::before{right:0;background:rgba(0,0,0,.05);}
+  body.quarto-light .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=light] .tabxplor-tab td.tx-bar-on::after,[data-theme=light] .tabxplor-tab td.tx-bar-on::after,body.quarto-dark .tabxplor-tab td.tx-bar-on::after,[data-bs-theme=dark] .tabxplor-tab td.tx-bar-on::after,[data-theme=dark] .tabxplor-tab td.tx-bar-on::after,html.dark .tabxplor-tab td.tx-bar-on::after{width:var(--tx-bar,0%);border-radius:3px;border:2px solid var(--tx-bar-ink);background:color-mix(in oklch,var(--tx-bar-ink) 10%,transparent);}
   body.quarto-light .tabxplor-tab tbody tr:hover,[data-bs-theme=light] .tabxplor-tab tbody tr:hover,[data-theme=light] .tabxplor-tab tbody tr:hover,body.quarto-dark .tabxplor-tab tbody tr:hover,[data-bs-theme=dark] .tabxplor-tab tbody tr:hover,[data-theme=dark] .tabxplor-tab tbody tr:hover,html.dark .tabxplor-tab tbody tr:hover{background:transparent;}
   body.quarto-light .g1,body.quarto-light .tabxplor-tab .g1,[data-bs-theme=light] .g1,[data-bs-theme=light] .tabxplor-tab .g1,[data-theme=light] .g1,[data-theme=light] .tabxplor-tab .g1,body.quarto-dark .g1,body.quarto-dark .tabxplor-tab .g1,[data-bs-theme=dark] .g1,[data-bs-theme=dark] .tabxplor-tab .g1,[data-theme=dark] .g1,[data-theme=dark] .tabxplor-tab .g1,html.dark .g1,html.dark .tabxplor-tab .g1{color:#949494;}
   body.quarto-light .g2,body.quarto-light .tabxplor-tab .g2,[data-bs-theme=light] .g2,[data-bs-theme=light] .tabxplor-tab .g2,[data-theme=light] .g2,[data-theme=light] .tabxplor-tab .g2,body.quarto-dark .g2,body.quarto-dark .tabxplor-tab .g2,[data-bs-theme=dark] .g2,[data-bs-theme=dark] .tabxplor-tab .g2,[data-theme=dark] .g2,[data-theme=dark] .tabxplor-tab .g2,html.dark .g2,html.dark .tabxplor-tab .g2{color:#444444;}
@@ -336,13 +479,12 @@ Markdown with their color helpers. Underlying heavy computations run on
 <code>data.table</code></p>
 <p><strong>No R needed, if you prefer menus.</strong> Everything below
 is also available point-and-click, through a module for <a href="https://www.jamovi.org/" class="external-link">jamovi</a> — a free, open-source
-statistical software. Install it, open the modules menu (the
-<strong><code>+</code></strong> at the top right), choose <strong>jamovi
-library</strong>, and install <em>tabxplor</em>: it adds a
-<strong>Crosstables</strong> analysis and a <strong>Regressions</strong>
-analysis, with the same coloured, exportable tables. The options carry
-the same names as the arguments taught here, so this vignette reads as
-its manual.</p>
+statistical software. The module is a file you sideload, one per system
+and per jamovi line: <a href="https://bricenocenti.github.io/tabxplor/#the-jamovi-module">how to
+install it</a>. It adds a <strong>Crosstables</strong> analysis and a
+<strong>Regressions</strong> analysis, with the same coloured,
+exportable tables. The options carry the same names as the arguments
+taught here, so this vignette reads as its manual.</p>
 <p>Throughout this vignette we use <code>gss_simple</code>, a cleaned-up
 version of the US General Social Survey (<code><a href="https://forcats.tidyverse.org/reference/gss_cat.html" class="external-link">forcats::gss_cat</a></code>)
 with factors levels merged and reordered.</p>
@@ -356,6 +498,7 @@ variable</strong> and a <strong>column variable</strong>. By default it
 shows counts:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -519,6 +662,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>This is tabxplor’s <strong>html table</strong> — what you get in the
 RStudio or Positron Viewer pane with the recommended session option,
 used throughout this vignette:</p>
@@ -545,6 +689,7 @@ row/column and a count column (<code>n</code>) are added
 automatically:</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -708,11 +853,13 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>When the column variable is <strong>numeric</strong>,
 <code><a href="../reference/tab.html">tab()</a></code> shows its <strong>mean</strong> in each row instead
 of percentages:</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">age</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -795,10 +942,12 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>You can pass <strong>several row and column variables at
 once</strong>.</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop_all"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1120,6 +1269,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>A few other everyday arguments: <code>na = "drop"</code> to drop
 missing values from the base, <code>digits =</code> for the number of
 decimals, and <code>cleannames = TRUE</code> to strip prefixes like
@@ -1132,6 +1282,7 @@ same percentages, colours and tests:</p>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">counts</span> <span class="op">&lt;-</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/count.html" class="external-link">count</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">marital</span>, <span class="va">race</span><span class="op">)</span> <span class="co"># or a published table</span></span>
 <span><span class="fu"><a href="../reference/tab_counts.html">tab_counts</a></span><span class="op">(</span><span class="va">counts</span>, <span class="va">marital</span>, <span class="va">race</span>, counts <span class="op">=</span> <span class="va">n</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1303,6 +1454,7 @@ Percentage points (risk) difference: cell ≥ the Total row <span class="p1" sty
 </tr></tfoot>
 </table>
 </div>
+</div>
 <div class="section level2">
 <h2 id="colours-reading-a-table-at-a-glance">Colours: reading a table at a glance<a class="anchor" aria-label="anchor" href="#colours-reading-a-table-at-a-glance"></a>
 </h2>
@@ -1316,6 +1468,7 @@ reference, the stronger the shade — and a color legend is printed
 underneath.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1452,12 +1605,14 @@ Percentage points (risk) difference: cell ≥ the Total row <span class="p1" sty
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><code>color = "auto"</code> picks a sensible scheme automatically for
 each column type (difference as text colour <em>and</em> ratio as
 background for percentages, ratio alone for means, …); the legend says
 which one:</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">marital</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1780,10 +1935,12 @@ cell ≤ the Total row <span class="u1" style="border-radius:4px;padding-right:4
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Numeric columns are colored the same way, on their
 <strong>means</strong> (here, hours of TV per day by income):</p>
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="va">tvhours</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -1865,6 +2022,7 @@ Standardized mean difference: cell ≥ the Total row <span class="p1" style="fon
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><strong>Which cell is the reference for comparison ?</strong> By
 default each cell is compared to the relevant Total (Total row for row
 percentages and Total column for column percentages) to highlight
@@ -1882,6 +2040,7 @@ Total.</li>
 </ul>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="va">year</span>, pct <span class="op">=</span> <span class="st">"col"</span>, color <span class="op">=</span> <span class="st">"ratio"</span>, ref <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -2276,28 +2435,28 @@ n
 <td class="tx-r tx-num">
 2 817
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 2 765
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 2 812
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 4 510
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 2 023
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 2 044
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 1 974
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 2 538
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot g1">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 21 483
 </td>
 </tr>
@@ -2310,9 +2469,11 @@ Relative risk (ratio): cell ≥ the reference category (in bold) <span class="p1
 </td>
 </tr></tfoot>
 </table>
+</div>
 <div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="va">party3</span>, <span class="va">race</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span>, </span>
 <span>    color <span class="op">=</span> <span class="st">"auto"</span>, comp<span class="op">=</span><span class="st">"all"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -2641,6 +2802,7 @@ cell ≤ the Total Ensemble row <span class="u1" style="border-radius:4px;paddin
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><strong>A different reference for each variable.</strong>
 <code>ref</code> is reinterpreted by <code>pct</code>. Under
 <strong>row</strong> percentages (or means) it picks a reference
@@ -2650,6 +2812,7 @@ its own — here <code>race</code> is read against its first row,
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">relig</span><span class="op">)</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>,</span>
 <span>    ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>race <span class="op">=</span> <span class="fl">1</span>, relig <span class="op">=</span> <span class="st">"tot"</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -2931,6 +3094,7 @@ bold) <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" sty
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Under <strong>column</strong> percentages <code>ref</code> picks a
 reference <strong>column</strong> instead, vectorised over the column
 variables — either named
@@ -2939,6 +3103,7 @@ one value per column variable:</p>
 <div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">marital</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"col"</span>, color <span class="op">=</span> <span class="st">"difference"</span>,</span>
 <span>    ref <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"first"</span>, <span class="st">"tot"</span><span class="op">)</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3145,25 +3310,25 @@ n
 <td class="tx-r tx-num">
 9 679
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 4 512
 </td>
-<td class="tx-r tx-num tx-br g1">
+<td class="tx-r tx-num tx-br">
 7 137
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 10 117
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 743
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 3 383
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 1 807
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 5 416
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot">
@@ -3174,15 +3339,15 @@ n
 <tfoot><tr>
 <td colspan="10">
 <div class="tx-foot">
-party3 — Percentage points (risk) difference: cell ≥ the reference
-category (in bold) <span class="p1" style="font-weight:bold;">+5</span>;
-<span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ ref <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.<br>marital — Percentage
-points (risk) difference: cell ≥ the Total column <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total column
+<b>party3</b> — Percentage points (risk) difference: cell ≥ the
+reference category (in bold) <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ ref <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.<br><b>marital</b> —
+Percentage points (risk) difference: cell ≥ the Total column <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total column
 <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Color thresholds and the palette can be customised : set them
 <strong>once for the whole session</strong> with
 <code><a href="../reference/set_color_palette.html">set_color_breaks()</a></code> and
@@ -3219,6 +3384,7 @@ is.</li>
 <div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, </span>
 <span>    color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3357,10 +3523,12 @@ confidence) or under the first colour threshold (±5 points).
 </td>
 </tr></tfoot>
 </table>
+</div>
 <div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">year</span> <span class="op">==</span> <span class="st">"2012"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="co"># n=1 974</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3499,6 +3667,7 @@ significantly different from the Total row.
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>On <strong>small samples</strong> a big-looking percentage can rest
 on a handful of respondents. <code>n_min =</code> is a purely visual
 filter, applied last: it hides cells whose (unweighted) base is below
@@ -3506,6 +3675,7 @@ the threshold and drops a row entirely when its largest base falls
 short. Here the rarest religions drop out:</p>
 <div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>, n_min <span class="op">=</span> <span class="fl">400</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3635,10 +3805,12 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>An alternative is to keep the small rows and cols but group them all
 in a “Other” level :</p>
 <div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">relig</span>, <span class="va">race</span>, pct <span class="op">=</span> <span class="st">"row"</span>,  other_if_less_than <span class="op">=</span> <span class="fl">400</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3803,6 +3975,7 @@ Total
 </tbody>
 </table>
 </div>
+</div>
 <div class="section level2">
 <h2 id="confidence-intervals-tests-and-stars">Confidence intervals, tests and stars<a class="anchor" aria-label="anchor" href="#confidence-intervals-tests-and-stars"></a>
 </h2>
@@ -3810,6 +3983,7 @@ Total
 with <code>ci = "cell"</code> :</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, ci <span class="op">=</span> <span class="st">"cell"</span><span class="op">)</span> <span class="co"># by default, conf_level = 0.95</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -3939,6 +4113,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>Print the confidence intervals of the <strong>difference</strong>
 with a reference, used to calculate significance (if 0 belongs to the
 confidence interval, the cell is not significantly different from the
@@ -3950,6 +4125,7 @@ reference, here the Total row) :</p>
 <span>      color <span class="op">=</span> <span class="st">"difference"</span>, ref <span class="op">=</span> <span class="fl">1</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span>,</span>
 <span>      display <span class="op">=</span> <span class="st">"base_ci"</span> <span class="co"># "{base} {ci}"</span></span>
 <span>  <span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -4088,6 +4264,7 @@ significantly different from the reference category.
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><code>display = "base_ci"</code> is the named layout for this.
 <code>{base}</code> means “the level this column shows” — a percentage
 on a factor column, a mean on a numeric one — so one call works for a
@@ -4096,11 +4273,12 @@ quantity. The next section covers the rest of the layouts.</p>
 <p><code>display = "ci"</code> prints that interval on its own. Add
 significance stars with <code>stars = TRUE</code>: they tell the same
 story as the interval of the deviation from the reference, but at fixed
-confidence levels (99 %, 95 %, 90 %) :</p>
+confidence levels (95 %, 99 %, 99.9 %) :</p>
 <div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_simple</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">year</span> <span class="op">==</span> <span class="st">"2012"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="co"># n=1 974</span></span>
 <span>  <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">rincome</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, ref <span class="op">=</span> <span class="fl">1</span>, display <span class="op">=</span> <span class="st">"ci"</span>, stars <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -4153,13 +4331,13 @@ Total
 Lt $10000
 </td>
 <td class="tx-r tx-num tx-b">
-40%<span class="tx-sec" style="font-weight:normal;">  </span>
+40%<span class="tx-sec" style="font-weight:normal;"> </span>
 </td>
 <td class="tx-r tx-num tx-b">
 33%<span class="tx-sec" style="font-weight:normal;">   </span>
 </td>
 <td class="tx-r tx-num tx-b">
-27%<span class="tx-sec" style="font-weight:normal;">  </span>
+27%<span class="tx-sec" style="font-weight:normal;"> </span>
 </td>
 <td class="tx-r tx-num tx-b">
 0%
@@ -4173,13 +4351,13 @@ Lt $10000
 $10000 to 14999
 </td>
 <td class="tx-r tx-num g2">
-[-6;+17]%<span class="tx-sec">  </span>
+[-6;+17]%<span class="tx-sec"> </span>
 </td>
 <td class="tx-r tx-num g2">
 [-16;+5]%<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num g2">
-[-11;+10]%<span class="tx-sec">  </span>
+[-11;+10]%<span class="tx-sec"> </span>
 </td>
 <td class="tx-r tx-num g2">
 [-1;+6]%
@@ -4193,13 +4371,13 @@ $10000 to 14999
 $15000 to 24999
 </td>
 <td class="tx-r tx-num g2">
-[+1;+20]%<span class="tx-sec">**</span>
+[+1;+20]%<span class="tx-sec">*</span>
 </td>
 <td class="tx-r tx-num g2">
-[-17;+1]%<span class="tx-sec">*  </span>
+[-17;+1]%<span class="tx-sec">   </span>
 </td>
 <td class="tx-r tx-num g2">
-[-11;+6]%<span class="tx-sec">  </span>
+[-11;+6]%<span class="tx-sec"> </span>
 </td>
 <td class="tx-r tx-num g2">
 [-3;+1]%
@@ -4213,13 +4391,13 @@ $15000 to 24999
 $25000 or more
 </td>
 <td class="tx-r tx-num g2">
-[+2;+18]%<span class="tx-sec">**</span>
+[+2;+18]%<span class="tx-sec">*</span>
 </td>
 <td class="tx-r tx-num g2">
 [-25;-10]%<span class="tx-sec">***</span>
 </td>
 <td class="tx-r tx-num g2">
-[+0;+14]%<span class="tx-sec">**</span>
+[+0;+14]%<span class="tx-sec">*</span>
 </td>
 <td class="tx-r tx-num g2">
 [-2;+1]%
@@ -4233,13 +4411,13 @@ $25000 or more
 NA
 </td>
 <td class="tx-r tx-num g2">
-[+0;+15]%<span class="tx-sec">**</span>
+[+0;+15]%<span class="tx-sec">*</span>
 </td>
 <td class="tx-r tx-num g2">
-[-18;-4]%<span class="tx-sec">***</span>
+[-18;-4]%<span class="tx-sec">** </span>
 </td>
 <td class="tx-r tx-num g2">
-[-4;+9]%<span class="tx-sec">  </span>
+[-4;+9]%<span class="tx-sec"> </span>
 </td>
 <td class="tx-r tx-num g2">
 [-2;+2]%
@@ -4253,13 +4431,13 @@ NA
 Total
 </td>
 <td class="tx-r tx-num g2">
-[+1;+15]%<span class="tx-sec">**</span>
+[+1;+15]%<span class="tx-sec">*</span>
 </td>
 <td class="tx-r tx-num g2">
 [-18;-5]%<span class="tx-sec">***</span>
 </td>
 <td class="tx-r tx-num g2">
-[-3;+9]%<span class="tx-sec">  </span>
+[-3;+9]%<span class="tx-sec"> </span>
 </td>
 <td class="tx-r tx-num g2">
 [-2;+1]%
@@ -4273,12 +4451,13 @@ Total
 <td colspan="6">
 <div class="tx-foot">
 ***: significantly different from the reference category (in bold) at
-the 99% confidence level; **: at the 95% level; *: at the 90% level; no
-star: not significant.
+the 99.9% confidence level; **: at the 99% level; *: at the 95% level;
+no star: not significant.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><code>test = TRUE</code> adds a statistical test of independence per
 (sub-)table — <strong>Chi-squared</strong> for factor columns,
 <strong>Welch’s F ANOVA</strong> for numeric variables
@@ -4286,6 +4465,7 @@ star: not significant.
 F):</p>
 <div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, test <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -4438,18 +4618,18 @@ Total
 <td class="tx-l tx-br tx-bl tx-rv">
 pvalue (Chi2, Welch F)
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 &lt;0.01%
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
-<td class="tx-r tx-num tx-br g2">
+<td class="tx-r tx-num tx-br">
 &lt;0.01%
 </td>
 </tr>
@@ -4457,23 +4637,24 @@ pvalue (Chi2, Welch F)
 <td class="tx-l tx-br tx-bl tx-rv">
 Cramér’s V, eta2
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 0.21
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g2">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
-<td class="tx-r tx-num tx-br g2">
+<td class="tx-r tx-num tx-br">
 0.04
 </td>
 </tr>
 </tbody>
 </table>
+</div>
 </div>
 <div class="section level2">
 <h2 id="batteries-of-yesno-items-and-a-score">Batteries of yes/no items, and a score<a class="anchor" aria-label="anchor" href="#batteries-of-yesno-items-and-a-score"></a>
@@ -4502,6 +4683,7 @@ variable, so it takes its place in the same table, as a mean:</p>
 <code class="sourceCode R"><span><span class="va">tea</span> <span class="op">&lt;-</span> <span class="va">facto_tea</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/score_from_lv1.html">score_from_lv1</a></span><span class="op">(</span><span class="st">"tea_when"</span>, vars_list <span class="op">=</span> <span class="va">tea_when_vars</span><span class="op">)</span> <span class="co"># score variable</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">tea</span>, <span class="va">SPC</span>, <span class="fu"><a href="https://tidyselect.r-lib.org/reference/all_of.html" class="external-link">all_of</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">tea_when_vars</span>, <span class="st">"tea_when"</span><span class="op">)</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, </span>
 <span>    levels <span class="op">=</span> <span class="st">"first"</span>, na <span class="op">=</span> <span class="st">"drop"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -4822,13 +5004,14 @@ Total
 <tfoot><tr>
 <td colspan="9">
 <div class="tx-foot">
-breakfast, lunch, tea.time, evening, dinner, always — Percentage points
-(risk) difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.<br>tea_when — Standardized
-mean difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+0.1</span>; <span class="p2" style="font-weight:bold;">+0.2</span>; <span class="p3" style="font-weight:bold;">+0.4</span>; <span class="p4" style="font-weight:bold;">+0.8</span> SD; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-0.1</span>; <span class="m2" style="font-weight:bold;">-0.2</span>; <span class="m3" style="font-weight:bold;">-0.4</span>; <span class="m4" style="font-weight:bold;">-0.8</span> SD.
+<b>breakfast, lunch, tea.time, evening, dinner, always</b> — Percentage
+points (risk) difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points.<br><b>tea_when</b> —
+Standardized mean difference: cell ≥ the Total row <span class="p1" style="font-weight:bold;">+0.1</span>; <span class="p2" style="font-weight:bold;">+0.2</span>; <span class="p3" style="font-weight:bold;">+0.4</span>; <span class="p4" style="font-weight:bold;">+0.8</span> SD; cell ≤ the Total row <span class="m1" style="font-weight:bold;">-0.1</span>; <span class="m2" style="font-weight:bold;">-0.2</span>; <span class="m3" style="font-weight:bold;">-0.4</span>; <span class="m4" style="font-weight:bold;">-0.8</span> SD.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Each percentage reads down its own column: 63 % of senior managers
 drink tea at breakfast, against 25 % of manual workers. There is no
 Total column, and rightly so — the six items do not add up to 100 %,
@@ -4843,6 +5026,7 @@ the social category, in one table:</p>
 <div class="sourceCode" id="cb28"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">tea</span>, <span class="va">sex</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">breakfast</span>, <span class="va">evening</span>, <span class="va">SPC</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, </span>
 <span>    levels <span class="op">=</span> <span class="st">"auto"</span>, na <span class="op">=</span> <span class="st">"drop"</span>, tot <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5028,6 +5212,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p>A battery is also what <code>spread_vars</code> was made for — see
 <em>the most compact table</em> below.</p>
 <p>A summed score is also exactly what a
@@ -5043,6 +5228,7 @@ group). The result is <em>grouped</em>: <code>dplyr</code> operations
 then run within each sub-table.</p>
 <div class="sourceCode" id="cb29"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, <span class="va">rincome</span>, na <span class="op">=</span> <span class="st">"drop"</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5376,6 +5562,7 @@ Total Ensemble
 </tr>
 </tbody>
 </table>
+</div>
 <p>When you pass several <strong>row variables</strong> <em>without</em>
 <code>tab_vars</code>, <code><a href="../reference/tab.html">tab()</a></code> merges the mirror tables into
 a single table by default. <code>output_list = TRUE</code> returns
@@ -5396,6 +5583,7 @@ variables, several groups, one screen:</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">rincome</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">married</span>, <span class="va">tvhours</span><span class="op">)</span>, tab_vars <span class="op">=</span> <span class="va">race</span>, spread_vars <span class="op">=</span> <span class="va">race</span>,</span>
 <span>    pct <span class="op">=</span> <span class="st">"row"</span>, na <span class="op">=</span> <span class="st">"drop"</span>, levels <span class="op">=</span> <span class="st">"first"</span>, comp <span class="op">=</span> <span class="st">"all"</span>,</span>
 <span>    color <span class="op">=</span> <span class="st">"auto"</span>, color_signif <span class="op">=</span> <span class="st">"grey_non_signif"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5700,7 +5888,7 @@ Total
 <tfoot><tr>
 <td colspan="13">
 <div class="tx-foot">
-White married, Black married, Other married, Ensemble married —
+<b>White married, Black married, Other married, Ensemble married</b> —
 Percentage points (risk) difference: cell ≥ the Total Ensemble row <span class="p1" style="font-weight:bold;">+5</span>; <span class="p2" style="font-weight:bold;">+10</span>; <span class="p3" style="font-weight:bold;">+20</span>; <span class="p4" style="font-weight:bold;">+30</span> points; cell ≤ the Total Ensemble
 row <span class="m1" style="font-weight:bold;">-5</span>; <span class="m2" style="font-weight:bold;">-10</span>; <span class="m3" style="font-weight:bold;">-20</span>; <span class="m4" style="font-weight:bold;">-30</span> points. Background colour, relative
 risk (ratio): cell ≥ the Total Ensemble row <span class="o1" style="border-radius:4px;padding-right:4px;padding-left:4px;">×1.5</span>;
@@ -5709,14 +5897,17 @@ cell ≤ the Total Ensemble row <span class="u1" style="border-radius:4px;paddin
 <span class="u3" style="border-radius:4px;padding-right:4px;padding-left:4px;">÷4</span>.
 Uncoloured: not significantly different from the Total Ensemble row
 (Newcombe score interval, 95% confidence) or under the first colour
-threshold (±5 points).<br>White tvhours, Black tvhours, Other tvhours,
-Ensemble tvhours — Ratio of means: cell ≥ the Total Ensemble row <span class="p1" style="font-weight:bold;">×1.1</span>; <span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total Ensemble row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.2</span>; <span class="m3" style="font-weight:bold;">÷1.5</span>; <span class="m4" style="font-weight:bold;">÷2</span>. Uncoloured: not significantly
+threshold (±5 points).<br><b>White tvhours, Black tvhours,
+Other tvhours, Ensemble tvhours</b> — Ratio of means: cell ≥ the Total
+Ensemble row <span class="p1" style="font-weight:bold;">×1.1</span>;
+<span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total Ensemble row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.2</span>; <span class="m3" style="font-weight:bold;">÷1.5</span>; <span class="m4" style="font-weight:bold;">÷2</span>. Uncoloured: not significantly
 different from the Total Ensemble row (Welch t interval, 95% confidence;
 Welch closed form) or under the first colour threshold (×1.1).
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>The layout follows from the shape, and the table says so:</p>
 <ul>
 <li>there is <strong>one <code>Total</code> row</strong> for the whole
@@ -5751,6 +5942,7 @@ you happened to interview:</p>
 <div class="sourceCode" id="cb32"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gss_w</span> <span class="op">&lt;-</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="va">gss_simple</span>, w <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html" class="external-link">ifelse</a></span><span class="op">(</span><span class="va">marital</span> <span class="op"><a href="https://rdrr.io/r/base/match.html" class="external-link">%in%</a></span> <span class="st">"Never married"</span>, <span class="fl">2.5</span>, <span class="fl">0.8</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_w</span>, <span class="va">race</span>, <span class="va">party3</span>, wt <span class="op">=</span> <span class="va">w</span>, pct <span class="op">=</span> <span class="st">"row"</span>, na <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -5865,12 +6057,12 @@ Total
 <tfoot><tr>
 <td colspan="5">
 <div class="tx-foot">
-Weighted by w; confidence intervals and tests use the unweighted sample
-size.
+Weighted by w.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>That is the easy half. The <strong>margins of error</strong> around
 those percentages have three levels, and a table’s footer always says
 which one it is on:</p>
@@ -5929,6 +6121,7 @@ export using <code>transpose = TRUE</code> :</li>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">party3</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">race</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>,</span>
 <span>    color <span class="op">=</span> <span class="st">"ratio"</span>, display <span class="op">=</span> <span class="st">"base"</span>, n <span class="op">=</span> <span class="st">"min"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/tab_html.html">tab_html</a></span><span class="op">(</span>transpose <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6095,13 +6288,13 @@ mean
 <tfoot><tr>
 <td colspan="7">
 <div class="tx-foot">
-race — Relative risk (ratio): cell ≥ the Total row <span class="p1" style="font-weight:bold;">×1.1</span>; <span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.25</span>; <span class="m3" style="font-weight:bold;">÷2</span>; <span class="m4" style="font-weight:bold;">÷4</span>.<br>tvhours — Ratio of means: cell ≥
-the Total row <span class="p1" style="font-weight:bold;">×1.1</span>;
-<span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.2</span>; <span class="m3" style="font-weight:bold;">÷1.5</span>; <span class="m4" style="font-weight:bold;">÷2</span>.
+<b>race</b> — Relative risk (ratio): cell ≥ the Total row <span class="p1" style="font-weight:bold;">×1.1</span>; <span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.25</span>; <span class="m3" style="font-weight:bold;">÷2</span>; <span class="m4" style="font-weight:bold;">÷4</span>.<br><b>tvhours</b> — Ratio of means:
+cell ≥ the Total row <span class="p1" style="font-weight:bold;">×1.1</span>; <span class="p2" style="font-weight:bold;">×1.2</span>; <span class="p3" style="font-weight:bold;">×1.5</span>; <span class="p4" style="font-weight:bold;">×2</span>; cell ≤ the Total row <span class="m1" style="font-weight:bold;">÷1.1</span>; <span class="m2" style="font-weight:bold;">÷1.2</span>; <span class="m3" style="font-weight:bold;">÷1.5</span>; <span class="m4" style="font-weight:bold;">÷2</span>.
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 <ul>
 <li>
 <strong>One stylesheet for a whole document.</strong> In an
@@ -6137,7 +6330,8 @@ palette, is still there by name.)</p>
 <div class="sourceCode" id="cb37"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/tab_html.html">tab_html</a></span><span class="op">(</span>theme <span class="op">=</span> <span class="st">"print_ready"</span><span class="op">)</span></span></code></pre></div>
-<table class="table tabxplor-tab tx-has-stars" data-quarto-disable-processing="true">
+<div class="tx-scrollbox">
+<table class="table tabxplor-tab tx-print_marks tx-has-stars" data-quarto-disable-processing="true">
 <thead>
 <tr>
 <th class="tx-span" colspan="1">
@@ -6277,6 +6471,7 @@ points.
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>This is not merely a taste: converted to lightness, the two
 directions of the color palette come out as the <em>same</em> shades of
 grey, so a grayscale print loses over-vs-under entirely. It works in
@@ -6357,6 +6552,7 @@ comparable (the default on numeric columns)</td>
 </table>
 <div class="sourceCode" id="cb39"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">party3</span>, <span class="va">tvhours</span><span class="op">)</span>, pct <span class="op">=</span> <span class="st">"row"</span>, display <span class="op">=</span> <span class="st">"base_moe"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6391,12 +6587,12 @@ NA
 Total
 </th>
 <th class="tx-r tx-num tx-br">
-mean
+mean moe
 </th>
 </tr>
 <tr>
 <th class="tx-r tx-num tx-unit">
-&lt;row%&gt;
+&lt;row% moe&gt;
 </th>
 <th class="tx-r tx-num tx-unit">
 </th>
@@ -6408,7 +6604,7 @@ mean
 &lt;row% (n_range)&gt;
 </th>
 <th class="tx-r tx-num tx-br tx-unit">
-&lt;mean&gt;
+&lt;mean moe&gt;
 </th>
 </tr>
 </thead>
@@ -6418,22 +6614,22 @@ mean
 White
 </td>
 <td class="tx-r tx-num g2">
-39%
+39%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-21%
+21%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-40%
+40%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-1%
+1%<span class="tx-sec"> ±0%</span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 100%<span class="tx-sec" style="font-weight:normal;"> ( 8 610-16 395)</span>
 </td>
 <td class="tx-r tx-num tx-br g2">
-2.8
+2.8<span class="tx-sec">   ±0</span>
 </td>
 </tr>
 <tr>
@@ -6441,22 +6637,22 @@ White
 Black
 </td>
 <td class="tx-r tx-num g2">
-75%
+75%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-16%
+16%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-8%
+ 8%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num g2">
-1%
+1%<span class="tx-sec"> ±0%</span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 100%<span class="tx-sec" style="font-weight:normal;"> ( 1 700- 3 129)</span>
 </td>
 <td class="tx-r tx-num tx-br g2">
-4.2
+4.2<span class="tx-sec"> ±0.2</span>
 </td>
 </tr>
 <tr>
@@ -6464,22 +6660,22 @@ Black
 Other
 </td>
 <td class="tx-r tx-num g2">
-48%
+48%<span class="tx-sec"> ±2%</span>
 </td>
 <td class="tx-r tx-num g2">
-32%
+32%<span class="tx-sec"> ±2%</span>
 </td>
 <td class="tx-r tx-num g2">
-18%
+18%<span class="tx-sec"> ±2%</span>
 </td>
 <td class="tx-r tx-num g2">
-1%
+1%<span class="tx-sec"> ±1%</span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 100%<span class="tx-sec" style="font-weight:normal;"> ( 1 027- 1 959)</span>
 </td>
 <td class="tx-r tx-num tx-br g2">
-2.8
+2.8<span class="tx-sec"> ±0.1</span>
 </td>
 </tr>
 <tr class="tx-b tx-bt tx-bb tx-bb2">
@@ -6487,32 +6683,34 @@ Other
 Total
 </td>
 <td class="tx-r tx-num tx-b">
-45%
+45%<span class="tx-sec" style="font-weight:normal;"> ±1%</span>
 </td>
 <td class="tx-r tx-num tx-b">
-21%
+21%<span class="tx-sec" style="font-weight:normal;"> ±1%</span>
 </td>
 <td class="tx-r tx-num tx-b">
-33%
+33%<span class="tx-sec" style="font-weight:normal;"> ±1%</span>
 </td>
 <td class="tx-r tx-num tx-b">
-1%
+1%<span class="tx-sec" style="font-weight:normal;"> ±0%</span>
 </td>
 <td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
 100%<span class="tx-sec" style="font-weight:normal;"> (11 337-21 483)</span>
 </td>
 <td class="tx-r tx-num tx-br tx-b">
-3.0
+3.0<span class="tx-sec" style="font-weight:normal;">   ±0</span>
 </td>
 </tr>
 </tbody>
 </table>
+</div>
 <p><strong>Or write your own</strong>, with a <code><a href="https://rdrr.io/r/base/Paren.html" class="external-link">{}</a></code> template
 naming the fields you want. <code>display = "{pct} ({diff})"</code>
 prints each percentage followed by its difference from the reference;
 <code>"{pct} (n={n})"</code> follows it with the count:</p>
 <div class="sourceCode" id="cb40"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span>, display <span class="op">=</span> <span class="st">"{pct} ({diff})"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6649,6 +6847,7 @@ Percentage points (risk) difference: cell ≥ the Total row <span class="p1" sty
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Two rules are worth knowing. The <strong>first field outside brackets
 is the primary one</strong>: it carries the significance stars, it is
 what an Excel export keeps as a real number, and it is the only part the
@@ -6661,6 +6860,7 @@ as many decimals as the estimate.</p>
 <div class="sourceCode" id="cb41"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tabs</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="va">tabs</span>, <span class="st">"{pct} (n={n})"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6790,6 +6990,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p><code><a href="../reference/tab.html">?tab</a></code> lists every field a template can name;
 <code><a href="../articles/tabxplor-programming.html">vignette("tabxplor-programming")</a></code> explains the record behind
 them.</p>
@@ -6812,6 +7013,7 @@ colour a table of raw counts (a count has no reference), and it is what
 </h3>
 <div class="sourceCode" id="cb42"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, color <span class="op">=</span> <span class="st">"contrib"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -6943,32 +7145,32 @@ Total
 <td class="tx-l tx-br tx-bl tx-rv">
 pvalue (Chi2)
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 &lt;0.01%
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 <tr class="tx-bb tx-bb2">
 <td class="tx-l tx-br tx-bl tx-rv">
 Cramér’s V
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 0.21
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 </tbody>
@@ -6981,6 +7183,7 @@ under-represented, by <span class="m1" style="font-weight:bold;">×1</span>; <sp
 </td>
 </tr></tfoot>
 </table>
+</div>
 <div class="sourceCode" id="cb43"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># tab(gss_simple, race, party3, pct = "all", color = "contrib")  # works with pct too</span></span></code></pre></div>
 <p>Each cell is coloured by its <strong>share of the table’s
@@ -7011,6 +7214,7 @@ table’s chi-squared, and the Total row gives the average cell’s share —
 which is the <code>×1</code> the colours are measured against:</p>
 <div class="sourceCode" id="cb44"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, color <span class="op">=</span> <span class="st">"contrib"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="st">"ctr"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7044,7 +7248,7 @@ Total
 </tr>
 <tr>
 <th class="tx-r tx-num tx-unit">
-&lt;n-ctr&gt;
+&lt;ctr&gt;
 </th>
 <th class="tx-r tx-num tx-unit">
 </th>
@@ -7053,7 +7257,7 @@ Total
 <th class="tx-r tx-num tx-unit">
 </th>
 <th class="tx-r tx-num tx-br tx-bl tx-tot tx-unit">
-&lt;n-ctr&gt;
+&lt;ctr&gt;
 </th>
 </tr>
 </thead>
@@ -7142,32 +7346,32 @@ mean:8%
 <td class="tx-l tx-br tx-bl tx-rv">
 pvalue (Chi2)
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 &lt;0.01%
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 <tr class="tx-bb tx-bb2">
 <td class="tx-l tx-br tx-bl tx-rv">
 Cramér’s V
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 0.21
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 </tbody>
@@ -7181,6 +7385,7 @@ under-represented, by <span class="m1" style="font-weight:bold;">×1</span>; <sp
 </tr></tfoot>
 </table>
 </div>
+</div>
 <div class="section level3">
 <h3 id="which-cells-are-notably-off-on-a-scale-i-can-compare">2. “Which cells are notably off, on a scale I can compare?”<a class="anchor" aria-label="anchor" href="#which-cells-are-notably-off-on-a-scale-i-can-compare"></a>
 </h3>
@@ -7190,6 +7395,7 @@ standard errors each cell sits away from what independence predicts:</p>
 <div class="sourceCode" id="cb45"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, color <span class="op">=</span> <span class="st">"contrib"</span>, color_signif <span class="op">=</span> <span class="st">"guaranteed_effect"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/fmt_fields.html">set_display</a></span><span class="op">(</span><span class="st">"resid"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7223,7 +7429,7 @@ Total
 </tr>
 <tr>
 <th class="tx-r tx-num tx-unit">
-&lt;n-resid&gt;
+&lt;resid&gt;
 </th>
 <th class="tx-r tx-num tx-unit">
 </th>
@@ -7232,7 +7438,7 @@ Total
 <th class="tx-r tx-num tx-unit">
 </th>
 <th class="tx-r tx-num tx-br tx-bl tx-tot tx-unit">
-&lt;n-resid&gt;
+&lt;resid&gt;
 </th>
 </tr>
 </thead>
@@ -7313,32 +7519,32 @@ Total
 <td class="tx-l tx-br tx-bl tx-rv">
 pvalue (Chi2)
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 &lt;0.01%
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 <tr class="tx-bb tx-bb2">
 <td class="tx-l tx-br tx-bl tx-rv">
 Cramér’s V
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 0.21
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 </tbody>
@@ -7352,6 +7558,7 @@ tables.
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Read it with the rule you may know from SPSS: beyond
 <strong>±2</strong> a cell is notable, beyond <strong>±3</strong>
 strongly so. Positive means over-represented, negative
@@ -7369,6 +7576,7 @@ cells are individually notable</em>.</p>
 <div class="sourceCode" id="cb46"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"contrib"</span>,</span>
 <span>    display <span class="op">=</span> <span class="st">"{pct} ({resid})"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7500,32 +7708,32 @@ Total
 <td class="tx-l tx-br tx-bl tx-rv">
 pvalue (Chi2)
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 &lt;0.01%
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 <tr class="tx-bb tx-bb2">
 <td class="tx-l tx-br tx-bl tx-rv">
 Cramér’s V
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 0.21
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num g1">
+<td class="tx-r tx-num">
 </td>
-<td class="tx-r tx-num tx-br tx-bl tx-tot tx-b">
+<td class="tx-r tx-num tx-br tx-bl tx-tot">
 </td>
 </tr>
 </tbody>
@@ -7538,6 +7746,7 @@ under-represented, by <span class="m1" style="font-weight:bold;">×1</span>; <sp
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p>Hovering an html table shows both numbers (<code>ctr:</code> and
 <code>resid:</code>) in the tooltip, whatever you display: every tooltip
 line is named after the field it shows, so the hover uses the same words
@@ -7564,6 +7773,7 @@ page light. So you write no argument at all — hover the cells of the
 table below, where they are switched back on:</p>
 <div class="sourceCode" id="cb47"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">party3</span>, pct <span class="op">=</span> <span class="st">"row"</span>, color <span class="op">=</span> <span class="st">"difference"</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7700,6 +7910,7 @@ Percentage points (risk) difference: cell ≥ the Total row <span class="p1" sty
 </td>
 </tr></tfoot>
 </table>
+</div>
 <p><strong>A note on weights.</strong> With a weight
 (<code>wt =</code>), every proportion or mean is weighted, but by
 default the sample size behind the confidence intervals and tests stays
@@ -7765,6 +7976,7 @@ the bottom):</p>
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/tab.html">tab</a></span><span class="op">(</span><span class="va">gss_simple</span>, <span class="va">race</span>, <span class="va">marital</span>, pct <span class="op">=</span> <span class="st">"row"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html" class="external-link">desc</a></span><span class="op">(</span><span class="va">Married</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -7928,6 +8140,7 @@ Total
 </tr>
 </tbody>
 </table>
+</div>
 <p><strong>Titling and annotating.</strong> <code>subtext =</code>
 prints one or more legend lines under a table (a data source, a note).
 <code><a href="../reference/set_caption.html">set_caption()</a></code> gives a table a <strong>title that survives a
@@ -7940,6 +8153,7 @@ title:</p>
 <div class="tabxplor-caption">
 Custom title
 </div>
+<div class="tx-scrollbox">
 <table class="table tabxplor-tab" data-quarto-disable-processing="true">
 <thead>
 <tr>
@@ -8105,11 +8319,12 @@ Total
 <tfoot><tr>
 <td colspan="8">
 <div class="tx-foot">
-Population: <br>Source: GSS, 2000-2014
+<b>Population</b>: <br><b>Source</b>: GSS, 2000-2014
 </div>
 </td>
 </tr></tfoot>
 </table>
+</div>
 </div>
 <div class="section level2">
 <h2 id="global-r-options">Global R options<a class="anchor" aria-label="anchor" href="#global-r-options"></a>
@@ -8122,7 +8337,8 @@ just changes the default. The everyday ones:</p>
 <li>
 <code>options(tabxplor.print = "html")</code> — print tables not in
 console, but as html in RStudio or Positron Viewer Pane by default
-(recommended)</li>
+(recommended); <code>"md"</code> prints them as Markdown instead, which
+is what a notebook knitted straight to <code>.md</code> wants.</li>
 <li>
 <code>options(tabxplor.cleannames = TRUE)</code> — strip
 <code>"1-"</code>-style prefixes from level names everywhere.</li>

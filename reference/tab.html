@@ -23,6 +23,13 @@ tabxplor-options.'><!-- PURPOSE: what txtheme adds to a consumer's <head>, so th
      ROLE: shadows pkgdown's own in-header.html, whose single line is kept BELOW. pkgdown searches
        the site's own pkgdown/templates/ first, then this package's, then its own -- so a site can
        always shadow this back, and must then carry pkgdown's line itself.
+     Two OPT-IN assets, each `template: params: {txtheme: {<name>: true}}`:
+       annotations  the twelve pandoc-span classes. Opt-in because pkgdown itself styles
+                    `pre code .error` / `.warning`, and a reference page really does emit
+                    <span class="warning"> for an example's warning.
+       prose        the course typography -- heading family and scale, paragraph rhythm, the two
+                    prose classes. Opt-in because a paragraph rhythm is a COURSE's voice, and a
+                    reference site may not want it. A Quarto document gets it unconditionally.
      WARNING: the last line is pkgdown's, not ours. Dropping it silently kills
        `template: includes: in_header:` for every site using txtheme. --><script src="../txtheme-at.js" defer></script></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -32,7 +39,7 @@ tabxplor-options.'><!-- PURPOSE: what txtheme adds to a consumer's <head>, so th
 
     <a class="navbar-brand me-2" href="../index.html">tabxplor</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">2.0.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -200,7 +207,7 @@ follows from this choice.</p></dd>
 sits from its reference, the measure which of the ways of expressing it you read.
 <code>"no"</code> (default, <code>FALSE</code> equivalently) prints no color; <code>TRUE</code> picks
 one per column type. Otherwise:</p><ul><li><p><code>"difference"</code> (<code>"RD"</code>, <code>"diff"</code>): the cell's difference from its reference (percentage points for factors, Glass's \(\Delta\) for means).</p></li>
-<li><p><code>"ratio"</code> (<code>"RR"</code>, <code>"IRR"</code>, <code>"RoM"</code>): relative risk (factors) or mean ratio (numerics) vs the reference.</p></li>
+<li><p><code>"ratio"</code> (<code>"RR"</code>, <code>"RoM"</code>): relative risk (factors) or mean ratio (numerics) vs the reference.</p></li>
 <li><p><code>"odds_ratio"</code> (<code>"OR"</code>): the odds ratio, on percentage tables, coloured on its own symmetric scale.</p></li>
 <li><p><code>"contrib"</code>: signed contribution to the chi-squared (reference-free).</p></li>
 </ul><p>The acronyms in brackets are permanent aliases, the same words <code><a href="tab_reg.html">tab_reg</a></code>'s
@@ -390,8 +397,9 @@ keeps each cell's plain value. Three ways to ask: a <strong>named layout</strong
 <code>"diff"</code>), or a <strong>{} template</strong> of your own
 (<code>"\{pct\} (n=\{n\})"</code>). The whole vocabulary is in <a href="tabxplor-display.html">tabxplor-display</a>;
 <code><a href="fmt_fields.html">set_display</a></code> changes it on a table already built.
-A layout showing an interval prints the one the table computed, so pair it with a
-<code>ci = </code> value or a <code>color</code> that needs one.</p></dd>
+A layout that names a confidence interval or a contribution to the chi-squared
+COMPUTES it, so <code>display = "base_ci"</code> needs no <code>ci = </code> beside it; an
+explicit <code>ci = "no"</code> still stands.</p></dd>
 
 
 <dt id="arg-color-breaks">color_breaks<a class="anchor" aria-label="anchor" href="#arg-color-breaks"></a></dt>

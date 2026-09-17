@@ -41,7 +41,10 @@ new_grouped_tab(
 
 - subtext:
 
-  A character vector to print legend lines under the table.
+  The footer's text, as a template: one element per line, every
+  `<placeholder>` tabxplor generates and every line you write, in the
+  order they print. See
+  [`set_subtext`](https://bricenocenti.github.io/tabxplor/reference/set_subtext.md).
 
 - test:
 
@@ -58,40 +61,58 @@ new_grouped_tab(
   The table's metadata, as a single named list gathering (all optional,
   `NULL` when unset):
 
-  - `render_extras` – display-only intent for the base count and the
-    `add_pct` companion, `list(n =, add_pct =)`, materialised at
-    print/export time from this attribute rather than baked into the
-    table.
-
-  - `spec` – the table's identity, `list(kind =, vars =, call =)`: its
+  - `spec` — the table's identity, `list(kind =, vars =, call =)`: its
     `kind` (`"crosstab"` or `"regression"`); `vars`, what no column can
-    carry (`list(wt =, caption =, outcomes =, var_labels =)` – see
+    carry (the weight, the caption, the outcomes, the variable labels —
+    see
     [`set_caption`](https://bricenocenti.github.io/tabxplor/reference/set_caption.md)),
     the rest of the variable model being derived from the declared index
     columns and from the columns' own `col_var`; and `call`, the
-    producer's own recipe (a regression's model record – family,
+    producer's own recipe (a regression's model record — family,
     outcome, predictors, reference level, and the `fit_spec`
     [`reg_check_plots`](https://bricenocenti.github.io/tabxplor/reference/reg_check_plots.md)
     refits from).
 
-  - `empirical_tips` – multinomial crude-companion tooltip data (a
+  - `render_extras` — display-only intent for the base count and the
+    `add_pct` companion, `list(n =, add_pct =)`, materialised at
+    print/export time rather than baked into the table.
+
+  - `empirical_tips` — multinomial crude-companion tooltip data (a
     `tibble` keyed by column, predictor and level), set by
     `tab_reg(empirical = TRUE)`.
 
-  - `assumptions` – one record PER OUTCOME, keyed by it, each holding
+  - `assumptions` — one record PER OUTCOME, keyed by it, each holding
     the observed curve of every continuous predictor (weighted quantile
     bins of the outcome on the family's link scale, one block per
     `tab_vars` group), set by
     [`tab_reg`](https://bricenocenti.github.io/tabxplor/reference/tab_reg.md):
-    the data behind the sparkline – drawn in a continuous predictor's
-    `n` cell, or in the shape table below the footer – and behind
+    the data behind the shape table under the footer, and behind
     [`reg_check_plots`](https://bricenocenti.github.io/tabxplor/reference/reg_check_plots.md)'s
     linearity panel.
 
-  - `color_breaks` – a per-table override of the colour break scales
-    (see
-    [`set_color_breaks`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md)),
-    merged over the global option at render time.
+  - `color_breaks` — a per-table override of the colour break scales,
+    set by `tab(color_breaks =)` and merged over the global option
+    ([`set_color_breaks`](https://bricenocenti.github.io/tabxplor/reference/set_color_palette.md))
+    at render time.
+
+  - `legend_words` — what this table's colour legend CALLS each measure
+    — naming only, never a number (see
+    [`set_legend_words`](https://bricenocenti.github.io/tabxplor/reference/set_legend_words.md)).
+
+  - `footer_tabs` — the tables and notes rendered UNDER this one by
+    every medium, set by
+    [`set_footer_tabs`](https://bricenocenti.github.io/tabxplor/reference/set_footer_tabs.md):
+    a `tabxplor_tab` renders as a table, any other data.frame as a grey
+    note
+    ([`tab_note`](https://bricenocenti.github.io/tabxplor/reference/tab_note.md)).
+    In the console they print ABOVE the table, so the last thing printed
+    is the object you can go on to pipe. A footer table's own are never
+    rendered.
+
+  - `bars` — the columns drawn as data bars in html and in Excel, each
+    named with the ceiling a full bar means (`NA` = the column's own
+    largest data cell, so that one reference serves the whole column —
+    [`set_bars`](https://bricenocenti.github.io/tabxplor/reference/set_bars.md)).
 
   `meta` sub-fields left `NULL` are dropped, so a table given nothing
   carries no attribute.
