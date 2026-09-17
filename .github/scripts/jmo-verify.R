@@ -28,10 +28,14 @@
 MACOS_LOAD_IS_FATAL <- TRUE
 ANALYSIS_IS_FATAL <- TRUE
 
-# What a usable module must be able to LOAD. Some of these the compiler vendors, some jamovi's own
-# library already holds; openxlsx2 is the one built from source, and the one this list exists for.
-REQUIRED <- c("tabxplor", "openxlsx2", "survey", "VGAM", "svyVGAM", "brant",
-              "marginaleffects", "mirai", "nanonext", "parallelly", "RhpcBLASctl", "fansi")
+# The list exists for ONE failure mode: `install.packages()` reports a failed SOURCE build as a
+# warning, so a .jmo can look complete with a package missing. On these runners openxlsx2 is the only
+# dependency ever built from source, and its absence takes Excel export -- the panel's own default --
+# with it. Everything else is covered: tabxplor's Imports by `library(tabxplor)` failing outright,
+# and every vendored package by the load loop below. Suggests that jamovi's own library happens to
+# hold or not hold are NOT listed: what they are differs per jamovi line, and tx_need_pkg() guards
+# each of them at its entry point anyway.
+REQUIRED <- c("tabxplor", "openxlsx2")
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) != 5L) {
@@ -164,9 +168,11 @@ check_load <- function(pkgs) {
   say("libPaths   ", paste(.libPaths(), collapse = "\n           "))
 
   for (p in setdiff(pkgs, "tabxplor")) {
-    ok <- tryCatch({ loadNamespace(p); TRUE }, error = function(e) FALSE)
+    why <- NULL
+    ok <- tryCatch({ loadNamespace(p); TRUE },
+                   error = function(e) { why <<- conditionMessage(e); FALSE })
     if (!ok) {
-      m <- paste0("'", p, "' does not load in jamovi's R")
+      m <- paste0("'", p, "' does not load in jamovi's R: ", gsub("\n", " ", if (is.null(why)) "?" else why))
       if (os == "macos") {
         m <- paste0(m, " -- if its .so passed the otool check, suspect the @executable_path ",
                     "stand-in symlink the workflow creates, not the build")

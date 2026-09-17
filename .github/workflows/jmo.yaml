@@ -256,6 +256,22 @@ jobs:
           # no restore-keys, deliberately: see the file header
           key: jmo-${{ env.CACHE_EPOCH }}-${{ matrix.platform }}-R${{ matrix.r }}-${{ hashFiles('DESCRIPTION') }}
 
+      # jamovi's macOS R cannot LINK a source build: its Makeconf names /Library/Frameworks/R.framework,
+      # which no runner has, so clang dies "ld: framework 'R' not found". openxlsx2 is the only
+      # dependency with no binary in the 28 line's snapshot -- give it one, and the compiler then
+      # skips it (it installs only what is not already in the build library).
+      # ⚠ Cold cache only: on a warm one the compiler's install_name_tool pass does not run, so a
+      # copy seeded then would never be patched.
+      - name: Pre-seed openxlsx2 from a binary (macOS)
+        if: runner.os == 'macOS' && steps.deps.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p '${{ matrix.build_dir }}'
+          "$JRSCRIPT" --vanilla -s -e 'install.packages("openxlsx2", lib = commandArgs(TRUE)[[1]],
+             repos = "https://packagemanager.posit.co/cran/latest", type = "mac.binary",
+             dependencies = c("Depends", "Imports", "LinkingTo"))' --args '${{ matrix.build_dir }}'
+          ls '${{ matrix.build_dir }}'
+
       - name: Fetch the compiler, inside the jmvtools source tarball
         run: |
           set -euo pipefail
