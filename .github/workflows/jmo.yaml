@@ -256,25 +256,21 @@ jobs:
           # no restore-keys, deliberately: see the file header
           key: jmo-${{ env.CACHE_EPOCH }}-${{ matrix.platform }}-R${{ matrix.r }}-${{ hashFiles('DESCRIPTION') }}
 
-      # jamovi's macOS R cannot LINK a source build: its Makeconf names /Library/Frameworks/R.framework,
-      # which no runner has, so clang dies "ld: framework 'R' not found". openxlsx2 is the only
-      # dependency with no binary in the 28 line's snapshot -- give it one, and the compiler then
-      # skips it (it installs only what is not already in the build library).
-      # ⚠ Keyed on the PACKAGE, not on the cache: a warm cache restored from a run where the source
-      # build failed holds every other dependency and not this one, and a `cache-hit` guard would
-      # then skip exactly the run that needs seeding. openxlsx2 is C++ over Rcpp and links nothing
-      # the compiler patches, so seeding it outside the install_name_tool pass is safe -- and the
-      # otool check in jmo-verify.R is what says so rather than this comment.
-      - name: Pre-seed openxlsx2 from a binary (macOS)
+      # jamovi's macOS R cannot LINK a source build out of the box: its Makeconf passes
+      # `-F/Library/Frameworks/R.framework/.. -framework R`, and no runner has that directory, so
+      # clang dies "ld: framework 'R' not found". openxlsx2 is the only dependency with no binary in
+      # the 28 line's snapshot, so the 28 line hits it and the 2.7 line does not.
+      # ⚠ Point that path at the R jamovi ships rather than seeding a prebuilt package: the package
+      # is then built against the very R it will run under, and the compiler's own install_name_tool
+      # pass rewrites the resulting libR.dylib reference (it is on its patch list) to
+      # @executable_path -- which is exactly what jmo-verify.R's otool check then confirms.
+      - name: Let jamovi's R link a source build (macOS)
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
-          mkdir -p '${{ matrix.build_dir }}'
-          if [ -d '${{ matrix.build_dir }}/openxlsx2' ]; then echo "already there"; exit 0; fi
-          "$JRSCRIPT" --vanilla -s -e 'install.packages("openxlsx2", lib = commandArgs(TRUE)[[1]],
-             repos = "https://packagemanager.posit.co/cran/latest", type = "mac.binary",
-             dependencies = c("Depends", "Imports", "LinkingTo"))' --args '${{ matrix.build_dir }}'
-          ls '${{ matrix.build_dir }}'
+          sudo mkdir -p /Library/Frameworks
+          sudo ln -sfn "$JAMOVI_HOME/Contents/Frameworks/R.framework" /Library/Frameworks/R.framework
+          ls -l /Library/Frameworks/R.framework/
 
       - name: Fetch the compiler, inside the jmvtools source tarball
         run: |
