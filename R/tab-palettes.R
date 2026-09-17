@@ -385,8 +385,9 @@ PRINT_PALETTES <- list(
 # crosstab takes the MARKS -- nothing typographic competes with the numbers, and the glyphs survive a
 # plain-text copy. A regression takes the EMPHASIS ladder, its cells already carrying their own
 # direction symbol, which frees the typography to spend everything on magnitude.
-# WARNING: the two members write DIFFERENT `.p1..m4` rules and a stylesheet is table-independent by
-# contract, so a batch resolves to ONE of them and `fallback` serves a caller with no table in hand.
+# WARNING: the two members write DIFFERENT `.p1..m4` rules, so ONE call resolves to one of them (the
+# table then wears its `tx-<palette>` class, which every sheet's scoped layer reads -- R/tab-css.R),
+# and `fallback` serves a caller with no table in hand.
 # It is the EMPHASIS member on purpose: marks are cell TEXT and survive a missing stylesheet.
 PRINT_READY <- c(crosstab = "print_marks", regression = "print_emphasis",
                  fallback = "print_minimalistic")

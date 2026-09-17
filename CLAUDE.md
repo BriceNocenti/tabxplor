@@ -318,7 +318,7 @@ The measure's behaviour — raw getter, scale keys, significance source, gating 
 
 **A bare table auto-prints in a medium, and `options(tabxplor.print)` names it** — `console`, `html` (`kable` being its pre-2.0.0 name) or `md`. A medium is a renderer plus an **object that knows how to present itself**: `tab_html()` returns a `tabxplor_kable` and `tab_md()` a `tabxplor_md`, each carrying its own `print()` (the Viewer, a `cat()`) and `knit_print()` (an `asis_output`), so the six `print` / `knit_print` methods hand the rendered object over and carry no per-medium branch — adding a medium is one arm of `tx_auto_render()` plus those two S3 methods. Each exporter is called **bare**, so `tabxplor.theme` and `tabxplor.tab_kable_css` govern an auto-print exactly as they govern an explicit call. Neither `xl` nor `forest` is a value: one writes a file, the other is a chart.
 
-Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, in html and in Excel. **One reference per column**, or two bars could not be compared — the ceiling `max =` states, and the column's own largest data cell where it states none; the prep resolves it once and both media read that one number, Excel pinning it as its `cfvo` bounds rather than auto-scaling over rows the bar excludes. It is drawn as two stacked pseudo-elements, a **groove** saying how far a full bar would reach and the **bar** over it, because an element has one background and a short bar needs the reference. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is a stylesheet custom property (the cell's own slot colour where it has one, the chrome's `accent` where it has none, over the chrome's alpha `track`), and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
+Display values reach the backends by one source of truth: `format.tabxplor_fmt()` renders the text for console, Markdown and HTML, and `tab_xl()` writes a number with format codes from that *same* `format(syntax = "excel")`, so a display change never needs mirroring. **Excel keeps the cell a number and puts everything else in the code**: an aside becomes a column carrying its own segment (`(n={n})`), and every literal a template writes — the stars, the brackets, a sigma, a test label — folds into the numFmt, per section. A multiplicative cell holds its **reading value**, the signed fold, so `1/2.11` reaches the workbook without becoming text; text stays a property of a *cell*, not of a column. The exports' **unit row** is the console's own type tag (`<row%>`, `<n>`), written once per **block** — `tab_col_block_ids()`, the one definition of a block, which also decides where a vertical rule falls. Colour is single-sourced too — every backend reads `fmt_color_channels`. HTML colour is a slot **class**, never inline hex, the theme living in a `<style>` block from the one CSS generator (`tab-css.R`), so light/dark and the publication palettes work by stylesheet — a colour theme is the page's and a publication palette the table's, scoped to the `tx-<palette>` class it wears, so one page mixes both — except `print_marks`, whose signal is cell text and so comes from `format()` like the stars. **Every html table is wrapped in a `.tx-scrollbox`** (`tx_scrollbox()`), so a table wider than the space it has scrolls instead of widening the page — one wrapper and one rule for a document, a pkgdown site, the Viewer and jamovi, which restates only its pixel cap. **A table's title is one text with three placements, decided by the host**: a `<div>` sibling, the only shape that cannot size the table; a real `<caption>` under bookdown, which numbers a table only by scanning for one; and nothing at all under Quarto when the cell already wrote `tbl-cap` — and every `<table>` tabxplor opens carries `data-quarto-disable-processing`, since Quarto would otherwise restyle a table it did not build. **A table may carry subordinate tables and notes** (`meta$footer_tabs`, written by `set_footer_tabs()`) — a fact that belongs to the table without being a row of it, such as the eigenvalues beside a factorial-analysis summary. A `tabxplor_tab` renders as a table (`tx_with_footer_tabs()` hands each exporter the LIST the table means, so the `list_method = TRUE` path renders it, a named one captioned by its name); **any other data.frame renders as a NOTE** — a grid of already-rendered character columns in the aside ink, which is what the regression's shape table now is, so its four hand-written emitters became everybody's (`tab_note()` overrides the headers, the alignment, a greyed row, a footnote or a sparkline column). **A subordinate is not a peer**: it renders what it carries and nothing generated, so a host and its subordinate show ONE colour legend, and it inherits the host's render options with no opt-out. ⚠ **In the console both print ABOVE the table** — the last thing printed is the R object you can go on to pipe — and below the footer in every export; a subordinate table takes the pipe-table shape there (`tab_pipe()`, which is `tab_md()` with three arguments fixed so the two cannot drift). **A column may be drawn as data bars** (`meta$bars`, `set_bars()`): a bar chart inside the table, in html and in Excel. **One reference per column**, or two bars could not be compared — the ceiling `max =` states, and the column's own largest data cell where it states none; the prep resolves it once and both media read that one number, Excel pinning it as its `cfvo` bounds rather than auto-scaling over rows the bar excludes. It is drawn as two stacked pseudo-elements, a **groove** saying how far a full bar would reach and the **bar** over it, because an element has one background and a short bar needs the reference. ⚠ Its LENGTH is the one inline `style` the html engine writes — a length is not a look, its ink is a stylesheet custom property (the cell's own slot colour where it has one, the chrome's `accent` where it has none, over the chrome's alpha `track`), and a class per percent would be a hundred rules. `tab-transpose-render.R` flips a finished render model (a transposed column is heterogeneous and cannot be an `fmt` column), and `tab-theme-detect.R` best-effort-detects the console's scheme — a subsystem that must never error, because a wrong guess only mis-tints.
 
 **How wide a thing is, and where it breaks, are measured from the rendered content — and an export never renames.** Wrapping a header is a *label* in the render model, not a rename of the tibble, so `names(tab)` stays raw from prep to backend and nothing keyed by a column name can go stale; a label column is identified by its **position**, `label_cols` / `label_runs` / `vname_plans` being parallel vectors a consumer walks by index. A column name and a variable name are compound words, not prose, so they break at the seams a name is built from (`_`, `.`, `*`, camelCase) rather than at whitespace alone. A **col_var span** gets exactly the width its own columns leave it: past that it wraps at those seams, past what wrapping can do it is shown from the prefix it shares with the block before it (`MUS_CONCERT_CLASSIQUE`, then `_ROCK`, the full name returning whenever that prefix changes), and in the last resort it is held to `wrap_cols` like every other header — one name is not entitled to widen the table on its own. None of that happens while there is room for the whole name, which is what keeps the elision readable. ⚠ An elided name cannot say where the previous one was cut, so html hands the full one over in a `title=` and no other medium can. A *variable* name is written vertically only where the rotation actually saves width — a turned line costs about one character, so a name turns when it needs fewer turned lines than the width it would otherwise force, weighed against the names that cannot turn (a one-row block like `Constant`), which set the floor; turned, it wraps soft and unindented, an overrun there costing a little row height where a horizontal one would widen the table. How many turned characters a block of rows actually holds is *measured per medium* and the two differ — a 5-row block takes about 14 in html and 10 in Excel — so the plan is computed against the backend being exported, once, and the backend never re-derives it. Excel then has no fixed widths at all: each column is as wide as the widest thing in it that cannot wrap (a figure), while a header, a unit tag or a long label contributes its width divided by the lines it may use — measured per **sheet**, since a column index belongs to the sheet and not to the table sitting on it.
 
@@ -691,7 +691,7 @@ l'en-tête est corrigée au passage (`var` n'est pas « l'écart-type dans une c
 ne nomme aucune queue d'écart-type).
 
 
-#### v2.0.1 — Phase 7 — le pied de tableau, un seul gabarit **DONE**
+### v2.0.1 — Phase 7 — le pied de tableau, un seul gabarit **DONE**
 
 Demandé par `ggfacto` et `formations_stat`, qui butaient sur le même mur : **ce que tabxplor engendre
 ne peut pas être redit par qui sait mieux, et ce qu'un paquet tiers porte ne peut pas être rendu par
@@ -812,7 +812,7 @@ code AVANT/APRÈS que `ggfacto` écrirait (avec les sorties réelles), la sectio
 donner à une session IA dans `~/github/ggfacto/` ou `~/github/formations_stat/`.
 
 
-#### v2.0.1 — Phase 7b — le gabarit dit ce que CE tableau dit **DONE**
+### v2.0.1 — Phase 7b — le gabarit dit ce que CE tableau dit **DONE**
 
 Deux dettes de la phase 7. (1) Le gabarit stocké décrivait **tous** les tableaux : un croisement simple
 portait `<weight> <model> <interaction>`, trois lignes qui ne peuvent jamais rien dire — or le gabarit
@@ -915,7 +915,7 @@ notes après `</table>`, Excel rend un tableau subordonné comme une FEUILLE —
 jamais les ré-ordonner, seulement les supprimer. Il n'y a toujours aucun moyen, par tableau,
 de n'imprimer **rien** : `subtext = FALSE` des exportateurs reste le coup unique.
 
-#### v2.0.1 — Phase 7c — une légende nomme ses colonnes comme l'en-tête **DONE**
+### v2.0.1 — Phase 7c — une légende nomme ses colonnes comme l'en-tête **DONE**
 
 **Là où une légende nomme les COLONNES, elle disait le nom brut du tibble.** Suite verte : **4 797**
 (4 790 avant). Un `col_var` portant plusieurs lignes de légende fait passer le préfixe du bandeau
@@ -940,7 +940,7 @@ aucune section `reference:` de `_pkgdown.yml`. Ils n'apparaîtront donc pas à l
 `pkgdown` avertira qu'ils ne sont pas référencés.
 
 
-#### v2.0.1 — Phase 9 — la barre de données : son échelle, et son encre **DONE**
+### v2.0.1 — Phase 9 — la barre de données : son échelle, et son encre **DONE**
 
 **Le cas d'usage : l'éboulis d'une AGD.** `ggfacto::mca_interpret()` fait suivre chaque tableau-résumé
 d'un tableau des valeurs propres, et la colonne `% variance` y portait une barre par `set_bars()` —
@@ -1010,7 +1010,7 @@ barre — une longueur posée sur un `::before` absolu, qui ne dimensionne donc 
 ⚠ **Relevé au passage, et non traité** : `set_bars` / `get_bars` ne sont dans aucune section
 `reference:` de `_pkgdown.yml`, comme les six topics du cadre de pied relevés en phase 7c.
 
-#### v2.0.1 — Phase 9b — la barre de données : sa rainure **DONE**
+### v2.0.1 — Phase 9b — la barre de données : sa rainure **DONE**
 
 Une barre sans rien derrière ne dit pas jusqu'où elle irait : à 9,9 % on lit une tache, pas une part.
 Elle est donc **deux pseudo-éléments empilés** — la **rainure** (`::before`, classe `tx-bar`) : toute
@@ -1034,7 +1034,7 @@ trait sur rien. Excel est inchangé : un `dataBar` a sa rainure à lui.
 
 Suite livrée verte : **4 864**. `_snaps/golden.md` accepté — 128 lignes, toutes la règle de la barre.
 
-#### v2.0.1 — Phase 10 — noms de col_vars plus compacts dans les exports **DONE**
+### v2.0.1 — Phase 10 — noms de col_vars plus compacts dans les exports **DONE**
 
 Demandé par `ggfacto` et `formations_stat`. Mesuré : un tableau `levels = "first"` sur cinq col_vars
 d'un même préfixe écrivait cinq en-têtes de 21 caractères au-dessus de colonnes larges de 4, et **rien
@@ -1175,7 +1175,7 @@ précoce là où celle de `tab_label_runs()` ne l'était pas.
 
 
 
-#### v2.0.1 — Phase 11 — l'encre d'une ligne de résumé **DONE**
+### v2.0.1 — Phase 11 — l'encre d'une ligne de résumé **DONE**
 
 Demandé par `ggfacto` : les deux lignes de résumé de `HCPC_tab()` (`% of population`, `n`) sortaient
 en gris, l'encre qui dit « cette cellule aurait pu être graduée et ne l'est pas », alors qu'elles
@@ -1256,7 +1256,7 @@ se coupe en deux lignes, alors que le recalibrage vertical de la phase 10 (~14 c
 règle dit : un nom tourne quand tourner économise de la largeur, et il tient entier quand il tient.
 
 
-#### v2.0.1 — Phase 11b — une ligne de test est un avertissement **DONE**
+### v2.0.1 — Phase 11b — une ligne de test est un avertissement **DONE**
 
 Relevé en relisant la phase 11 : une ligne de p-value non significative ne rougissait que si la
 mesure de couleur de la colonne était `difference`. Mesuré, ce n'était pas une décision mais un
@@ -1291,7 +1291,7 @@ sous les six combinaisons de mesure et de canal, l'absence d'aplat, une ligne si
 sans couleur, et la parité logistique/linéaire qui est le défaut d'origine). Aucun instantané ni
 aucune fixture `_golden` ne bouge : aucune n'a de test non significatif.
 
-#### v2.0.1 — Phase 12 — un tableau nu s'imprime dans un MÉDIUM **DONE**
+### v2.0.1 — Phase 12 — un tableau nu s'imprime dans un MÉDIUM **DONE**
 
 Demandé par `formations_stat` : un carnet d'exploration est un `.qmd` knité en `.md` par
 `knitr::knit()` seul, sans jamais atteindre pandoc — mesuré, `quarto render --to markdown` réécrit la
@@ -1382,7 +1382,137 @@ gardent un nom d'avant 2.0.0 ; les renommer par `alias` est une phase à elle se
 `set_color_palette()` pose `tabxplor.color_style_theme` sans condition dans `.onLoad()` : même
 écrasement de `.Rprofile` que le point 1, hors du mécanisme `seed`.
 
-#### Phase xx — jamovi 2.0.0 release
+### v2.0.1 — Phase 13 — une bulle qui ne s'affichait jamais sous Bootstrap 5 **DONE**
+
+**Le balisage était là, le binding aussi, et aucune bulle n'apparaissait.** Sous
+`popover = TRUE`, `tab_tooltip_attrs()` (`R/tab-render-html.R:54-65`) écrit l'orthographe
+**Bootstrap 3/4** — `data-content=` pour le texte, `title=` vide. Or Bootstrap 5 ne lit ses options
+que dans les `data-bs-*` : `getDataAttributes()` filtre sur le préfixe `bs`. La branche BS5 de
+`inst/tabxplor-1.0/tabxplor.js` construisait donc `new bs.Popover(el, {...})` **sans `content`**,
+`_isWithContent()` renvoyait `false`, et `show()` sortait aussitôt. Une page Quarto — qui sert
+Bootstrap 5 — n'a jamais montré une seule bulle de popover ; les tooltips, eux, marchaient, parce
+que leur texte va dans `title=`, que BS5 sait récupérer.
+
+**Le correctif est de passer `content` et `title` explicitement** au constructeur BS5, lus sur les
+attributs que le moteur html a écrits. Trois lignes, dans le seul fichier qui connaît les deux
+Bootstrap et qui le revendique dans son en-tête. Rien à changer côté R : l'orthographe `data-*` est
+celle que la branche jQuery attend, et la dupliquer en `data-bs-*` aurait mis deux vérités dans le
+même `<td>`.
+
+**Mesuré** : sur une séance de `formations_stat` rendue par Quarto 1.10, 89 cases portent
+`data-toggle="popover"` et `data-content=` ; aucune ne s'ouvrait. ⚠ Le défaut ne se voit **ni** dans
+le html, **ni** dans le journal de rendu, **ni** dans les tests : il faut ouvrir la page et survoler
+une case. C'est aussi pourquoi il a vécu si longtemps.
+
+#### v2.0.1 — Phase 14 — « ratio », les étiquettes de note en gras, les palettes de publication par tableau **DONE**
+
+Trois demandes, et chaque brouillon visait un symptôme : la vraie correction était un cran plus bas.
+
+**« ratio » partout, sauf pour la cote.** Le brouillon plaçait les chaînes dans `inst/i18n/fr.json` :
+ce fichier ne porte que les libellés jamovi, et ce qui s'imprime (légendes, en-têtes, graphiques) vit
+dans `po/R-fr.po`. Décision du mainteneur, plus large que le brouillon : toute comparaison
+multiplicative qui n'est pas une cote dit « ratio » (« ratio (risque relatif) », « ratio de moyennes »,
+« ratio de victoires », « ratio des proportions ajustées »), et « rapport » ne survit que dans trois
+formes figées — « rapport de cotes (cumulé) », « rapport de vraisemblance », « par rapport à ». Le
+`or` multinomial n'est plus glosé « rapport de risques relatifs » (le RRR de Stata est une cote contre
+la modalité de référence) : « rapport de cotes (par rapport à la modalité de référence) », l'usage de
+guide-R et de Tanagra, que `test-i18n.R` épinglait déjà. La règle est écrite une fois, dans
+`dev/french_glossary.md`. Le fuzzy faux « win ratio → rapport de risques » est corrigé au passage (7
+fuzzy → 6).
+
+**IRR disparaît.** « Incidence » est un mot d'épidémiologiste, mais « taux » n'était pas plus juste :
+`tab_reg()` ne prend aucun offset d'exposition, et le niveau `count` était déjà tamponné
+`scale = "mean_ratio"`. L'exp(coef) d'un Poisson est donc un ratio de comptages moyens — `RoM`, que le
+paquet nommait déjà. `REG_LEVEL_MEASURES$count` dit `RoM`, la ligne `IRR` de `REG_WORDS` part, les
+formes observées Poisson deviennent `mr` / `mr_log`, l'intervalle de Wald dit « log ratio of means »,
+l'axe d'un graphique « Ratio of means ». ⚠ **Changement visible** : `Model_IRR` → `Model_RoM`. L'entrée
+reste acceptée : `MEASURE_ACRONYMS_RETIRED` (`R/fmt_class.R`), hors de la clé à double sens avec
+`REG_WORDS`, donc `measure = "IRR"` et `color = "IRR"` résolvent toujours, en silence.
+
+**L'étiquette d'une note en gras, dans les cinq médias.** Le brouillon proposait une regex html seule.
+Or le flux de jetons du pied porte déjà un drapeau `bold` (les noms de variables s'en servent), que la
+console, le html, le markdown et les runs Excel rendent chacun à sa façon : un seul découpage,
+`footer_label_split()`, dans `footer_text_tokens()` — le point par lequel passe toute ligne écrite par
+une personne. Une étiquette doit en avoir l'air : lettres, espaces, apostrophes, points, tirets, au
+plus quatre mots, **aucun chiffre** — « En 2020, 30 % : », « 10:30 » et une URL restent intacts. Rien
+n'est stocké : `get_subtext()` reste du texte brut. `options(tabxplor.subtext_bold_label = FALSE)` pour
+s'en passer. Vérifié : `<b>Champ</b>` en html, `**Champ**` en md, un run `<b/>` dans le xlsx.
+
+⚠ **Un défaut md trouvé en chemin, mesuré avec pandoc** : les lignes du pied étaient jointes par un
+`\n` nu, donc la légende, « Champ : … » et « Source : … » sortaient en UN paragraphe. Chaque ligne sauf
+la dernière finit désormais par la coupure dure `\` (le `<br>` du html). La pipe table de console
+(`tab_pipe()`) la montre, comme elle montrait déjà les `\*\*\*` échappés.
+
+**La palette de publication appartient au tableau, pas à la page.** Cause du tableau `print_ready` en
+couleur dans la vignette : une feuille est globale, toutes les palettes partagent `.p1–.m4`, et la
+vignette émet une feuille `auto` puis coupe la css par tableau. Le même défaut était latent partout,
+puisque `print_ready` choisit `print_marks` pour un croisement et `print_emphasis` pour une régression.
+Un tableau sur une palette de publication porte donc `tx-<palette>` (html et div markdown), et **toute
+feuille** porte les trois palettes, portées par `tx_print_scope_sel()` : `:root .tabxplor-tab.tx-<p>`
+ajoute (0,2,0) quand un crochet de page ajoute au plus (0,1,1), donc la règle portée gagne quel que
+soit l'ordre des feuilles. Les thèmes de couleur restent sans classe et suivent la page. La vignette
+n'a rien à changer — vérifié dans Chromium headless sur la vignette tricotée : cases du tableau
+`print_marks` en noir et gris, tableau coloré voisin en bleu. Coût : feuille `auto` 44 934 → 50 028
+octets.
+
+⚠ **Un second défaut latent, corrigé par le même geste** : `tx_hook_sel()` coupait les sélecteurs à
+chaque virgule, y compris dans les listes `:not(.p1,.p2…)` / `:is(.o1…)`, et injectait le crochet au
+milieu de la pseudo-classe (sous `auto`). `tx_sel_parts()` ne coupe qu'hors parenthèses et sert les
+deux.
+
+Suite livrée verte : **4 990**. `_snaps/golden.md` accepté après revue ligne à ligne — les seules
+différences sont les couches portées (16 feuilles) et une coupure dure md ; `_golden/*.rds` intacts.
+Suite `dev/tests/` : les dix fichiers touchés par IRR mis à jour et verts (2 453). Traductions : 328.
+
+⚠ **Relevé, non traité.** Une table de forme (`tx-shape`) sous un hôte de publication ne porte pas la
+classe de l'hôte, donc garde l'encre de page. Le titre `.a.yaml` jamovi (« ratio (RR, RoM) ») n'atteint
+l'appli qu'au prochain `jmvtools::install()`.
+
+**Traductions corrigées ensuite.** Les six fuzzy anciens de `po/R-fr.po` étaient faux, donc imprimés
+en anglais : « below/above mean » (« Moyenne de la population ») → « sous la moyenne » / « au-dessus
+de la moyenne », « Not %s » (« à %s ») → « Autre que %s », et trois formats de ponctuation. 334
+traduites, 0 fuzzy vivant. Côté jamovi : la parenthèse fermante manquait au libellé `test =`, la boîte
+« Références … » finit sur « valeurs manquantes », et `all` était UN msgid pour `pct` et `levels`
+— d'où « all (toutes les garder) » sous `pct`. Les deux titres sont distincts dans `jmvtab.a.yaml`
+(`all (whole table)` / `all <i>(keep every level)</i>`), donc traduisibles chacun.
+
+### v2.0.1 — Phase 15 — bugs and changes from jamovi team feedback
+
+Some bugs were found by the jamovi team feeback, that are real bugs and need to be corrected now : see `dev/jamovi_library_vs_sideloading.md` . The new jamovi UX with Table elements as default is not for v. 2.0.1, don’t implement it now. But if you find changes that we’ll need to implement in the future, but that would more easily be made now, tell me honestly and we’ll implement them too.
+
+Dans jmvtab, dans le menu déroulant de `display =`, est-ce qu’il serait facile de ne garder dans les choix possible que les éléments qui ont un sens pour le tableau affiché (le vctrs field concerné n’est pas NA dans au moins une colonne ?), et de le faire **de manière fiable et *user-friendly*** ? Pour l’instant, la plupart des options ne font rien quand on les choisit mais restent affichées, ce qui rend le dropdown difficile à lire.
+
+
+
+#### v2.0.1 — Phase 15a — un data frame ordinaire s'exporte en silence ; `fct_recode_helper()` réhabilité **DONE**
+
+**Le message « Colours and formatting skipped … (not a tabxplor table) » disparaît là où il ne dit
+rien.** Un data frame qui n'a jamais été un tableau tabxplor, rendu en tableau simple, est exactement
+ce qui était demandé. `tab_render_vars()` marque ces deux cas (`plain = TRUE` : pas un data frame, aucune
+colonne `fmt`) et `tab_degrade_inform()` reçoit désormais le record entier et se tait sur eux. ⚠ Le
+message reste pour un vrai tableau tabxplor qui se dégrade quand même (aucune colonne facteur, ligne
+introuvable) : là, quelque chose est perdu. `plots.R` lit toujours `reason` pour son erreur.
+
+**`fct_recode_helper()` n'est plus déprécié** (décision du mainteneur : il l'enseigne pour simplifier
+`fct_recode()`). La page d'aide est réécrite pour l'utilisateur (le problème qu'il résout, l'usage des
+fréquences en commentaire, un exemple), la fonction rejoint « Data-prep and text helpers » dans
+`_pkgdown.yml`, et les tests ne coupent plus lifecycle. `NEWS.md` ne l'annonce plus comme future
+fonction interne.
+
+Tests ciblés verts (edge-cases, utils, exporteurs) ; `dev/tests/` : les deux assertions qui exigeaient
+le message sont retournées (366 verts).
+
+### v2.0.1 — Phase 16 — github actions to compile the jamovi module for all platforms
+
+I need to compile the jamovi module .jmo for my MacOS students. I want to use GitHub Actions for every platform — macOS arm64 and Intel, Windows, Linux, each jamovi line that exists there — and published as GitHub Release assets.
+
+See more details at `dev/jamovi_library_vs_sideloading.md`.
+
+
+### v2.0.1 — Phase 17 — v2.0.1 release
+
+New CRAN release. We’ll do R CMD CHECK, github actions, rhub, reverse dependency check with ggfacto (CRAN 0.3.2 and current dev version in this WSL2 machine), and everything else needed for the new release.
+
 
 
 

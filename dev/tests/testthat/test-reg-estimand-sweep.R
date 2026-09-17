@@ -38,7 +38,7 @@ test_that("the marker rides the measure, and the log wraps the whole token", {
   expect_identical(w("binomial", "conditional",  "log"),        "log(OR)")
   expect_identical(w("ordinal",  "conditional",  "odds_ratio"), "cumOR")   # cumulative, and it says so
   expect_identical(w("gaussian", "conditional",  "difference"), "diff")    # never a bare greek letter
-  expect_identical(w("poisson",  "at_reference", "ratio"),      "refIRR")  # ONE ratio word per family
+  expect_identical(w("poisson",  "at_reference", "ratio"),      "refRoM")  # ONE ratio word per family
   # Phase 22g-v: a raw coefficient is the model's OWN, so there is no marginal or at-reference one
   expect_identical(w("multinomial", "at_reference", "log_odds"), "")
   # the expansion is one declared string per acronym, wrapped the way each form is spoken
@@ -258,7 +258,7 @@ test_that("the estimand is stored in the table's recipe, per dependent", {
   expect_identical(unname(rc$links[["married"]]),    "ratio")
   expect_identical(unname(rc$measures[["married"]]), "ratio")
   # ... and the footer sentence is generated from it
-  expect_match(reg_model_lines(t)[[1]], "risk ratio|rapports de risque")
+  expect_match(reg_model_lines(t)[[1]], "risk ratio|risque relatif")
 })
 
 
@@ -691,13 +691,13 @@ test_that("measure = log colours the log-RR coefficient on the log scale (is_log
 
 # ---- (1d) NON-REGRESSION: a genuine count model is untouched --------------------------------------
 
-test_that("a real COUNT poisson keeps its IRR, its dispersion row and its over-dispersion warning", {
+test_that("a real COUNT poisson keeps its RoM, its dispersion row and its over-dispersion warning", {
   d <- rr_data()
   expect_warning(t <- tab_reg(d, "tvhours", "race", family = "poisson"), "Over-dispersion")
-  expect_true("Model_IRR" %in% names(t))
+  expect_true("Model_RoM" %in% names(t))
   expect_false(any(grepl("_RR", names(t))))
   expect_true("dispersion" %in% get_test(t)$test)
-  expect_equal(get_model_family(t$Model_IRR), "poisson")
+  expect_equal(get_model_family(t$Model_RoM), "poisson")
 })
 
 

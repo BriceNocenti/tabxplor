@@ -92,6 +92,22 @@ fb_stars <- function(x, ctx, args = character(0)) {
 fb_user <- function(x, ctx, args = character(0))
   lapply(Filter(nzchar, ctx$subtext), function(s) footer_text_tokens(s, x, ctx))
 
+# DESIGN: a person's line opening on a short LABEL and a colon is a field note -- "Champ : ...",
+# "Source: ..." -- whose label is what the eye looks for, so it is set in bold in every medium. It is
+# decided at RENDER on the plain stored text, so no markup ever reaches `subtext` (md would print a
+# `<b>` literally, Excel would write it into the cell). ⚠ The label must LOOK like one: letters,
+# spaces, apostrophes, dots and hyphens only, at most four words -- a digit, a comma or a URL scheme
+# (no space after its colon) keeps a free sentence ("En 2020, 30 % : ...", "10:30") untouched.
+# Returns c(label, rest-including-the-colon), or NULL.
+#' @keywords internal
+#' @noRd
+footer_label_split <- function(line) {
+  m <- regmatches(line, regexec(
+    "^(\\s*)(\\p{L}[\\p{L}'\u2019. -]{0,29}?)([ \u00a0\u202f]?:(?:\\s.*|$))", line, perl = TRUE))[[1L]]
+  if (!length(m) || lengths(strsplit(trimws(m[[3L]]), "\\s+")) > 4L) return(NULL)
+  c(paste0(m[[2L]], m[[3L]]), m[[4L]])
+}
+
 # ---- the INLINE builders: (x, ctx, args) -> a list of TOKENS spliced into one line -----------------
 # They are the reason a foreign package never pastes a break value into prose: `<breaks>` is built from
 # the very plan the cells are painted with, so a hand-written ladder cannot drift from color_breaks.
@@ -254,10 +270,20 @@ footer_args <- function(s) {
   if (!nzchar(s)) character(0) else strsplit(s, ":", fixed = TRUE)[[1L]]
 }
 
-# ONE text line -> a token stream, with every INLINE placeholder replaced by what its row builds.
+# ONE text line -> a token stream, with every INLINE placeholder replaced by what its row builds, and a
+# leading label (footer_label_split()) as a bold token ahead of it.
 #' @keywords internal
 #' @noRd
 footer_text_tokens <- function(line, x, ctx) {
+  lab <- if (isTRUE(tx_option("subtext_bold_label"))) footer_label_split(line)
+  if (!is.null(lab))
+    return(c(list(.lg_tok(lab[[1L]], bold = TRUE)), footer_text_tokens_plain(lab[[2L]], x, ctx)))
+  footer_text_tokens_plain(line, x, ctx)
+}
+
+#' @keywords internal
+#' @noRd
+footer_text_tokens_plain <- function(line, x, ctx) {
   unesc <- function(z) gsub("\\\\<", "<", z)
   m <- gregexpr(FOOTER_TOKEN_RE, line, perl = TRUE)[[1L]]
   if (m[[1L]] == -1L) return(list(.lg_tok(unesc(line))))

@@ -2402,7 +2402,7 @@ reg_profile_row <- function(data, predictors, anchors = NULL, w = NULL) {
 
 # WHERE THE BASELINE ROW'S VALUE BELONGS, for both contrasts at once. `EST_SCALES$const_display`
 # names the quantity this column's effects OPERATE ON: an odds ratio multiplies odds, so an odds
-# column keeps the baseline odds (with its level as the cell's aside); a risk / rate ratio multiplies
+# column keeps the baseline odds (with its level as the cell's aside); a risk ratio or a ratio of means multiplies
 # the level and a difference adds to it, so those show the LEVEL itself; a coefficient adds on the
 # link scale. The number never changes -- only the field it sits in and the token that renders it --
 # which is what stops the row wearing a comparison sign or a "x" glyph it has no reference for.
@@ -3746,7 +3746,7 @@ reg_cols_ame <- function(f, sp, ctx) {
   # the Constant row: this contrast has no intercept in its tidy, so the baseline is the model's own
   # predicted outcome, at the very profile the column's effects are read at.
   # ⚠ a LOGGED column's baseline is computed on the scale it is the log OF -- the baseline odds under
-  # a logged odds ratio, the baseline level under a logged risk / rate ratio -- and logged after, so
+  # a logged odds ratio, the baseline level under a logged risk ratio or ratio of means -- and logged after, so
   # `Constant + effect` stays coherent on the link scale.
   exp_sc <- reg_exp_scale_of(sp_est, sp$trials)
   # DESIGN: a RANK column has no baseline to place. The model's predicted outcome distribution is a
@@ -4222,8 +4222,8 @@ reg_stage_finalize <- function(ctx) {
 #' All-in-one tables for regressions, with each modelled effect beside its observed one
 #'
 #' Fits one regression model per column and returns a `tabxplor` table of the per-family effect
-#' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **incidence-rate
-#' ratios** (poisson), one **odds-ratio column per outcome category** (nominal 3+ level), a
+#' measure --- a linear **mean difference** (gaussian), **odds ratios** (binomial), **ratios of
+#' means** (poisson counts), one **odds-ratio column per outcome category** (nominal 3+ level), a
 #' **cumulative odds ratio** (ordinal) --- one row per predictor level, grouped by predictor, with
 #' the **observed (crude)** effect beside each adjusted one. Each cell stores its estimate, interval
 #' and p-value, so the table prints with stars, greys what is not significant, and exports like any
@@ -4238,7 +4238,7 @@ reg_stage_finalize <- function(ctx) {
 #' @details
 #' New to regressions with tabxplor? A first model needs three arguments: `data`, `outcome` and
 #' `predictors`. The model follows the outcome's type --- a two-level factor gives logistic **odds
-#' ratios**, a numeric a linear **mean difference**, a count Poisson **rate ratios**, a 3+ level
+#' ratios**, a numeric a linear **mean difference**, a count Poisson **ratios of means**, a 3+ level
 #' factor multinomial or ordinal odds ratios --- so you rarely set `family` by hand.
 #'
 #' **The estimand is a cascade**: `family` -> `link` -> `measure` -> `effect`, where `"auto"` means
@@ -4304,7 +4304,7 @@ reg_stage_finalize <- function(ctx) {
 #'   the model's own. The full word is canonical, the discipline's acronym a synonym:
 #'
 #'   * `"odds_ratio"` (`"OR"`) --- the odds of the outcome, times what.
-#'   * `"ratio"` (`"RR"`, `"IRR"`, `"RoM"`) --- how many times as likely, as frequent, as large.
+#'   * `"ratio"` (`"RR"`, `"RoM"`) --- how many times as likely, as frequent, as large.
 #'     Reach for it when the outcome is **common**, where an odds ratio is far from the risk ratio
 #'     people hear in it, and because a risk ratio stays comparable across nested models.
 #'   * `"difference"` (`"RD"`, `"diff"`) --- how much more, in the outcome's own units.
@@ -4542,7 +4542,7 @@ reg_stage_finalize <- function(ctx) {
 #' # Linear: a mean difference in dollars.
 #' tab_reg(car_salaries, "salary", c("sex", "discipline", "rank"))
 #'
-#' # A count outcome: incidence-rate ratios.
+#' # A count outcome: ratios of mean counts.
 #' tab_reg(car_arrests, "checks", c("colour", "employed"), family = "poisson")
 #'
 #' # `measure` reports another measure WITHOUT changing the model: a MARGINAL risk ratio,

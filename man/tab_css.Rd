@@ -76,8 +76,10 @@ tab_css(theme = "auto")
 }\if{html}{\out{</div>}}
 
 Every later \code{\link[=tab_html]{tab_html()}} then emits classes only. Two things to know: with \code{css = FALSE} and \strong{no}
-\code{tab_css()} call the tables render uncoloured; and one stylesheet means one \code{theme} for the whole
-document.
+\code{tab_css()} call the tables render uncoloured; and one stylesheet means one colour \code{theme} for the
+whole document. A black-and-white table (\code{theme = "print_ready"} or a publication palette on the
+table's own call) still renders as such under it: every stylesheet carries the publication palettes,
+scoped to the tables that wear them.
 }
 
 \section{Restyling a table}{

@@ -6,8 +6,11 @@
 # KEY CONSTRAINTS:
 #   - THE CSS IS TABLE-INDEPENDENT: a pure function of (palette, theme). That is the whole point of
 #     naming a class after a palette SLOT rather than a break value. It lets a document emit the
-#     stylesheet ONCE and reuse it for every table, and it makes class collisions impossible --
-#     `.p3` is the same shade in every table, whatever its color_breaks.
+#     stylesheet ONCE and reuse it for every table -- `.p3` is the same shade in every table,
+#     whatever its color_breaks. A COLOUR theme is the page's; a PUBLICATION palette is the table's
+#     (`print_ready` picks one per table), so every sheet also carries each publication palette,
+#     scoped to the `tx-<palette>` class its tables wear (tx_print_scope_sel()): one page can hold a
+#     colour table and a black-and-white one.
 #   - "auto" is a RENDER intent, never a palette. Every palette lookup funnels through
 #     tx_palette_theme(), or a key like "text_auto" gets built and errors on a length-0 vector.
 #   - WARNING: NO BORDER SHORTHAND, anywhere. A shorthand resets border-*-color to `currentColor` --
@@ -363,13 +366,52 @@ tx_cell_sel <- function(cls) paste0(".", cls, ",.tabxplor-tab .", cls)
 # A chrome value that may be absent: "" is how this builder spells "say nothing at this layer".
 tx_na_blank <- function(x) if (is.null(x) || is.na(x)) "" else x
 
+# the top-level parts of a selector list. ⚠ Only a comma OUTSIDE parentheses separates two: the
+# `:not(.p1,.p2)` / `:is(.o1,.o2)` lists are one part each, and splitting inside them would write a
+# prefix into the middle of a pseudo-class.
+tx_sel_parts <- function(s) {
+  ch <- strsplit(s, "", fixed = TRUE)[[1]]
+  depth <- cumsum((ch == "(") - (ch == ")"))
+  cut <- which(ch == "," & depth == 0L)
+  trimws(substring(s, c(1L, cut + 1L), c(cut - 1L, length(ch))))
+}
+
 # prefixes every part of a (possibly comma-separated) selector with every hook.
 # `.tabxplor-tab th,.tabxplor-tab td` + 2 hooks -> 4 parts.
 tx_hook_sel <- function(sel, hooks) {
   vapply(sel, function(s) {
-    parts <- trimws(strsplit(s, ",", fixed = TRUE)[[1]])
+    parts <- tx_sel_parts(s)
     paste0(as.vector(t(outer(hooks, parts, function(h, p) paste0(h, " ", p)))), collapse = ",")
   }, character(1), USE.NAMES = FALSE)
+}
+
+# DESIGN: a PUBLICATION palette is a fact of the TABLE, not of the page -- `print_ready` picks one per
+# table, and a page may show a colour table beside a black-and-white one -- so its rules are scoped by
+# the `tx-<palette>` class the table carries. `:root` + that class add (0,2,0) to every selector, where
+# a page hook adds at most (0,1,1): a scoped rule out-specifies every colour layer, whatever the
+# source order and however many sheets the page holds.
+tx_print_scope_sel <- function(sel, palette) {
+  host <- paste0(":root .tabxplor-tab.tx-", palette)
+  vapply(sel, function(s) {
+    parts <- tx_sel_parts(s)
+    own   <- grepl("^\\.tabxplor-tab($|[ .:])", parts)
+    out   <- ifelse(own, paste0(host, substring(parts, nchar(".tabxplor-tab") + 1L)),
+                    paste0(host, " ", parts))
+    paste0(unique(out), collapse = ",")
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# the class a table carries for its palette: `tx-<palette>` on a publication palette, none on a colour
+# theme (a colour theme is the page's, see tx_print_scope_sel()).
+tx_palette_class <- function(theme) if (tx_is_print(theme)) paste0("tx-", theme[1]) else NULL
+
+# Every publication palette's layer, scoped to the tables that carry it (tx_print_scope_sel()).
+tx_print_scoped_layers <- function(chrome = TRUE) {
+  unlist(lapply(names(PRINT_PALETTES), function(p) {
+    r <- tx_css_rules(chrome = chrome, print_theme = p)
+    r$sel <- tx_print_scope_sel(r$sel, p)
+    tx_css_layer(r, "print")
+  }), use.names = FALSE)
 }
 
 tx_css_layer <- function(rules, which = c("light", "dark", "print"), hooks = NULL, indent = "") {
@@ -615,7 +657,8 @@ tx_css_render <- function(rules, theme = "light", chrome = TRUE, print_rules = T
     tx_css_layer(rules, if (tx_is_print(theme)) "print" else theme)
   }
 
-  paste0(c(static, body, tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
+  paste0(c(static, body, tx_print_scoped_layers(chrome),
+           tx_print_block(rules, theme, chrome, print_rules)), collapse = "\n")
 }
 
 # WHICH publication palette a COLOURED page falls back to when it is printed. `TRUE` = the default
@@ -701,8 +744,10 @@ tx_print_block <- function(rules, theme, chrome = TRUE, print_rules = TRUE) {
 #' ````
 #'
 #' Every later [tab_html()] then emits classes only. Two things to know: with `css = FALSE` and **no**
-#' `tab_css()` call the tables render uncoloured; and one stylesheet means one `theme` for the whole
-#' document.
+#' `tab_css()` call the tables render uncoloured; and one stylesheet means one colour `theme` for the
+#' whole document. A black-and-white table (`theme = "print_ready"` or a publication palette on the
+#' table's own call) still renders as such under it: every stylesheet carries the publication palettes,
+#' scoped to the tables that wear them.
 #'
 #' @section Restyling a table:
 #' Nothing is written inline on a cell, so **any** of the look can be overridden by adding your own

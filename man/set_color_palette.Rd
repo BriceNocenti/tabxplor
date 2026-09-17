@@ -151,7 +151,7 @@ the remaining ones are read as spacings from it. \code{adj_ratio}, \code{adj_dif
 \code{\link{tab_reg}}-only scales of \code{color = "adjustment"} / \code{"between_groups"} --
 how far a modelled effect sits from the observed one (or from the reference group's). Which one a
 column reads follows the estimate's own scale: \code{adj_ratio} for a multiplicative effect (odds /
-risk / rate ratio), \code{adj_diff} for a probability-scale marginal effect (in percentage points),
+risk ratio or ratio of means), \code{adj_diff} for a probability-scale marginal effect (in percentage points),
 and \code{adj_diff_std} for an additive effect in the outcome's own units (a gaussian beta, a count
 marginal effect), where the gap is divided by SD(Y) so the same threshold means the same thing
 whatever unit the outcome is recorded in. An empty/\code{NULL} scale
@@ -160,7 +160,7 @@ drops that measure for its column type.
 Two rules shape a default, and a custom one is free to break them. A ladder is MIRRORED unless the
 quantity it grades is bounded above: a percentage ratio is capped at \code{1 / base}, so a cell can
 sit far below its reference and never far above it, and \code{pct_ratio} is stricter below
-(\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a mean ratio, a rate ratio
+(\code{list(over = c(1.1, 1.2, 1.5, 2), under = c(1.1, 1.25, 2, 4))}) -- a ratio of means
 and a ratio of two estimates have no ceiling and stay symmetric. And a fill is read at a glance, so
 on the BACKGROUND channel the two ratio scales keep their two loudest rungs only: with the default
 \code{color = TRUE} the text grades every deviation and the background flags the ones whose

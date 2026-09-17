@@ -64,7 +64,7 @@ a one-factor GLM at the matching link (n = 4 000, three-level predictor):
 | `Obs_OR` (binomial)             | `glm(y ~ x, binomial)`          |             9.2e-14 |
 | `Obs_%` risk difference         | `glm(y ~ x, gaussian)`          |             1.7e-14 |
 | `Obs_RR` (Katz)                 | `glm(y ~ x, poisson)`           |             1.8e-10 |
-| `Obs_IRR` (poisson counts)      | `glm(y ~ x, poisson)`           |             3.7e-10 |
+| `Obs_RoM` (poisson counts)      | `glm(y ~ x, poisson)`           |             3.7e-10 |
 | `Obs_OR` **weighted**           | `glm(y ~ x, binomial, weights)` |             8.9e-16 |
 
 And the influence function of that saturated fit reproduces the **Woolf** standard error the crude
@@ -82,7 +82,7 @@ IF_i  =  1(x_i = l) · w_i (y_i − μ_l) / Σ_{x=l} w · g'(μ_l)
        − 1(x_i = r) · w_i (y_i − μ_r) / Σ_{x=r} w · g'(μ_r)
 
 g'(μ) = 1/(μ(1−μ))   logit     (OR)
-        1/μ          log       (RR, IRR)
+        1/μ          log       (RR, RoM)
         1            identity  (risk difference, mean difference)
 ```
 
@@ -156,7 +156,7 @@ true crude and adjusted effects are the same quantity and an honest test must no
 
 Read the two halves separately.
 
-- **Collapsible scales (RR, IRR, β, AME): textbook.** The gap is 0 in expectation and the test holds
+- **Collapsible scales (RR, RoM, β, AME): textbook.** The gap is 0 in expectation and the test holds
   its nominal size at every n. `grey_non_signif` and `guaranteed_effect` mean exactly what a user
   expects.
 - **Odds ratio: the test is correct and the *interpretation* is the trap.** The gap converges to a

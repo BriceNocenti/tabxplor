@@ -92,7 +92,7 @@ sits from its reference, the measure which of the ways of expressing it you read
 one per column type. Otherwise:
 \itemize{
 \item \code{"difference"} (\code{"RD"}, \code{"diff"}): the cell's difference from its reference (percentage points for factors, Glass's \eqn{\Delta} for means).
-\item \code{"ratio"} (\code{"RR"}, \code{"IRR"}, \code{"RoM"}): relative risk (factors) or mean ratio (numerics) vs the reference.
+\item \code{"ratio"} (\code{"RR"}, \code{"RoM"}): relative risk (factors) or mean ratio (numerics) vs the reference.
 \item \code{"odds_ratio"} (\code{"OR"}): the odds ratio, on percentage tables, coloured on its own symmetric scale.
 \item \code{"contrib"}: signed contribution to the chi-squared (reference-free).
 }

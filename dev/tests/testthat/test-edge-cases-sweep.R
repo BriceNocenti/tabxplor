@@ -277,8 +277,8 @@ testthat::test_that("degrade notice is suppressed when the render batch holds a 
   plain <- tibble::tibble(a = factor(c("x", "y")), b = c(1.5, 2.5))
   # a mixed list: the plain peer must NOT emit the misleading "skipped" message
   testthat::expect_no_message(tab_kable(list(real, plain)), message = "skipped")
-  # a lone non-tabxplor frame still informs (exactly once)
-  testthat::expect_message(tab_kable(plain), "skipped")
+  # ...and a lone non-tabxplor frame is silent too: a plain table is what was asked
+  testthat::expect_no_message(tab_kable(plain), message = "skipped")
 })
 
 

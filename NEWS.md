@@ -205,8 +205,8 @@
 
 * The step-by-step chain warns on every call. What goes away is the *chaining API*, not the
   statistics: `tab()` and `tab_num()` compute the same numbers, in one pass.
-* `tab_prepare()`, `complete_partial_totals()` and `fct_recode_helper()` will become internal or be
-  removed; `tab_prepare()`'s work is done by `tab()` itself.
+* `tab_prepare()` and `complete_partial_totals()` will become internal or be removed; `tab_prepare()`'s
+  work is done by `tab()` itself.
 
 ### Removed (now an error)
 

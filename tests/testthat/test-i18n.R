@@ -160,3 +160,22 @@ test_that("the shape table translates to French", {
   expect_match(fr, "pr\u00e9dicteur num\\.")
   expect_no_match(fr, "numeric predictor")
 })
+
+
+test_that("French names every non-odds ratio \"ratio\"", {
+  skip_if_no_gettext()
+  t  <- tab(forcats::gss_cat, marital, race, pct = "row", color = "ratio")
+  fr <- paste(tab_footer_text(t, lang = "fr"), collapse = " ")
+  expect_match(fr, "Ratio (risque relatif)", fixed = TRUE)
+  expect_no_match(fr, "rapport", fixed = TRUE)
+  # the catalogue is a source file: read where it exists (a dev checkout), not under R CMD check
+  po_file <- testthat::test_path("..", "..", "po", "R-fr.po")
+  if (file.exists(po_file)) {
+    po <- readLines(po_file, encoding = "UTF-8", warn = FALSE)
+    live <- grep("^msgstr|^\"", po, value = TRUE)
+    left <- grep("\\brapports?\\b", live, value = TRUE, perl = TRUE)
+    left <- grep("rapports? de cotes|rapport de vraisemblance|par rapport|rapport \"$", left,
+                 value = TRUE, invert = TRUE)
+    expect_length(left, 0L)
+  }
+})

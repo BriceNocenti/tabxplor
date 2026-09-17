@@ -144,7 +144,7 @@ testthat::test_that("the `coef` token names the quantity, not the artefact", {
   testthat::expect_identical(vctrs::vec_ptype_abbr(lg[["Obs_log(OR)"]]),   "log(OR)")
   # the acronym is the FAMILY's own measure, derived from REG_FAMILIES -- not a literal
   testthat::expect_identical(reg_own_word("binomial"), "OR")
-  testthat::expect_identical(reg_own_word("poisson"),  "IRR")
+  testthat::expect_identical(reg_own_word("poisson"),  "RoM")
   testthat::expect_identical(reg_own_word("ordinal"),  "cumOR")
   testthat::expect_identical(reg_own_word("gaussian"), "diff")
   # a `{coef}` asked for by hand on a multiplicative column is log(OR) and says so; on an additive

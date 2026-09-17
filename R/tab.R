@@ -2220,13 +2220,15 @@ tab_row_roles <- function(tab) {
 # The ROBUST render-time variable detector: it degrades instead of letting a consumer crash.
 # DESIGN: row_var / tab_vars are placed from dplyr::group_vars(), which survives rename / select /
 #   relocate, so a factor moved AFTER the fmt columns is not miswritten.
+# `plain = TRUE`: the input was never a tabxplor table, so rendering it plain is what was asked --
+# the exporters say nothing. A table that HAS fmt columns and still degrades is told why.
 tab_render_vars <- function(tabs) {
   if (!is.data.frame(tabs))
-    return(list(degrade = TRUE, reason = "the object is not a data frame"))
+    return(list(degrade = TRUE, plain = TRUE, reason = "the object is not a data frame"))
 
   fmt_mask <- purrr::map_lgl(tabs, is_fmt)
   if (!any(fmt_mask))
-    return(list(degrade = TRUE,
+    return(list(degrade = TRUE, plain = TRUE,
                 reason = "the table has no tabxplor_fmt columns (not a tabxplor table)"))
 
   fct_names <- names(tabs)[purrr::map_lgl(tabs, is.factor)]
@@ -2260,7 +2262,9 @@ tab_render_vars <- function(tabs) {
 
 
 #' @keywords internal
-tab_degrade_inform <- function(reason) {
+tab_degrade_inform <- function(vars) {
+  if (isTRUE(vars$plain)) return(invisible(NULL))
+  reason <- vars$reason
   cli::cli_inform(c("!" = "Colours and formatting skipped ({reason}): the plain table is shown."))
 }
 

@@ -31,7 +31,7 @@ modcol  <- function(t) t[[grep("^Model", names(t), value = TRUE)[[1]]]]
 test_that("the default call is the family's own link, measure and coefficient", {
   want <- list(gaussian    = c("difference",  "difference", "gaussian",    "diff"),
                binomial    = c("odds_ratio",  "odds_ratio", "binomial",    "OR"),
-               poisson     = c("ratio",       "ratio",      "poisson",     "IRR"),
+               poisson     = c("ratio",       "ratio",      "poisson",     "RoM"),
                multinomial = c("odds_ratio",  "odds_ratio", "multinomial", "OR"),
                ordinal     = c("odds_ratio",  "odds_ratio", "ordinal",     "cumOR"))
   for (fam in names(want)) {
@@ -265,7 +265,7 @@ test_that("every family's cells hold one estimand: interval, neutral and star ag
     list(tag = "binomial rr -> mRD",   a = list(d, "married", c("race", "age"),
                                                 family = "binomial", link = "ratio",
                                                 measure = "difference")),
-    list(tag = "poisson coef IRR",     a = list(d, "tvhours", c("race", "age"),
+    list(tag = "poisson coef RoM",     a = list(d, "tvhours", c("race", "age"),
                                                 family = "poisson")),
     list(tag = "multinomial coef OR",  a = list(d, "party3",  c("race", "age"),
                                                 family = "multinomial")),
@@ -349,13 +349,13 @@ test_that("link='ratio' on a binary outcome fits the modified Poisson, and is na
   t <- suppressMessages(tab_reg(d, "married", "race", family = "binomial", link = "ratio"))
   expect_error(suppressMessages(tab_reg(d, "married", "race", family = "poisson")),
                'link = "ratio"', fixed = TRUE)
-  # the column is Model_RR (not Model_IRR, not Model_mRR: the coefficient is unmarked), and the
+  # the column is Model_RR (not Model_RoM, not Model_mRR: the coefficient is unmarked), and the
   # estimand prose says so
   expect_true("Model_RR" %in% names(t))
-  expect_false(any(grepl("IRR", names(t))))
+  expect_false(any(grepl("RoM", names(t))))
   note <- reg_estimand_note(reg_estimand("binomial", link = "ratio"))
   expect_match(note, "RR: risk ratio")
-  expect_no_match(note, "incidence-rate")
+  expect_no_match(note, "ratio of means")
   # Sociology terminology trap: "log-linear model" means Goodman's contingency-table models.
   expect_no_match(reg_family_display_name("rr"), "log-linear")
   expect_equal(reg_family_display_name("rr"), "modified Poisson regression")

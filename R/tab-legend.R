@@ -277,7 +277,7 @@ legend_reg_eff_word <- function(col, meta) {
   est <- reg_meta_estimand(meta, family = fam)
   # ⚠ A CRUDE column is named from ITS OWN SHAPE, not from the model's estimand: the two are the same
   # measure wherever they pair (so the block merges), and where they do not -- a poisson AME beside a
-  # crude rate ratio -- the crude column must say what it actually holds.
+  # crude ratio of means -- the crude column must say what it actually holds.
   if (identical(get_role(col), "emp")) {
     ck <- reg_meta_crude_key(meta, fam)
     return(reg_crude_word(reg_crude_shape(ck, est)) %||% NA_character_)
@@ -425,12 +425,12 @@ CI_METHOD_LABELS <- list(
   # `katz` and `wald_log` live in CI_METHOD_WORDED below: their label needs the effect word.
 )
 
-# CI_METHOD_WORDED -- the engine whose LABEL needs a second fact. An OR, an IRR and an RR are the same
+# CI_METHOD_WORDED -- the engine whose LABEL needs a second fact. An OR, an RoM and an RR are the same
 # interval on the same log scale, and only the effect WORD tells them apart, so the MODEL's engine is
 # the one that has to ask. Every other engine names itself in CI_METHOD_LABELS.
 #' @keywords internal
 CI_METHOD_WORDED <- list(
-  wald_log = list(IRR      = function() gettext("Wald interval on the log rate-ratio"),
+  wald_log = list(RoM      = function() gettext("Wald interval on the log ratio of means"),
                   OR       = function() gettext("Wald interval on the log odds-ratio"),
                   RR       = function() gettext("Wald interval on the log risk-ratio"),
                   .default = function() gettext("Wald interval on the log scale"))

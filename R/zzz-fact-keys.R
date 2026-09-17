@@ -128,6 +128,8 @@ TAB_FOREIGN_KEYS <- list(
         function() names(MEASURES)),
   tx_fk("MEASURE_ACRONYMS_REG",    function() unname(MEASURE_ACRONYMS_REG),
         function() names(MEASURES)),
+  tx_fk("MEASURE_ACRONYMS_RETIRED", function() unname(MEASURE_ACRONYMS_RETIRED),
+        function() names(MEASURES)),
   # --- the FOOTER: the region, its vocabulary and what each part reads -------------------------
   # a placeholder's `reads` names the facts it is built from: `meta$<field>` must be a declared table
   # attribute, and every other name a declared `fmt` column attribute. That edge is what lets

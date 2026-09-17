@@ -105,7 +105,7 @@ test_that("a character `predictors` with several dependents gives one column per
 })
 
 
-test_that("mixed binomial + poisson: legend effect words are OR and IRR per column", {
+test_that("mixed binomial + poisson: legend effect words are OR and RoM per column", {
   d   <- reg_data()
   mix <- suppressWarnings(tab_reg(d, c("married", "tvhours"), c("age", "race"),
                                   family = c("binomial", "poisson"), cleannames = FALSE))
@@ -117,7 +117,7 @@ test_that("mixed binomial + poisson: legend effect words are OR and IRR per colu
   expect_identical(get_model_family(irr_col), "poisson")
   # the per-column effect word reads the column's OWN family, not the table scalar
   expect_identical(tabxplor:::legend_reg_eff_word(or_col,  meta), "OR")
-  expect_identical(tabxplor:::legend_reg_eff_word(irr_col, meta), "IRR")
+  expect_identical(tabxplor:::legend_reg_eff_word(irr_col, meta), "RoM")
 })
 
 

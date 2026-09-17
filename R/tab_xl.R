@@ -192,7 +192,7 @@ tab_xl <-
     # graceful degrade: an unreadable input writes as a raw frame (+ a message) instead of crashing.
     rv <- if (is.data.frame(tabs)) tab_render_vars(tabs) else list(degrade = FALSE)
     if (isTRUE(rv$degrade)) {
-      tab_degrade_inform(rv$reason)
+      tab_degrade_inform(rv)
       xl_finish(function(p) xlb_write_xlsx(tibble::as_tibble(tabs), p), path, replace, open)
       return(invisible(tabs_base))
     }
@@ -219,7 +219,7 @@ tab_xl <-
     rd <- prep$tables
 
     if (any(purrr::map_lgl(rd, ~ isTRUE(.$vars$degrade)))) {
-      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars$reason))
+      purrr::walk(rd, ~ if (isTRUE(.$vars$notify)) tab_degrade_inform(.$vars))
       xl_finish(function(p) xlb_write_xlsx(purrr::map(rd, ~ tibble::as_tibble(.$tab)), p),
                 path, replace, open)
       return(invisible(tabs_base))

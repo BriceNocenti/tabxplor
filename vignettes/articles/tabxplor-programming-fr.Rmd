@@ -106,10 +106,10 @@ Une case `tabxplor_fmt` porte **21 champs** (beaucoup valent `NA` lorsque la qua
 | `pct`       | pourcentage |
 | `mean`      | moyenne (variables en colonne numériques) |
 | `diff`      | différence avec la case Total / de référence |
-| `ratio`     | rapport à la référence (risque relatif, ou rapport de moyennes) |
+| `ratio`     | ratio à la référence (risque relatif, ou ratio de moyennes) |
 | `ci_inf`, `ci_sup` | bornes de l'intervalle de confiance |
 | `pvalue`    | p-valeur de significativité par case (alimente les étoiles) |
-| `or`        | rapport de cotes / rapport de risques relatifs |
+| `or`        | rapport de cotes |
 | `ctr`       | contribution au Chi2 (`color = "contrib"`) |
 | `var`       | variance (colonnes numériques ; variance du Chi2 avec `pct`) |
 | `tot_n`     | la base propre à la case — l'effectif sur lequel son pourcentage est calculé |
@@ -228,7 +228,7 @@ tab(gss_simple, race, marital, race, pct = "row") |>
 
 Outre les champs de chaque case, chaque colonne `fmt` porte quelques **attributs de niveau colonne**, lus et fixés avec `get_*` / `set_*` (ou `is_*` / `as_*` pour les attributs logiques) :
 
-- `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable à expliquer), un rapport (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
+- `scale` — `get_scale()` / `set_scale()` : **ce que la colonne estime**. Un niveau (`"level_n"`, `"level_pct"`, `"level_mean"`), une différence (`"points"` pour des points de pourcentage, `"mean_diff"`, `"raw_diff"` pour un coefficient de régression dans l’unité de la variable à expliquer), un ratio (`"pct_ratio"`, `"mean_ratio"`, `"odds_ratio"`) ou un coefficient sur l’échelle du lien (`"log_coef"`). Il indique quel champ contient l’estimation, quelle est sa valeur nulle, et sur quelle échelle de couleurs elle se lit.
 - `pct_type` — `get_pct_type()` / `set_pct_type()` : pour un pourcentage, de quoi il est le pourcentage — `"row"`, `"col"`, `"all"`, `"all_tabs"`, ou `"none"` pour les effectifs, les moyennes et les coefficients.
 - `ci_method` — `get_ci_method()` : quelle méthode a calculé les bornes de cette colonne (`"wilson"`, `"newcombe"`, `"welch"`, `"katz"`…; `""` si la colonne ne porte pas d’intervalle).
 - `color` — `get_color()` / `set_color()` : la mesure de couleur de la colonne — `""`, `"no"`, ou l'un des noms de mesure `"difference"`, `"ratio"`, `"odds_ratio"`, `"contrib"` (plus `"adjustment"` / `"between_groups"` sur un tableau `tab_reg()`). Les acronymes de la discipline (`"diff"`, `"OR"`, `"or"`, `"RR"`, `"RD"`) restent des raccourcis permanents que l'on peut *écrire*, mais un tableau construit stocke toujours — et sa légende nomme toujours — le mot complet.
@@ -273,7 +273,7 @@ fmt(n = c(10L, 20L, 30L), pct = c(0.1, 0.2, 0.7), display = "pct", digits = 0L)
 
 ## Tableaux à partir d'effectifs déjà agrégés
 
-Parfois, les données arrivent déjà croisées — un tableau d'effectifs issu d'un rapport, une `table()`, une matrice de fréquences. `tab_counts()` construit le même tableau `tabxplor` que `tab()`, mais à partir de ces effectifs plutôt que des observations brutes et des données individuelles.
+Parfois, les données arrivent déjà croisées — un tableau d'effectifs issu d'une publication, une `table()`, une matrice de fréquences. `tab_counts()` construit le même tableau `tabxplor` que `tab()`, mais à partir de ces effectifs plutôt que des observations brutes et des données individuelles.
 
 L'entrée la plus courante est un data frame d'**effectifs au format long** (une ligne par combinaison, l'effectif dans une colonne) :
 
@@ -336,7 +336,7 @@ HTML / `tab_html()` :
 Excel / `tab_export("xl")` :
 
 - `tabxplor.xl_font_text` / `tabxplor.xl_font_num` / `tabxplor.xl_font_num_stars` — les polices des étiquettes, des nombres et des nombres avec étoiles.
-- `tabxplor.xl_ratio_cells` — sous quelle forme une case multiplicative arrive dans Excel : `"fold"` (le défaut, l'écart signé comme nombre), `"raw"` (le rapport non transformé) ou `"text"` (la chaîne d'affichage exacte).
+- `tabxplor.xl_ratio_cells` — sous quelle forme une case multiplicative arrive dans Excel : `"fold"` (le défaut, l'écart signé comme nombre), `"raw"` (le ratio non transformé) ou `"text"` (la chaîne d'affichage exacte).
 
 Console, statistiques et chemins :
 

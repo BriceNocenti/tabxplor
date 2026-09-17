@@ -238,7 +238,7 @@ Each kind of variable, and so each family of model, has its own base way of meas
 | —           | a choice among 3+ options                | `multinomial` | an odds ratio — one column per option                |
 | —           | a choice among ordered options           | `ordinal`     | one odds ratio shared by every cut of the scale      |
 | numeric     | a continuous quantity (money, age, …)    | `gaussian`    | a difference of means                                |
-| —           | a count (hours of `x`, number of `x`)    | `poisson`     | a rate ratio — "1.4 times more `x` per day"          |
+| —           | a count (hours of `x`, number of `x`)    | `poisson`     | a ratio of means — "1.4 times more `x` per day"      |
 | —           | a score counting yes/no items            | `binomial`    | an odds ratio                                        |
 
 For a categorical variable — a `factor` in R's sense — the exact model follows from the number of levels and whether they are ordered: binomial for two, multinomial for three or more, ordinal for three or more that are ordered. tabxplor works this out from the outcome itself.
@@ -251,7 +251,7 @@ The sociologist's way to think about it is not "which statistical distribution d
 
 Suppose that instead of `released` we wanted to model `checks` — in how many of six police databases the arrested person's name already appeared. Which models could we choose? It is a count, but it is *also* a score out of six, and it could be treated as a continuous quantity. Each choice gives the deviation between two groups of a predictor a different shape:
 
-- **as a count** — all the other chosen variables being equal, black arrestees appear in **1.35 times as many** databases as white arrestees (a rate ratio, IRR);
+- **as a count** — all the other chosen variables being equal, black arrestees appear in **1.35 times as many** databases as white arrestees (a ratio of means, `RoM`);
 - **as a score out of six** — for **any one database**, their odds of being on it rather than not are **1.55 times higher** (an odds ratio);
 - **as a continuous quantity** — they appear in **0.5 more databases** on average, which is a difference of means, so a subtraction.
 

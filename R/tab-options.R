@@ -267,6 +267,12 @@ TAB_OPTIONS <- list(
       "`\"prose\"` (full sentences) or `\"terse\"` (the compact one-line form the console uses). The",
       "console itself is always terse.")),
 
+  subtext_bold_label = tx_opt(
+    TRUE, "stats",
+    c("whether a note line opening on a short label and a colon (`\"Champ : adults\"`,",
+      "`\"Source: GSS\"`) has that label set in bold, in every medium. `FALSE` prints the note as",
+      "written. The label is at most four words, with no digit, so a free sentence is left alone.")),
+
   test_lines = tx_opt(
     "summary", "stats",
     c("how many crosstab test rows the exporters ([tab_md()], [tab_html()], [tab_xl()]) append:",

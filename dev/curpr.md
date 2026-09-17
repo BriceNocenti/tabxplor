@@ -3,8 +3,6 @@
 
 # tabxplor 2.0.1
 
-In section "Black and white, for publication", the "print_ready" plot have colors css. We fixed that in README.R by using an image, but now it needs a long term solution.
-
 
 Jamovi icon :
 - Send the .svg to contact@jamovi.org , making sure its public domain.
@@ -22,12 +20,18 @@ Jamovi icon :
 # tabxplor v2.0.1
 
 
-We are inside the development of tabxplor 2.0.1 and we want to simplify and integrate the functions in tabxplor in a clear, simple and user-friendly ecosystem at the package level, to simplify code, simplify future develpment, and make the whole framework more readable for both human and machine. Please read the whole remaining roadmap carefully to always remember the full picture, then your current task is to implement **"### v2.0.1 — Phase 12 — la valeur `"md"` de `options(tabxplor.print)`"** :
+We are inside the development of tabxplor 2.0.1 and we want to simplify and integrate the functions in tabxplor in a clear, simple and user-friendly ecosystem at the package level, to simplify code, simplify future develpment, and make the whole framework more readable for both human and machine. Please read the whole remaining roadmap carefully to always remember the full picture, then your current task is to implement **"### v2.0.1 — Phase 14 — v2.0.1 small changes"** :
 - This is a design and creative thinking task, where your main aim is to think out-of-the box, temporarily put backward-compatibility and other constraints away, and find the missing key to a possible simplification and integration of the whole footer legends and pipe tables legends framework, while assessing possible caveats.
 - Do NOT add another layer of confusion and ad-hoc solutions inside the code: your main aim is to simplify, to remove traces of old implementations altogether when they have become useless, to clarify, to integrate the new features in the current code seamlessly, and to increase user-friendliness in any situation.
 - If you see some caveats, inconsistencies, decisions no yet settled, or white elephants in some of my propositions, please tell me honestly. If you think about a more reliable, consistent, user-friendly, modern, future-proof way to do the same thing, do not hesitate to AskUserQuestion me about it.
 - Respect the **hierarchy** of the **package documentation ecosystem**; be minimalistic and do not clutter documents and comments with dev history; to make the most targeted edits possible, do **documentation planning** when you write a plan, stating **what to write, where, with what focus and what level of detail**, and which references to point the user to a more detailed document. Do not write anything in `NEWS.md`.
 - N’applique pas bêtement la solution proposée qui n’est qu’un brouillon et une piste possible parmi d’autres, analyse la question en profondeur pour trouver une solution fiable et future-proof qui s’intègre parfaitement au sein du framework de tabxplor.
+
+
+### v2.0.1 — Phase 14 — v2.0.1 small changes
+### v2.0.1 — Phase 15 — bugs and changes from jamovi team feedback
+### v2.0.1 — Phase 16 — github actions to compile the jamovi module for all platforms
+### v2.0.1 — Phase 17 — v2.0.1 release
 
 
 

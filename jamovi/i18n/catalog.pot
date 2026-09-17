@@ -186,8 +186,11 @@ msgid "adjustment <i>(gap between model/observed)</i>"
 msgstr ""
 
 #: jmvtab/options/pct/all.title
+msgid "all (whole table)"
+msgstr ""
+
 #: jmvtab/options/lvs/all.title
-msgid "all"
+msgid "all <i>(keep every level)</i>"
 msgstr ""
 
 #: jmvtab/options/comp/all.title
@@ -974,7 +977,7 @@ msgid "ratio <i>(relative risk, or mean ratio)</i>"
 msgstr ""
 
 #: jmvtabreg/options/measure/ratio.title
-msgid "ratio <i>(RR, IRR, RoM)</i>"
+msgid "ratio <i>(RR, RoM)</i>"
 msgstr ""
 
 #: jmvtabreg/options/measure/raw_coefficient.title

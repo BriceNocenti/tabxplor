@@ -263,8 +263,8 @@ test_that("the Constant row is written on the column's own geometry, and labelle
 
   tp <- suppressWarnings(tab_reg(d, "tvhours", c("race", "age"), family = "poisson",
                                  effect = "at_reference", measure = "ratio", stats = FALSE))
-  expect_identical(get_scale(tp[["Model_refIRR"]]), "mean_ratio")
-  expect_true(cst(tp, "Model_refIRR") > 1)                            # a baseline RATE, not a ratio
+  expect_identical(get_scale(tp[["Model_refRoM"]]), "mean_ratio")
+  expect_true(cst(tp, "Model_refRoM") > 1)                            # a baseline RATE, not a ratio
   expect_identical(lab(tp), "Reference profile")
 
   ta <- tab_reg(d, "married", c("race", "age"), family = "binomial", effect = "at_reference", measure = "difference",

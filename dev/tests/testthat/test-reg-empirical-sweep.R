@@ -62,11 +62,11 @@ test_that("gaussian Obs_diff CI == OLS lm coefficient CI (Student, 2-level)", {
 })
 
 
-test_that("poisson Obs_IRR CI == quasi-Poisson regression CI (2-level)", {
+test_that("poisson Obs_RoM CI == quasi-Poisson regression CI (2-level)", {
   d <- emp_2lvl()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
-  ei <- t[["Obs_IRR"]]; k <- which(!is.na(get_ci_inf(ei)))
+  ei <- t[["Obs_RoM"]]; k <- which(!is.na(get_ci_inf(ei)))
   lev <- as.character(t$levels)[k]
   fq <- stats::glm(tvhours ~ race, d, family = stats::quasipoisson())
   co <- summary(fq)$coefficients[paste0("race", lev), ]
@@ -128,30 +128,30 @@ test_that("gaussian empirical: Obs_diff carries the level, coloured by SD(Y) (ma
 })
 
 
-test_that("poisson empirical: one Obs_IRR carrying the observed rate", {
+test_that("poisson empirical: one Obs_RoM carrying the observed rate", {
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
   expect_false("Obs_rate" %in% names(t))
-  expect_true("Obs_IRR" %in% names(t))
-  expect_identical(get_color(t[["Obs_IRR"]]), get_color(t[["Model_IRR"]]))
+  expect_true("Obs_RoM" %in% names(t))
+  expect_identical(get_color(t[["Obs_RoM"]]), get_color(t[["Model_RoM"]]))
   # an incidence-rate ratio IS a ratio of means, so it sits on `mean_ratio` -- whose level is a mean
-  expect_identical(get_scale(t[["Obs_IRR"]]), "mean_ratio")
-  expect_identical(get_pct_type(t[["Obs_IRR"]]), "none")
-  expect_true(any(is.finite(get_mean(t[["Obs_IRR"]]))))
+  expect_identical(get_scale(t[["Obs_RoM"]]), "mean_ratio")
+  expect_identical(get_pct_type(t[["Obs_RoM"]]), "none")
+  expect_true(any(is.finite(get_mean(t[["Obs_RoM"]]))))
 })
 
 
-test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_IRR)", {
+test_that("Phase h: quasipoisson empirical rides the poisson crude path (Obs_RoM)", {
   d <- emp_data()
   tq <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "quasipoisson", empirical = TRUE,
                                  cleannames = FALSE))
-  expect_true("Obs_IRR" %in% names(tq))                        # was a no-op before Phase h
+  expect_true("Obs_RoM" %in% names(tq))                        # was a no-op before Phase h
   # same crude descriptives as a poisson-declared model (the empirical shape is family-agnostic here).
   tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                  cleannames = FALSE))
-  expect_equal(get_mean(tq[["Obs_IRR"]]),  get_mean(tp[["Obs_IRR"]]),  tolerance = 1e-9)
-  expect_equal(get_ratio(tq[["Obs_IRR"]]), get_ratio(tp[["Obs_IRR"]]), tolerance = 1e-9)
+  expect_equal(get_mean(tq[["Obs_RoM"]]),  get_mean(tp[["Obs_RoM"]]),  tolerance = 1e-9)
+  expect_equal(get_ratio(tq[["Obs_RoM"]]), get_ratio(tp[["Obs_RoM"]]), tolerance = 1e-9)
 })
 
 
@@ -172,7 +172,7 @@ test_that("measure = log: a binomial coefficient is coloured (log_odds scale), n
 })
 
 
-test_that("measure = log + empirical: Obs_log(OR) / Obs_log(IRR), logged effect + logged CI", {
+test_that("measure = log + empirical: Obs_log(OR) / Obs_log(RoM), logged effect + logged CI", {
   d <- emp_data()
   # binomial: Obs_log(OR); the logged empirical == log of the OR-version, same colour as the model
   tb  <- suppressWarnings(tab_reg(d, "married", "race", family = "binomial", empirical = TRUE,
@@ -187,11 +187,11 @@ test_that("measure = log + empirical: Obs_log(OR) / Obs_log(IRR), logged effect 
   expect_equal(df[k], log(or[k]), tolerance = 1e-8)                 # value: diff == log(OR)
   expect_equal(get_ci_inf(lc)[k], log(get_ci_inf(tbo[["Obs_OR"]])[k]), tolerance = 1e-8)  # logged CI
   expect_identical(fmt_color_channels(lc)$text, fmt_color_channels(tb[["Model_log(OR)"]])$text)
-  # poisson: Obs_log(IRR)
+  # poisson: Obs_log(RoM)
   tp <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                  measure = "log", cleannames = FALSE))
-  expect_true("Obs_log(IRR)" %in% names(tp))
-  expect_identical(tabxplor:::fmt_var_kind(tp[["Obs_log(IRR)"]]), "coef")
+  expect_true("Obs_log(RoM)" %in% names(tp))
+  expect_identical(tabxplor:::fmt_var_kind(tp[["Obs_log(RoM)"]]), "coef")
 })
 
 
@@ -319,12 +319,12 @@ test_that("gaussian Obs_diff == the univariable lm coefficient CI on a 3-LEVEL p
 })
 
 
-test_that("poisson Obs_IRR == the univariable quasi-Poisson CI on a 3-LEVEL predictor", {
+test_that("poisson Obs_RoM == the univariable quasi-Poisson CI on a 3-LEVEL predictor", {
   d <- tidyr::drop_na(fx_reg_df()[, c("tvhours", "race", "age")])
   d <- d[d$tvhours > 0, ]; d$race <- forcats::fct_drop(d$race)
   t  <- suppressWarnings(tab_reg(d, "tvhours", c("race", "age"), family = "poisson",
                                  empirical = TRUE, cleannames = FALSE))
-  oc <- t[["Obs_IRR"]]
+  oc <- t[["Obs_RoM"]]
   is_race <- as.character(t$var) == "race" & !is.na(get_ci_inf(oc))
   fit <- stats::glm(tvhours ~ race, data = d, family = stats::quasipoisson())
   ci  <- exp(stats::confint.default(fit))[-1, , drop = FALSE]
@@ -547,7 +547,7 @@ test_that("gaussian / poisson / rr numeric crude effects match their univariable
                                  empirical = TRUE, multiplier = 1, cleannames = FALSE))
   ip <- which(as.character(tp$var) == "age")
   gp <- stats::glm(tvhours ~ age, data = dm, family = stats::quasipoisson())
-  expect_equal(get_ratio(tp[["Obs_IRR"]])[ip], unname(exp(stats::coef(gp)["age"])), tolerance = 1e-10)
+  expect_equal(get_ratio(tp[["Obs_RoM"]])[ip], unname(exp(stats::coef(gp)["age"])), tolerance = 1e-10)
 
   tr <- tab_reg(d, "married", c("age", "race"), family = "binomial", link = "ratio",   # binary -> modified Poisson
                 empirical = TRUE, cleannames = FALSE)
@@ -1092,12 +1092,12 @@ emp_data <- function() {
 }
 
 
-test_that("poisson: single-predictor IRR == crude rate-ratio (Obs_IRR) == tab() ratio", {
+test_that("poisson: single-predictor RoM == crude ratio of means (Obs_RoM) == tab() ratio", {
   d <- emp_data()
   t <- suppressWarnings(tab_reg(d, "tvhours", "race", family = "poisson", empirical = TRUE,
                                 cleannames = FALSE))
-  # an IRR is a ratio of MEANS, so it lives in `ratio` (the field its `mean_ratio` scale names)
-  emp_irr <- get_ratio(t[["Obs_IRR"]]); names(emp_irr) <- as.character(t$levels)
+  # a count RoM is a ratio of MEANS, so it lives in `ratio` (the field its `mean_ratio` scale names)
+  emp_irr <- get_ratio(t[["Obs_RoM"]]); names(emp_irr) <- as.character(t$levels)
 
   m   <- suppressWarnings(stats::glm(tvhours ~ race, d, family = stats::poisson()))
   irr <- exp(stats::coef(m))

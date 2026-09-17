@@ -32,7 +32,7 @@ French words on purpose — crude/adjusted, and the reference.
   nowhere else. The reader thinks in French and types in English, and an argument that is only ever
   named in French cannot be used. The same names serve jamovi, whose options mirror the arguments.
   Settled in Phase 23f-i; applied to both *Reading a regression* twins.
-- **Notation and international abbreviations stay as-is**: `OR`, `IRR`, `β`, `AME`, `MER`, `AIC`, `BIC`,
+- **Notation and international abbreviations stay as-is**: `OR`, `RoM`, `β`, `AME`, `MER`, `AIC`, `BIC`,
   `Chi2`, `phi`, `eta2`, `R2`, `%`, `N`. A French statistics reader uses these directly.
 - **French typography** (handled in code by `legend_num()` + the `lang == "fr"` branches): a space
   before `; : ! ?`, decimal **comma** (`×1,5`). Keep this in every translation. The space is an
@@ -68,7 +68,7 @@ French words on purpose — crude/adjusted, and the reference.
 | over- / under-represented      | sur-représenté / sous-représenté    |
 | difference                     | différence                          |
 | standardized difference        | différence standardisée             |
-| ratio                          | rapport                             |
+| ratio                          | ratio                               |
 | contribution to Chi2           | contribution au Chi2                |
 | effect size                    | taille d'effet                      |
 | p-value                        | pvalue                              |
@@ -108,8 +108,8 @@ The three earlier renderings of *effective sample size* (`taille d'échantillon 
 | multinomial logistic regression    | régression logistique multinomiale                   |
 | ordinal logistic regression        | régression logistique ordinale                       |
 | odds ratio(s)                      | rapport(s) de cotes (notation `OR` kept)             |
-| incidence-rate ratio(s)            | rapport(s) de taux d'incidence (notation `IRR` kept) |
-| log-odds / log-rate coefficients   | coefficients log-cotes / log-taux                    |
+| ratio(s) of means (counts too)     | ratio(s) de moyennes (notation `RoM` kept)           |
+| log-odds / log-mean coefficients   | coefficients log-cotes / log-moyenne                 |
 | cumulative odds ratios             | rapports de cotes cumulés                            |
 | proportional-odds model            | modèle à cotes proportionnelles                      |
 | marginal effects (AME / MER)       | effets marginaux (notation `AME`/`MER` kept)         |
@@ -134,8 +134,8 @@ The argument names themselves are code and stay English; what is translated is t
 | conditional effect                     | effet conditionnel                         |
 | marginal effect / sample-averaged      | effet marginal / moyenné sur l'échantillon |
 | at the reference profile               | au profil de référence                     |
-| risk ratio / risk difference           | rapport de risques / différence de risques |
-| ratio of means                         | rapport de moyennes                        |
+| risk ratio / risk difference           | risque relatif / différence de risques     |
+| ratio of means                         | ratio de moyennes                          |
 | marginal odds ratio                    | rapport de cotes marginal                  |
 | modified Poisson (regression)          | (régression de) Poisson modifiée           |
 | collapsible / non-collapsible          | collapsible / non collapsible              |
@@ -157,18 +157,25 @@ short names for the regression headers (`RD`, `RR`, `mRR`, …) and their expans
 | difference × mean_diff | mean difference                     | différence de moyennes                           |
 | … standardized         | standardized mean difference        | différence de moyennes standardisée              |
 | difference × log_odds  | log-odds difference                 | différence de log-cotes                          |
-| ratio × pct_ratio      | relative risk (ratio)               | risque relatif (ratio)                           |
-| ratio × mean_ratio     | ratio of means                      | rapport de moyennes                              |
+| ratio × pct_ratio      | relative risk (ratio)               | ratio (risque relatif)                           |
+| ratio × mean_ratio     | ratio of means                      | ratio de moyennes                                |
 | odds_ratio             | odds ratio                          | rapport de cotes                                 |
 | contrib                | contribution to Chi2                | contribution au Chi2                             |
 | contrib (guaranteed)   | standardized residual               | résidu standardisé                               |
 
 Each name carries **both** the discipline's term and the base measure, so a reader meeting either word
-lands on the same quantity. « rapport de cotes » is the settled term for the odds ratio (not « rapport
+lands on the same quantity.
+
+⚠ **« ratio », never « rapport », for every multiplicative comparison but the odds ratio** — « rapport »
+alone meant the relative risk, the « par rapport à » of a reference and the odds ratio at once, and
+« ratio » is already the argument's value (`color = "ratio"`). « Rapport » survives in exactly three
+fixed forms: « rapport de cotes (cumulé) », « rapport de vraisemblance », « par rapport à ». A count's
+Poisson ratio has no exposure offset, so it is a ratio of mean counts: « ratio de moyennes », `RoM` —
+« taux d'incidence » is an epidemiologist's word and is not used. « rapport de cotes » is the settled term for the odds ratio (not « rapport
 de chances »); « différence de risques » is avoided in favour of « différence de proportion ».
 
 ⚠ **The `guaranteed_effect` head is ONE msgid PER MEASURE**, not a shared `"%s-guaranteed %s"`
-template: *garanti* agrees with the measure (*différence … garantie* vs *rapport … garanti* vs
+template: *garanti* agrees with the measure (*différence … garantie* vs *ratio … garanti* vs
 *risque relatif … garanti*), which no single format string can do. `MEASURES$<m>$by_scale$<scale>$word_guar`
 declares each one; French then writes the agreement out in full.
 
@@ -328,7 +335,7 @@ what the article did not already fix.
 | effect modification            | la modification d'effet                         | not « l'interaction », which names the *term*            |
 | the shape table                | le tableau des formes                           | printed under the footer                                 |
 | observed range                 | l'étendue observée                              |                                                          |
-| win ratio                      | rapport de victoires (*win ratio*)              | English name once — it is the searchable term            |
+| win ratio                      | ratio de victoires (*win ratio*)                | English name once — it is the searchable term            |
 | superiority probability        | probabilité de supériorité                      | Somers' `D` read as a probability                        |
 | display grammar / template     | la grammaire `display` / le gabarit             |                                                          |
 | named layout                   | la mise en page nommée                          |                                                          |
@@ -338,8 +345,9 @@ what the article did not already fix.
 | three levels (of margin of error) | les trois niveaux                            | the weights vignette's spine                             |
 
 ⚠ **`RR` is « risque relatif », never « rapport de risques »** (22f-i) — a rule the pre-23f-ii twin
-broke in a heading. The distinct `or` field is glossed « rapport de cotes / rapport de **risques
-relatifs** » (the multinomial RRR), which is a different quantity and keeps its own name.
+broke in a heading. The multinomial `or` field is « rapport de cotes (par rapport à la modalité de
+référence) », never « rapport de risques relatifs »: Stata's RRR is an odds ratio against the reference
+category, and « risque relatif » names the ratio of two proportions only.
 
 ⚠ **A section reporting `measure = "ratio"` says « combien de fois plus *souvent* ? », not « plus de
 *chances* ? »** — that section reports a risk ratio, and « chances » is exactly the word the odds-ratio

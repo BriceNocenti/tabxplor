@@ -163,7 +163,7 @@ options:
           name:  auto
         - title: "difference <i>(RD, diff)</i>"
           name:  difference
-        - title: "ratio <i>(RR, IRR, RoM)</i>"
+        - title: "ratio <i>(RR, RoM)</i>"
           name:  ratio
         - title: "odds_ratio <i>(OR)</i>"
           name:  odds_ratio

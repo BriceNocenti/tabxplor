@@ -82,7 +82,7 @@ options:
           name:  row
         - title: "col (column)"
           name:  col
-        - title: all
+        - title: "all (whole table)"
           name:  all
         - title: "all_tabs (with tab_vars)"
           name:  all_tabs
@@ -220,7 +220,7 @@ options:
       title: levels
       type: List
       options:
-        - title: all
+        - title: "all <i>(keep every level)</i>"
           name:  all
         - title: "first <i>(first level of each col_var)</i>"
           name:  first

@@ -118,7 +118,7 @@ test_that("poisson footer carries a Pearson dispersion matching sum(pearson^2)/d
   d <- reg_data()
   expect_warning(t1 <- tab_reg(d, "tvhours", c("age", "race"), family = "poisson",
                                cleannames = FALSE), "dispersion")
-  tst <- get_test(t1); cv <- "Model_IRR"
+  tst <- get_test(t1); cv <- "Model_RoM"
   dm  <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())
   # z15: the exact Pearson dispersion keeps its own row under the key `phi` (the key `dispersion` now

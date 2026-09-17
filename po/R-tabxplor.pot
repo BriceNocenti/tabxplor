@@ -1,7 +1,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: tabxplor 2.0.0.9000\n"
-"POT-Creation-Date: 2026-09-04 23:06+0200\n"
+"POT-Creation-Date: 2026-09-17 19:45+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -10,165 +10,165 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: fmt_class.R:4932
+#: fmt_class.R:4942
 #, c-format
 msgid "%s further from no effect than %s, by"
 msgstr ""
 
-#: fmt_class.R:4933
+#: fmt_class.R:4943
 #, c-format
 msgid "%s closer to no effect than %s (or inversed effect), by"
 msgstr ""
 
-#: fmt_class.R:4935
+#: fmt_class.R:4945
 #, c-format
 msgid "%s further from no effect (%s) than %s, by"
 msgstr ""
 
-#: fmt_class.R:4936
+#: fmt_class.R:4946
 #, c-format
 msgid "%s closer to no effect (%s) than %s (or inversed effect), by"
 msgstr ""
 
-#: fmt_class.R:4949
+#: fmt_class.R:4959
 #, c-format
 msgid "%s over-represented, by"
 msgstr ""
 
-#: fmt_class.R:4950
+#: fmt_class.R:4960
 #, c-format
 msgid "%s under-represented, by"
 msgstr ""
 
-#: fmt_class.R:4952
+#: fmt_class.R:4962
 #, c-format
 msgid "%s over-represented vs %s, by"
 msgstr ""
 
-#: fmt_class.R:4953
+#: fmt_class.R:4963
 #, c-format
 msgid "%s under-represented vs %s, by"
 msgstr ""
 
-#: fmt_class.R:4968
+#: fmt_class.R:4978
 msgid "difference"
 msgstr ""
 
-#: fmt_class.R:4982
+#: fmt_class.R:4992
 msgid "percentage points (risk) difference"
 msgstr ""
 
-#: fmt_class.R:4983
+#: fmt_class.R:4993
 #, c-format
 msgid "%s%%-guaranteed percentage points (risk) difference"
 msgstr ""
 
-#: fmt_class.R:4984 reg-estimand.R:346
+#: fmt_class.R:4994 reg-estimand.R:346
 msgid "mean difference"
 msgstr ""
 
-#: fmt_class.R:4985
+#: fmt_class.R:4995
 msgid "standardized difference"
 msgstr ""
 
-#: fmt_class.R:4986
+#: fmt_class.R:4996
 msgid "standardized mean difference"
 msgstr ""
 
-#: fmt_class.R:4987
+#: fmt_class.R:4997
 #, c-format
 msgid "%s%%-guaranteed mean difference"
 msgstr ""
 
-#: fmt_class.R:4988
+#: fmt_class.R:4998
 #, c-format
 msgid "%s%%-guaranteed standardized mean difference"
 msgstr ""
 
-#: fmt_class.R:4989
+#: fmt_class.R:4999
 msgid "log-odds difference"
 msgstr ""
 
-#: fmt_class.R:4990
+#: fmt_class.R:5000
 #, c-format
 msgid "%s%%-guaranteed log-odds difference"
 msgstr ""
 
-#: fmt_class.R:4991
+#: fmt_class.R:5001
 msgid "ratio"
 msgstr ""
 
-#: fmt_class.R:5005
+#: fmt_class.R:5015
 msgid "relative risk (ratio)"
 msgstr ""
 
-#: fmt_class.R:5006
+#: fmt_class.R:5016
 #, c-format
 msgid "%s%%-guaranteed relative risk (ratio)"
 msgstr ""
 
-#: fmt_class.R:5007 reg-estimand.R:345
+#: fmt_class.R:5017 reg-estimand.R:345
 msgid "ratio of means"
 msgstr ""
 
-#: fmt_class.R:5008
+#: fmt_class.R:5018
 #, c-format
 msgid "%s%%-guaranteed ratio of means"
 msgstr ""
 
-#: fmt_class.R:5009 reg-estimand.R:340
+#: fmt_class.R:5019 reg-estimand.R:341
 msgid "odds ratio"
 msgstr ""
 
-#: fmt_class.R:5010
+#: fmt_class.R:5020
 #, c-format
 msgid "%s%%-guaranteed odds ratio"
 msgstr ""
 
-#: fmt_class.R:5029
+#: fmt_class.R:5039
 msgid "contribution to Chi2"
 msgstr ""
 
-#: fmt_class.R:5051
+#: fmt_class.R:5061
 msgid "standardized residual"
 msgstr ""
 
-#: fmt_class.R:5060 tab-legend.R:128
+#: fmt_class.R:5070 tab-legend.R:132
 msgid "vs the mean"
 msgstr ""
 
-#: fmt_class.R:5061 fmt_class.R:5065 tab-legend.R:377 tab-legend.R:585
+#: fmt_class.R:5071 fmt_class.R:5075 tab-legend.R:381 tab-legend.R:589
 msgid "independence"
 msgstr ""
 
-#: fmt_class.R:5064 tab-legend.R:583
+#: fmt_class.R:5074 tab-legend.R:587
 msgid "vs independence"
 msgstr ""
 
-#: fmt_class.R:5077
+#: fmt_class.R:5087
 msgid "adjustment"
 msgstr ""
 
-#: fmt_class.R:5084
+#: fmt_class.R:5094
 msgid ""
 "z test on the difference between two estimates fitted on the same sample"
 msgstr ""
 
-#: fmt_class.R:5090
+#: fmt_class.R:5100
 msgid "between groups"
 msgstr ""
 
-#: fmt_class.R:5097
+#: fmt_class.R:5107
 msgid "z test on the difference between two independent estimates"
 msgstr ""
 
-#: fmt_class.R:5127
+#: fmt_class.R:5137
 msgid ""
 "Part of an odds-ratio gap is non-collapsibility, not confounding: a risk "
 "ratio or a marginal effect is the collapsible comparison."
 msgstr ""
 
-#: jmvtab.b.R:109 jmvtab.b.R:110 tab-legend.R:125 tab-legend.R:395
+#: jmvtab.b.R:109 jmvtab.b.R:110 tab-legend.R:129 tab-legend.R:399
 msgid "Total"
 msgstr ""
 
@@ -333,7 +333,7 @@ msgid "Ratio"
 msgstr ""
 
 #: plots.R:1038
-msgid "Rate ratio"
+msgid "Ratio of means"
 msgstr ""
 
 #: plots.R:1039
@@ -440,7 +440,7 @@ msgstr ""
 msgid "ns"
 msgstr ""
 
-#: reg-assumptions.R:1144 tab-legend.R:211 tab-legend.R:213
+#: reg-assumptions.R:1144 tab-legend.R:215 tab-legend.R:217
 msgid "SD"
 msgstr ""
 
@@ -540,20 +540,16 @@ msgstr ""
 msgid "observed shape (central 95%)"
 msgstr ""
 
-#: reg-estimand.R:341
+#: reg-estimand.R:342
 msgid "cumulative odds ratio"
 msgstr ""
 
-#: reg-estimand.R:342
+#: reg-estimand.R:343
 msgid "risk ratio"
 msgstr ""
 
-#: reg-estimand.R:343
-msgid "risk difference"
-msgstr ""
-
 #: reg-estimand.R:344
-msgid "incidence-rate ratio"
+msgid "risk difference"
 msgstr ""
 
 #: reg-estimand.R:350
@@ -683,7 +679,7 @@ msgstr ""
 msgid "%s; %s"
 msgstr ""
 
-#: reg-estimand.R:846 tab-legend.R:492
+#: reg-estimand.R:846 tab-legend.R:496
 #, c-format
 msgid "%s, %s"
 msgstr ""
@@ -851,390 +847,390 @@ msgstr ""
 msgid "adj"
 msgstr ""
 
-#: tab-export-prep.R:648
+#: tab-export-prep.R:689
 msgid "n"
 msgstr ""
 
-#: tab-footer.R:433 tab-legend.R:767
+#: tab-footer.R:466 tab-legend.R:771
 #, c-format
 msgid "%s %s"
 msgstr ""
 
-#: tab-footer.R:434
+#: tab-footer.R:467
 msgid "etc."
 msgstr ""
 
-#: tab-footer.R:438
+#: tab-footer.R:471
 #, c-format
 msgid "%s and %s"
 msgstr ""
 
-#: tab-footer.R:682
+#: tab-footer.R:715
 #, c-format
 msgid ""
 "%s: significantly different from the reference category (in bold) at the %s%"
 "% confidence level"
 msgstr ""
 
-#: tab-footer.R:685
+#: tab-footer.R:718
 #, c-format
 msgid ""
 "%s: significantly different from the reference category (in bold) at the %s%"
 "% confidence level (from %s for the Constant)"
 msgstr ""
 
-#: tab-footer.R:688
+#: tab-footer.R:721
 #, c-format
 msgid "%s: at the %s%% level"
 msgstr ""
 
-#: tab-footer.R:691
+#: tab-footer.R:724
 msgid "no star: not significant"
 msgstr ""
 
-#: tab-footer.R:755
+#: tab-footer.R:788
 msgid "Design-based (survey): weighted estimates."
 msgstr ""
 
-#: tab-footer.R:756
+#: tab-footer.R:789
 #, c-format
 msgid "Weighted by %s."
 msgstr ""
 
-#: tab-footer.R:761
+#: tab-footer.R:794
 msgid ""
 "Design-based (survey): weighted estimates, intervals and tests account for "
 "the sample design."
 msgstr ""
 
-#: tab-footer.R:763
+#: tab-footer.R:796
 msgid ""
 "Design-based (survey) estimates; this table's design variance could not be "
 "computed, so its intervals account for the weighting only."
 msgstr ""
 
-#: tab-footer.R:765
+#: tab-footer.R:798
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests account for the weighting."
 msgstr ""
 
-#: tab-footer.R:766
+#: tab-footer.R:799
 #, c-format
 msgid ""
 "Weighted by %s; confidence intervals and tests use the unweighted sample "
 "size."
 msgstr ""
 
-#: tab-legend.R:61
+#: tab-legend.R:65
 msgid "reference group"
 msgstr ""
 
-#: tab-legend.R:63
+#: tab-legend.R:67
 msgid "the observed effect (the reference for the adjustment)"
 msgstr ""
 
-#: tab-legend.R:64
+#: tab-legend.R:68
 msgid "no observed effect"
 msgstr ""
 
-#: tab-legend.R:126 tab-legend.R:127
+#: tab-legend.R:130 tab-legend.R:131
 msgid "ref."
 msgstr ""
 
-#: tab-legend.R:211 tab-legend.R:212
+#: tab-legend.R:215 tab-legend.R:216
 msgid "points"
 msgstr ""
 
-#: tab-legend.R:214
+#: tab-legend.R:218
 msgid "the mean contribution"
 msgstr ""
 
-#: tab-legend.R:259 tab-legend.R:259
+#: tab-legend.R:263 tab-legend.R:263
 msgid "Grey fill"
 msgstr ""
 
-#: tab-legend.R:380
+#: tab-legend.R:384
 msgid "the observed effect"
 msgstr ""
 
-#: tab-legend.R:381
+#: tab-legend.R:385
 msgid "the observed column"
 msgstr ""
 
-#: tab-legend.R:383
+#: tab-legend.R:387
 msgid "the reference group's effect"
 msgstr ""
 
-#: tab-legend.R:391
+#: tab-legend.R:395
 msgid "ref"
 msgstr ""
 
-#: tab-legend.R:392
+#: tab-legend.R:396
 msgid "the reference category"
 msgstr ""
 
-#: tab-legend.R:393
+#: tab-legend.R:397
 msgid "the reference category (in bold)"
 msgstr ""
 
-#: tab-legend.R:394
+#: tab-legend.R:398
 msgid "column"
 msgstr ""
 
-#: tab-legend.R:394
+#: tab-legend.R:398
 msgid "row"
 msgstr ""
 
-#: tab-legend.R:396
+#: tab-legend.R:400
 #, c-format
 msgid "the %s %s"
 msgstr ""
 
-#: tab-legend.R:407
+#: tab-legend.R:411
 msgid "Wilson score interval"
 msgstr ""
 
-#: tab-legend.R:408
+#: tab-legend.R:412
 msgid "Wald interval"
 msgstr ""
 
-#: tab-legend.R:409
+#: tab-legend.R:413
 msgid "Korn-Graubard (beta) interval"
 msgstr ""
 
-#: tab-legend.R:410
+#: tab-legend.R:414
 msgid "Newcombe score interval"
 msgstr ""
 
-#: tab-legend.R:411
+#: tab-legend.R:415
 msgid "Wald interval with Agresti-Caffo adjustment"
 msgstr ""
 
-#: tab-legend.R:412
+#: tab-legend.R:416
 msgid "Welch t interval"
 msgstr ""
 
-#: tab-legend.R:413
+#: tab-legend.R:417
 msgid "Student t interval"
 msgstr ""
 
-#: tab-legend.R:414
+#: tab-legend.R:418
 msgid "Student t interval, pooled over the variable's levels"
 msgstr ""
 
-#: tab-legend.R:415 tab-legend.R:430
+#: tab-legend.R:419 tab-legend.R:434
 msgid "Wald interval on the log odds-ratio"
 msgstr ""
 
-#: tab-legend.R:416 tab-legend.R:431
+#: tab-legend.R:420 tab-legend.R:435
 msgid "Wald interval on the log risk-ratio"
 msgstr ""
 
-#: tab-legend.R:417
+#: tab-legend.R:421
 msgid "quasi-Poisson interval"
 msgstr ""
 
-#: tab-legend.R:418
+#: tab-legend.R:422
 msgid "robust-Poisson (delta) interval"
 msgstr ""
 
-#: tab-legend.R:419
+#: tab-legend.R:423
 msgid "Poisson interval"
 msgstr ""
 
-#: tab-legend.R:420
+#: tab-legend.R:424
 msgid "profile-likelihood interval"
 msgstr ""
 
-#: tab-legend.R:429
-msgid "Wald interval on the log rate-ratio"
+#: tab-legend.R:433
+msgid "Wald interval on the log ratio of means"
 msgstr ""
 
-#: tab-legend.R:432
+#: tab-legend.R:436
 msgid "Wald interval on the log scale"
 msgstr ""
 
-#: tab-legend.R:475
+#: tab-legend.R:479
 msgid "confidence interval"
-msgstr ""
-
-#: tab-legend.R:486
-#, c-format
-msgid "%s%% confidence"
 msgstr ""
 
 #: tab-legend.R:490
 #, c-format
+msgid "%s%% confidence"
+msgstr ""
+
+#: tab-legend.R:494
+#, c-format
 msgid "%s, %s design df"
 msgstr ""
 
-#: tab-legend.R:523
+#: tab-legend.R:527
 #, c-format
 msgid "%s in SD"
 msgstr ""
 
-#: tab-legend.R:555
+#: tab-legend.R:559
 msgid "cell"
 msgstr ""
 
-#: tab-legend.R:582 tab-legend.R:1293
+#: tab-legend.R:586 tab-legend.R:1298
 #, c-format
 msgid "vs %s"
 msgstr ""
 
-#: tab-legend.R:641
+#: tab-legend.R:645
 msgid "bg"
 msgstr ""
 
-#: tab-legend.R:646
+#: tab-legend.R:650
 msgid "or not tested"
 msgstr ""
 
-#: tab-legend.R:649
+#: tab-legend.R:653
 #, c-format
 msgid "grey: non-significant or under %s"
 msgstr ""
 
-#: tab-legend.R:650
+#: tab-legend.R:654
 msgid "grey: non-significant or small"
 msgstr ""
 
-#: tab-legend.R:654
+#: tab-legend.R:658
 msgid "all that is significant is colored"
 msgstr ""
 
-#: tab-legend.R:655
+#: tab-legend.R:659
 msgid "all that is significant is colored, error-adjusted"
 msgstr ""
 
-#: tab-legend.R:715 tab-legend.R:741
+#: tab-legend.R:719 tab-legend.R:745
 msgid "Background colour"
 msgstr ""
 
-#: tab-legend.R:736
+#: tab-legend.R:740
 #, c-format
 msgid "%s%%-guaranteed %s"
 msgstr ""
 
-#: tab-legend.R:737
+#: tab-legend.R:741
 #, c-format
 msgid "%s (%s floor)"
 msgstr ""
 
-#: tab-legend.R:739
+#: tab-legend.R:743
 #, c-format
 msgid "Background colour, %s"
 msgstr ""
 
-#: tab-legend.R:749
+#: tab-legend.R:753
 #, c-format
 msgid "from %s"
 msgstr ""
 
-#: tab-legend.R:766
+#: tab-legend.R:770
 #, c-format
 msgid "%s %s %s"
 msgstr ""
 
-#: tab-legend.R:822
+#: tab-legend.R:826
 #, c-format
 msgid ""
 "Unmarked: not significantly different from %s (%s) or under the first "
 "threshold (%s)."
 msgstr ""
 
-#: tab-legend.R:825
+#: tab-legend.R:829
 #, c-format
 msgid ""
 "Uncoloured: not significantly different from %s (%s) or under the first "
 "colour threshold (%s)."
 msgstr ""
 
-#: tab-legend.R:829
+#: tab-legend.R:833
 #, c-format
 msgid "Unmarked: not significantly different from %s (%s)."
 msgstr ""
 
-#: tab-legend.R:831
+#: tab-legend.R:835
 #, c-format
 msgid "Uncoloured: not significantly different from %s (%s)."
 msgstr ""
 
-#: tab-legend.R:838
+#: tab-legend.R:842
 #, c-format
 msgid ""
 "Unmarked: below the significance threshold (%s). The thresholds above are "
 "comparable between tables."
 msgstr ""
 
-#: tab-legend.R:841
+#: tab-legend.R:845
 #, c-format
 msgid ""
 "Uncoloured: below the significance threshold (%s). The thresholds above are "
 "comparable between tables."
 msgstr ""
 
-#: tab-legend.R:844
+#: tab-legend.R:848
 #, c-format
 msgid "Unmarked: not significantly different from %s."
 msgstr ""
 
-#: tab-legend.R:845
+#: tab-legend.R:849
 #, c-format
 msgid "Uncoloured: not significantly different from %s."
 msgstr ""
 
-#: tab-legend.R:851
+#: tab-legend.R:855
 msgid "Some rows carry no test and are left unmarked."
 msgstr ""
 
-#: tab-legend.R:852
+#: tab-legend.R:856
 msgid "Some rows carry no test and are left uncoloured."
 msgstr ""
 
-#: tab-legend.R:862
+#: tab-legend.R:866
 #, c-format
 msgid "Background: the same rule, applied to the gap with %s (%s)."
 msgstr ""
 
-#: tab-legend.R:1211
+#: tab-legend.R:1216
 #, c-format
 msgid "%s; matching %s interval on the observed column"
 msgstr ""
 
-#: tab-legend.R:1212
+#: tab-legend.R:1217
 #, c-format
 msgid "%s; %s closed form"
 msgstr ""
 
-#: tab-legend.R:1289
+#: tab-legend.R:1294
 #, c-format
 msgid "guaranteed (%s%%) %s"
 msgstr ""
 
-#: tab-legend.R:1290
+#: tab-legend.R:1295
 #, c-format
 msgid "guaranteed %s"
 msgstr ""
 
-#: tab-legend.R:1296
+#: tab-legend.R:1301
 msgid "not significant"
 msgstr ""
 
-#: tab-legend.R:1297
+#: tab-legend.R:1302
 msgid "not guaranteed"
 msgstr ""
 
-#: tab-legend.R:1298
+#: tab-legend.R:1303
 msgid "below the first threshold"
 msgstr ""
 
-#: tab-palettes.R:314
+#: tab-palettes.R:330
 msgid "Underlined"
 msgstr ""
 
-#: tab-palettes.R:314 tab-palettes.R:334
+#: tab-palettes.R:330 tab-palettes.R:350
 msgid "Italic"
 msgstr ""
 
@@ -1320,7 +1316,7 @@ msgstr ""
 msgid "predictors"
 msgstr ""
 
-#: tab-test-display.R:633 tab_classes.R:1794
+#: tab-test-display.R:633 tab_classes.R:1893
 msgid "Model fit"
 msgstr ""
 
@@ -1436,7 +1432,7 @@ msgstr ""
 msgid "ANOVA F"
 msgstr ""
 
-#: tab_classes.R:913
+#: tab_classes.R:1012
 msgid "Outcome"
 msgstr ""
 
@@ -1558,7 +1554,7 @@ msgstr ""
 msgid "at %s"
 msgstr ""
 
-#: tab_xl.R:1351
+#: tab_xl.R:1398
 msgid "variables"
 msgstr ""
 

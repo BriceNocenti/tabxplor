@@ -85,9 +85,9 @@ test_that("tab_reg() gaussian betas / CI / p match stats::lm; fmt uses the addit
 
 
 
-# ---- poisson IRR: parity + multiplicative fmt shape -----------------------------------------
+# ---- poisson RoM: parity + multiplicative fmt shape -----------------------------------------
 
-test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR shape", {
+test_that("tab_reg() poisson RoM / CI / p match glm(poisson); fmt uses the OR shape", {
   d   <- reg_data()
   # suppressWarnings: this fixture is genuinely over-dispersed, so the Phase 12f dispersion flag
   # fires. That is correct and asserted in test-tab_reg-footer.R; here it is incidental noise.
@@ -95,16 +95,16 @@ test_that("tab_reg() poisson IRR / CI / p match glm(poisson); fmt uses the OR sh
   # (the default is now "sd", so a numeric predictor's row would otherwise be per-1-SD).
   t1  <- suppressWarnings(tab_reg(d, "tvhours", c("age", "race"), family = "poisson", multiplier = 1,
                                   ref = c(age = 0), empirical = FALSE, cleannames = FALSE))
-  col <- t1[["Model_IRR"]]
+  col <- t1[["Model_RoM"]]
 
-  # a rate ratio's own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
+  # a ratio of mean counts' own scale: odds_ratio's ladder and glyphs, a MEAN as the level it sits on
   expect_identical(get_pct_type(col), "none")
   expect_identical(get_display(col)[1], "mean")   # the Constant: the baseline mean count
   expect_identical(get_display(col)[2], "est")
   expect_identical(get_scale(col), "mean_ratio")
 
   dm <- d |> dplyr::filter(!is.na(tvhours), !is.na(age), !is.na(race))
-  # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the IRR = exp(coef) is the Poisson
+  # 14v-ii: an unweighted over-dispersed Poisson is fit by MLE (so the RoM = exp(coef) is the Poisson
   # estimate) but its SEs are scaled by sqrt(dispersion) and the interval uses t(df.residual) -- exactly
   # a quasi-Poisson fit's Wald interval. So the CI/p reference is quasipoisson, the point estimate poisson.
   m   <- stats::glm(tvhours ~ age + race, data = dm, family = stats::poisson())

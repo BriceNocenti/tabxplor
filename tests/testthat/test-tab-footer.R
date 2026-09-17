@@ -194,3 +194,35 @@ testthat::test_that("the pre-2.0.1 carrier surface still works (CRAN ggfacto 0.3
   testthat::expect_no_error(tab_md(old, css = FALSE, print = FALSE))
   testthat::expect_no_error(print(old, get_text = TRUE))
 })
+
+
+testthat::test_that("a note's leading label is bold in every medium, and a free sentence is not", {
+  lab <- function(s) tabxplor:::footer_label_split(s)
+  testthat::expect_identical(lab("Champ : adultes"), c("Champ", " : adultes"))
+  testthat::expect_identical(lab("Source: GSS"), c("Source", ": GSS"))
+  testthat::expect_identical(lab("Note de lecture : x")[[1]], "Note de lecture")
+  for (free in c("En 2020, 30 % : x", "10:30 le matin", "https://x.org", "<measure> (<ref>): <breaks>",
+                 "Pour les tres nombreuses femmes : x", "a plain note"))
+    testthat::expect_null(lab(free), info = free)
+
+  t <- tab(fx_gss(), race, marital, pct = "row", color = "diff",
+           subtext = c("Champ : adultes", "Source : GSS", "En 2020, 30 % : x"))
+  html <- as.character(tab_html(t))
+  testthat::expect_match(html, "<b>Champ</b> : adultes", fixed = TRUE)
+  testthat::expect_match(html, "<b>Source</b> : GSS", fixed = TRUE)
+  testthat::expect_match(html, "En 2020, 30 % : x", fixed = TRUE)
+  testthat::expect_no_match(html, "<b>En", fixed = TRUE)
+  md <- strsplit(tab_md(t, css = FALSE, print = FALSE), "\n")[[1]]
+  testthat::expect_true("**Champ** : adultes\\" %in% md)
+  # pandoc joins consecutive lines into one paragraph: every footer line but the last is a hard break
+  testthat::expect_true("En 2020, 30 % : x" %in% md)
+  runs <- tabxplor:::rd_blocks(t, "runs", subtext = get_subtext(t))
+  champ <- Filter(function(r) any(vapply(r, function(z) identical(z$text, "Champ"), logical(1))), runs)[[1]]
+  testthat::expect_true(isTRUE(champ[[1]]$bold))
+  # stored plain: the bold is a render fact
+  testthat::expect_identical(utils::tail(get_subtext(t), 3L),
+                             c("Champ : adultes", "Source : GSS", "En 2020, 30 % : x"))
+
+  withr::local_options(tabxplor.subtext_bold_label = FALSE)
+  testthat::expect_no_match(as.character(tab_html(t)), "<b>Champ</b>", fixed = TRUE)
+})

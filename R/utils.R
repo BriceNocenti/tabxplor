@@ -3,7 +3,7 @@
 #   helper with no home of its own -- the base-R wrapping / padding / truncating primitives, the
 #   NAME wrapper beside them, the retired-export-argument catcher, the two message helpers
 #   (tx_inform_once() / tx_need_pkg()), and the three exported user helpers (score_from_lv1(),
-#   gss_cat_data_formatting(), and the deprecated fct_recode_helper()).
+#   gss_cat_data_formatting(), and fct_recode_helper()).
 # KEY CONSTRAINTS:
 #   - TAB_OPTIONS (R/tab-options.R) is the single source of truth for option names and defaults;
 #     .onLoad() only seeds them, through tx_seed_options().
@@ -444,19 +444,23 @@ score_from_lv1 <- function (data, name, vars_list) {
 tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamespace("tabxplor"))
 
 
-#' fct_recode helper to recode multiple variables
+#' Write the code to recode several factors
 #'
 #' @description
-#' `r lifecycle::badge("deprecated")`
+#' Recoding a factor with [forcats::fct_recode()] means typing every level name exactly, and a typo
+#' is silently ignored. `fct_recode_helper()` writes that code for you: it prints a ready-to-paste
+#' `mutate()` call with one `fct_recode()` per variable, each level already written as
+#' `"level" = "level"`. You then only edit the new names on the left, and delete the lines you keep.
 #'
-#' Printed a ready-to-paste `mutate()` call recoding a set of factor columns via
-#' [forcats::fct_recode()] -- unrelated to cross-tabulation, and unused elsewhere in tabxplor.
-#' Removed in 2.1.0; copy it into your own project if you rely on it.
+#' With a few variables, each level carries its frequency and count as a comment, which is what tells
+#' you which small levels to merge. A column with a `label` attribute (data imported by \pkg{haven})
+#' gets that label as a comment title.
 #'
 #' @param data The data frame.
-#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode.
+#' @param .cols <\link[tidyr:tidyr_tidy_select]{tidy-select}> The variables to recode. Default: every
+#'   non-numeric column.
 #' @param name_in The input data frame's name (default: the expression given as `data`).
-#' @param name_out The output data frame's name, if different from `name_in`.
+#' @param name_out The output data frame's name, if different from `name_in` (used by `style = "base"`).
 #' @param style `"mutate"` (default) writes a `dplyr::mutate()` call; `"base"` writes `data$var <-`.
 #' @param reminder Print a `"new" = "old"` syntax reminder. Default `TRUE`.
 #' @param freq Print each level's frequency and count as a comment; defaults to `TRUE` when 5 or
@@ -465,15 +469,13 @@ tx_user_call <- function(env = parent.frame(2)) !identical(topenv(env), asNamesp
 #'   `FALSE` returns a data frame of the recode text instead.
 #'
 #' @return With `cat = TRUE` (default), the text printed to console (or written to a temp R file for
-#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text is
-#'   returned instead. A column carrying a `label` attribute is used as its comment title.
-#' @keywords internal
+#'   more than 5 variables), returned invisibly. With `cat = FALSE`, a `tibble` of the recode text.
 #' @export
+#' @examples
+#' fct_recode_helper(forcats::gss_cat, c(marital, race))
 fct_recode_helper <- function(data, .cols = -where(is.numeric), name_in, name_out,
                               freq = NULL,
                               style = c("mutate", "base"), reminder = TRUE, cat = TRUE) {
-  lifecycle::deprecate_soft("2.0.0", "fct_recode_helper()",
-                            details = "It writes forcats code and has nothing to do with tables.")
   no_name_in <- missing(name_in)
   if (no_name_in) {
     name_in <- deparse(substitute(data))

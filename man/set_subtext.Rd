@@ -35,6 +35,9 @@ literal \code{<}).
 The template a producer writes names only what \strong{this} table can say: no \code{<weight>} on an
 unweighted table, no \code{<model>} outside a regression. What you read back is therefore what
 prints, and the way to drop a line is to delete it.
+
+A line opening on a short label and a colon (\code{"Field: GSS 2000"}) has that label set in bold
+in every medium; \code{options(tabxplor.subtext_bold_label = FALSE)} prints it as written.
 }
 \examples{
 t <- tab(forcats::gss_cat, race, marital, pct = "row", color = "diff")

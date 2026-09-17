@@ -182,8 +182,8 @@ test_that("19m-i G4: the four family name tables are one, and REG_FIT_FAMILY der
 
 test_that("19m-i G4: the multiplicative effect word is DERIVED, total and singleton", {
   expect_identical(reg_family_mult_word("binomial"), "OR")
-  expect_identical(reg_family_mult_word("poisson"), "IRR")
-  expect_identical(reg_family_mult_word("quasipoisson"), "IRR")
+  expect_identical(reg_family_mult_word("poisson"), "RoM")
+  expect_identical(reg_family_mult_word("quasipoisson"), "RoM")
   expect_identical(reg_family_mult_word("rr"), "RR")
   expect_identical(reg_family_mult_word("mr"), "RoM")
   expect_identical(reg_family_mult_word("multinomial"), "OR")
@@ -194,7 +194,7 @@ test_that("19m-i G4: the multiplicative effect word is DERIVED, total and single
   expect_true(is.na(reg_family_mult_word("wibble")))
 })
 
-# The rendered word per family, which is what actually stands between "one lookup" and an Obs_IRR
+# The rendered word per family, which is what actually stands between "one lookup" and an Obs_RoM
 # column silently legended as an odds ratio.
 test_that("19m-i G4: every family's rendered effect word is unchanged", {
   d <- forcats::gss_cat |>
@@ -202,8 +202,8 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
   want <- list(
     list(a = list(outcome = "married", family = "binomial"),                  w = "OR"),
     list(a = list(outcome = "married", family = "binomial", measure = "ratio"), w = "RR"),
-    list(a = list(outcome = "tv", family = "poisson"),                        w = "IRR"),
-    list(a = list(outcome = "tv", family = "quasipoisson"),                   w = "IRR"),
+    list(a = list(outcome = "tv", family = "poisson"),                        w = "RoM"),
+    list(a = list(outcome = "tv", family = "quasipoisson"),                   w = "RoM"),
     # ⚠ the case that shows the fit word must NOT win unconditionally: a logistic fit asked for a
     # MARGINAL ratio has a crude RISK-ratio column beside it, and both are legended RR.
     list(a = list(outcome = "married", family = "binomial", effect = "marginal",
@@ -222,9 +222,9 @@ test_that("19m-i G4: every family's rendered effect word is unchanged", {
 
 test_that("19m-i G4: the worded CI-method labels are one declared table", {
   nm <- function(method, word) legend_method_name(list(ci_method = method, eff_word = word))
-  # the MODEL's engine is the one that needs the effect word: an OR, an IRR and an RR are the same
+  # the MODEL's engine is the one that needs the effect word: an OR, an RoM and an RR are the same
   # interval on the same log scale, and only the word tells them apart.
-  expect_identical(nm("wald_log", "IRR"), "Wald interval on the log rate-ratio")
+  expect_identical(nm("wald_log", "RoM"), "Wald interval on the log ratio of means")
   expect_identical(nm("wald_log", "OR"),  "Wald interval on the log odds-ratio")
   expect_identical(nm("wald_log", "RR"),  "Wald interval on the log risk-ratio")
   expect_identical(nm("wald_log", NA_character_), "Wald interval on the log scale")
@@ -243,8 +243,7 @@ test_that("D23: on a REG column a closed form renders the interval its model twi
     legend_method_name(list(ci_method = method, eff_word = word, scale = scale, is_reg = TRUE))
   expect_identical(reg("woolf", "OR",  "odds_ratio"), "Wald interval on the log odds-ratio")
   expect_identical(reg("katz",  "RR",  "odds_ratio"), "Wald interval on the log risk-ratio")
-  expect_identical(reg("quasipoisson", "IRR", "mean_ratio"), "Wald interval on the log rate-ratio")
-  expect_identical(reg("quasipoisson", "RoM", "mean_ratio"), "Wald interval on the log scale")
+  expect_identical(reg("quasipoisson", "RoM", "mean_ratio"), "Wald interval on the log ratio of means")
   # an additive or LINK-scale estimand is the plain Wald interval, whatever closed form evaluated it
   expect_identical(reg("ols",   "diff",    "raw_diff"), "Wald interval")
   expect_identical(reg("woolf", "log(OR)", "log_coef"), "Wald interval")

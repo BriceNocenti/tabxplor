@@ -129,7 +129,7 @@ A `tabxplor_fmt` cell carries **21 fields** (many are `NA` when the relevant qua
 | `ratio`     | ratio to the reference (relative risk, or a ratio of means) |
 | `ci_inf`, `ci_sup` | confidence-interval bounds |
 | `pvalue`    | per-cell significance p-value (feeds the stars) |
-| `or`        | odds ratio / relative-risk ratio |
+| `or`        | odds ratio |
 | `ctr`       | contribution to the chi-squared (`color = "contrib"`) |
 | `var`       | variance (numeric columns; chi-squared variance with `pct`) |
 | `tot_n`     | the cell's own base — the count its percentage is computed on |

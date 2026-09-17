@@ -1035,7 +1035,7 @@ fp_unit_word <- function(unit, eff_word = NA_character_, conf = NA_real_, outcom
   base <- switch(unit,
                  or         = if (!is.na(eff_word)) eff_word else gettext("Odds ratio"),
                  ratio      = gettext("Ratio"),
-                 rate_ratio = gettext("Rate ratio"),
+                 mean_ratio = gettext("Ratio of means"),
                  points     = gettext("Percentage points"),
                  pct        = gettext("Percentage"),
                  log        = gettext("Coefficient (log scale)"),
@@ -1522,7 +1522,7 @@ fp_plot_theme <- function(cols) {
       plot.title.position   = "plot")
 }
 
-# The effect word a regression column's own legend uses (OR/IRR/RR/AME/beta), so the axis title and
+# The effect word a regression column's own legend uses (OR/RR/RoM/AME/beta), so the axis title and
 # the footer name the same thing. NA on a cross-table, where the unit word stands alone.
 reg_eff_word_of <- function(x, col_nm) {
   if (!tab_is_reg(x) || is.null(x[[col_nm]])) return(NA_character_)

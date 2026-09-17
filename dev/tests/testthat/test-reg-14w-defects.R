@@ -125,16 +125,16 @@ test_that("a reg legend says 'reference category', never 'Total row' (AME includ
   expect_false(any(grepl("Total row", leg)))
 })
 
-test_that("item 5: an Obs_IRR / model IRR legend names the RATE-ratio, not the odds-ratio", {
+test_that("item 5: an Obs_RoM / model RoM legend names the ratio of means, not the odds-ratio", {
   leg <- tabxplor:::tab_color_legend(
     suppressWarnings(tab_reg(forcats::gss_cat, "tvhours", "race", family = "poisson",
                              empirical = TRUE, cleannames = FALSE)),
     medium = "md", style = "prose")
-  # Phase 16d: Obs_IRR + Model_IRR now fold into ONE legend line ("Obs_IRR, Model_IRR - ...", the
-  # prefix names joined with no-break spaces), so match the line by "IRR" rather than a space-anchored prefix.
-  irr <- leg[grepl("IRR", leg)]
+  # Phase 16d: Obs_RoM + Model_RoM now fold into ONE legend line ("Obs_RoM, Model_RoM - ...", the
+  # prefix names joined with no-break spaces), so match the line by "RoM" rather than a space-anchored prefix.
+  irr <- leg[grepl("RoM", leg)]
   expect_true(length(irr) >= 1)
-  expect_true(all(grepl("rate-ratio", irr)))
+  expect_true(all(grepl("ratio of means", irr)))
   expect_false(any(grepl("odds-ratio", irr)))
 })
 

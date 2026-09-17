@@ -111,7 +111,7 @@ test_that("the covariance is real: the gap SE sits strictly inside the two naive
   d <- gapb_data()
   t <- gapb_tab(d)
   x <- gapb_model_col(t)
-  o <- t[[grep("^Obs_(RR|OR|IRR)", names(t), value = TRUE)[[1]]]]
+  o <- t[[grep("^Obs_(RR|OR|RoM)", names(t), value = TRUE)[[1]]]]
   # reg_gap_se_of() recovers with the column's OWN critical value (22b-xiii-2 / C2), so it needs no
   # crit argument: a t-referred interval would otherwise come back inflated by t/z.
   se_m <- tabxplor:::reg_gap_se_of(x)
@@ -235,7 +235,7 @@ test_that("a crude companion on another scale writes neither obs nor a gap SE (a
   sc  <- get_scale(x)
   testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "mean_ratio", word = "diff"),
                                                       sc, est))
-  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "IRR"),
+  testthat::expect_false(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "RoM"),
                                                       sc, est))
   testthat::expect_true(tabxplor:::reg_same_estimand(list(scale = "raw_diff", word = "diff"),
                                                      sc, est))

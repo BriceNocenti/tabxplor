@@ -65,7 +65,7 @@ null value is, whether the scale is additive or multiplicative, and which colour
 \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
 \item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
 \item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
-\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+\item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, ratio of means)
 \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
 \item \code{"mixed"}: what binding columns of unlike scales collapses to
 }}
@@ -195,7 +195,7 @@ which compare a cell to \emph{another column} rather than to a reference row. A 
 column may carry them, provided it fills the \code{obs} field they score.
 }
 The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
-acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+acronyms included (\code{"RD"}, \code{"RR"}, \code{"RoM"}, \code{"OR"} and their
 lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
 The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
 superseded by the \code{color} + \code{color_signif} pair; here they resolve to their

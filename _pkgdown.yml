@@ -122,6 +122,7 @@ reference:
 - title: Data-prep and text helpers
   desc: Small utilities for preparing data or laying out a table.
   contents:
+  - fct_recode_helper
   - score_from_lv1
   - shape_numeric_var
   - tab_wrap_text

@@ -758,13 +758,13 @@ xl_numfmt_codes <- function(f) {
 xl_merges <- function(wb) sub('".*$', "", sub('^.*ref="', "", unlist(wb$worksheets[[1]]$mergeCells)))
 
 
-# Phase 10g: a non-tabxplor data.frame degrades gracefully (plain sheet + message, still writes).
+# a non-tabxplor data.frame writes as a plain sheet, and says nothing: a plain table is what was asked.
 testthat::test_that("tab_xl degrades to a plain sheet for a non-tabxplor data.frame", {
   testthat::skip_if_not_installed("openxlsx2")
   p <- withr::local_tempfile(fileext = ".xlsx")
-  testthat::expect_message(
+  testthat::expect_no_message(
     tab_xl(tibble::tibble(a = 1:3, b = letters[1:3]), path = p, open = FALSE),
-    "skipped"
+    message = "skipped"
   )
   testthat::expect_true(file.exists(p))
 })

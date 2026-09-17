@@ -350,7 +350,7 @@ prep_one_table <- function(tab, drop_tab_vars, wrap, compute,
                            color_legend = TRUE, backend = "kable") {
   rv <- tab_render_vars(tab)
   if (isTRUE(rv$degrade)) {
-    return(list(tab = tab, vars = list(degrade = TRUE, reason = rv$reason)))
+    return(list(tab = tab, vars = list(degrade = TRUE, plain = isTRUE(rv$plain), reason = rv$reason)))
   }
 
   tab_vars <- rv$tab_vars

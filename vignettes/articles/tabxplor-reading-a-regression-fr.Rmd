@@ -77,7 +77,7 @@ for (hook in c("message", "warning")) {
 }
 ```
 
-« Toutes choses égales par ailleurs. » Si la formule revient souvent, tous les étudiants ne savent pas dire *quelles* choses ont été maintenues égales, ni ce que cela a changé au résultat. Les méthodes de régression ne sont-elles pas, trop souvent, enseignées comme des machines à prédire ? : on y verse des variables, il en sort des nombres — coefficients, rapports de cotes — dont le rapport avec ce qu'on pouvait lire dans les données reste souvent mystérieux.
+« Toutes choses égales par ailleurs. » Si la formule revient souvent, tous les étudiants ne savent pas dire *quelles* choses ont été maintenues égales, ni ce que cela a changé au résultat. Les méthodes de régression ne sont-elles pas, trop souvent, enseignées comme des machines à prédire ? : on y verse des variables, il en sort des nombres — coefficients, rapports de cotes — dont le lien avec ce qu'on pouvait lire dans les données reste souvent mystérieux.
 
 `tabxplor` prend le chemin inverse : son objectif est de construire un modèle de régression sur des données d'enquête (ou des bases de données administratives), et le lire **sans jamais perdre de vue les pourcentages dont on est parti**. Chaque modèle y est posé à côté du tableau croisé dont il sort, et ce qui compte est toujours la **comparaison entre les deux** : maintenir les autres variables constantes, concrètement, qu'est-ce que cela change ?
 
@@ -102,7 +102,7 @@ Voici, d’abord, le vocabulaire à garder en tête et le sens précis que lui d
 | **variable à expliquer**<br>`outcome =` | ce qu'on cherche à comprendre | on la compte, ou on en prend la moyenne : c'est le nombre qui est dans les cases |
 | **prédicteur**<br>`predictors =` | ce sur quoi on compare les gens | on découpe la population d’après lui, et on compare les profils |
 | **référence**<br>`ref =` | le groupe auquel tout le reste est comparé | on choisit une modalité de référence par prédicteur ; bien la choisir rend le tableau lisible |
-| **écart**<br>`measure =` | la distance entre un groupe et sa référence | on choisit comment le mesurer : une différence, un rapport, ou un rapport de cotes |
+| **écart**<br>`measure =` | la distance entre un groupe et sa référence | on choisit comment le mesurer : une différence, un ratio, ou un rapport de cotes |
 | **effet**<br>*effect* | un écart attribué à un prédicteur | *brut* quand ce prédicteur est seul, *ajusté* quand les autres sont dans le modèle |
 | **ajusté**<br>`Model_…` | mesuré entre des gens qui se ressemblent sur les autres prédicteurs | on le lit *contre* l’écart observé/brut donné par la colonne `Obs_…` |
 | **« toutes choses égales par ailleurs »** | les autres variables choisies ont été maintenues constantes | jamais celles qu'on a oubliées, ou que l'enquête n'a pas mesurées |
@@ -175,14 +175,14 @@ car_arrests |>
 Chacune des trois dernières colonnes correspond à une mesure de l’écart. À partir de 86 % et de 74 %, on obtient :
 
 - une **différence** de &minus;12 points de pourcentage — on soustrait l'un de l'autre ;
-- un **rapport** de &divide;1.16 — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches (risque relatif) ;
+- un **ratio** de &divide;1.16 — les personnes noires ont été relâchées 1,2 fois moins souvent que les personnes blanches (risque relatif) ;
 - un **rapport de cotes** (*odds ratio*) de $1/2.11$ — les personnes noires ont 2,11 fois *moins* de chances (*odds*) que la population majoritaire d’avoir été relâchées plutôt que mises en garde à vue – soit 2,11 fois *plus* de chances d’avoir été mises en garde à vue plutôt que relâchées (un OR est strictement symétrique).
 
 Dans `tab_reg()`, ce choix porte un nom — `measure =` — et il vaut la peine de le lire en entier : la **mesure de l'écart**. Ce n’est ni une « échelle » abstraite, ni une unité : la question posée est **quelle sorte d'écart on veut voir rapportée** — soustraire, diviser, ou diviser les cotes. C'est l’argument qu'on utilise le plus régulièrement (l'équivalent de `color =` dans `tab()`).
 
-**La cote, c'est le mot des paris sportifs.** Le terme vient du turf : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en rapport une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le rapport de ces deux quantités est le *rapport de cotes* : $2.8/6.1 = 0.46$. Comme il tombe du mauvais côté de 1, on en prend l'inverse, $1/0.46$ — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois *moins* de chances.
+**La cote, c'est le mot des paris sportifs.** Le terme vient du turf : dire qu'un cheval est *coté à 3 contre 1*, c'est dire que sa probabilité de gagner est trois fois plus grande que sa probabilité de perdre. Une cote met en regard une situation dissymétrique — au numérateur la réussite, au dénominateur l'échec. Ici : sur 100 personnes blanches interpellées, 86 sont relâchées et 14 ne le sont pas, soit une cote de **6,1 contre 1** ; chez les personnes noires, 74 contre 26, soit **2,8 contre 1**. Le ratio de ces deux quantités est le *rapport de cotes* : $2.8/6.1 = 0.46$. Comme il tombe du mauvais côté de 1, on en prend l'inverse, $1/0.46$ — et on inverse aussi la formulation : `1/2.11`, soit 2,11 fois *moins* de chances.
 
-**Ce sont trois mesures du *même* écart**, et pourtant elles ne se lisent pas du tout de la même façon : le rapport de cotes fait sonner l'écart environ cinq fois plus fort que le rapport. Ce n'est pas une déformation, c'est que l'un divise des *cotes* et l'autre des pourcentages. Mais c'est le contresens le plus répandu des sciences sociales, et autant le rappeler : un rapport de cotes de 2 ne veut pas dire « deux fois plus souvent ».
+**Ce sont trois mesures du *même* écart**, et pourtant elles ne se lisent pas du tout de la même façon : le rapport de cotes fait sonner l'écart environ cinq fois plus fort que le ratio. Ce n'est pas une déformation, c'est que l'un divise des *cotes* et l'autre des pourcentages. Mais c'est le contresens le plus répandu des sciences sociales, et autant le rappeler : un rapport de cotes de 2 ne veut pas dire « deux fois plus souvent ».
 
 En français, il existe deux manières de dire un rapport de cotes sans le confondre avec un risque relatif :
 
@@ -206,7 +206,7 @@ tab(car_arrests, colour, released, pct = "row", ref = "first", ci = "ref",
     color = "difference", color_signif = "grey_non_signif")
 ```
 
-Une case est **significative** quand l’intervalle de sa déviation par rapport à la référence exclut la valeur neutre, celle qui signifierait aucun écart du tout : 0 pour une différence, 1 pour un rapport ou un rapport de cotes. L’intervalle, les étoiles et le grisé sont cohérents parce qu’ils lisent tous le résultat du même calcul.
+Une case est **significative** quand l’intervalle de sa déviation par rapport à la référence exclut la valeur neutre, celle qui signifierait aucun écart du tout : 0 pour une différence, 1 pour un ratio ou un rapport de cotes. L’intervalle, les étoiles et le grisé sont cohérents parce qu’ils lisent tous le résultat du même calcul.
 
 Mais pourvu que l’écart soit significatif, c’est la taille de l’effet, donnée par la couleur, qui est véritablement intéressante. Dans un dispositif expérimental réalisé sur 100 personnes par des médecins ou des psychologues, avec par exemple un groupe traité par médicament et un groupe témoin sous placebo, les étoiles et les tests *sont* le résultat : ils prouvent que le médicament a un effet. En sciences sociales, sur des données d’enquête avec 5 000 participants, presque tout écart réel sera significatif, y compris des écarts bien trop petits pour être intéressants. La significativité est une autorisation : elle dit seulement si l'on a le droit de généraliser l'observation au-delà de l'échantillon. Une fois cette autorisation obtenue, la vraie question est celle de la taille de l'effet, donnée par les couleurs, et de ce que lui fait l’ajustement du modèle.
 
@@ -231,7 +231,7 @@ Chaque type de variable ou famille de modèle possède sa propre manière de bas
 | —                     | choix parmi 3 modalités ou plus              | `multinomial`     | rapport de cotes – avec une colonne par catégorie          |
 | —                     | choix parmi des catégories ordonnées         | `ordinal`         | rapport de cotes – un seul partagé par toutes les modalités|
 | variable numérique    | quantité continue (argent, âge…)             | `gaussian`        | différence de moyennes                                     |
-| —                     | décompte (heures de `x`, nombre de `x`)      | `poisson`         | rapport de taux d’incidence — « 1,4 fois plus de `x`/jour »|
+| —                     | décompte (heures de `x`, nombre de `x`)      | `poisson`         | ratio de moyennes — « 1,4 fois plus de `x`/jour »          |
 | —                     | score comptant un nombre de réponses Oui/Non | `binomial`        | rapport de cotes                                           |
 
 
@@ -245,7 +245,7 @@ La bonne manière sociologique d'y penser n'est pas « quelle loi statistique ma
 
 Par exemple si, plutôt que `released`, nous voulions modéliser `checks` — dans combien des six fichiers de police le nom de la personne interpellée figurait déjà – quels modèles pourrions-nous choisir ? Cette variable est un décompte, mais c’est *aussi* un score sur six, et on pourrait éventuellement la modéliser comme une quantité continue. À partir de ce choix, une régression va le plus souvent modéliser l’écart entre catégories d’un prédicteur d’une manière spécifique :
 
-- **comme décompte** — les autres variables choisies étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (rapport de taux d’incidence, IRR) ;
+- **comme décompte** — les autres variables choisies étant égales, les personnes racisées comme noires figurent dans **1,35 fois plus** de fichiers que les personnes du groupe ethnique majoritaire (ratio de moyennes, `RoM`) ;
 - **comme score sur six** — pour **un fichier donné**, leur chance (cote, *odds*) d'y figurer plutôt que de ne pas y figurer est **1,55 fois plus élevée** (*odds ratio*)
 - **comme quantité continue** — elles figurent en moyenne dans **0,5 fichier de plus** que les personnes blanches (une différence de moyennes, donc une soustraction : 2 - 1,5) ;
 
@@ -502,7 +502,7 @@ Ce n'est pas le pourcentage d'une personne moyenne. C'est l'échantillon entier,
 
 ## Un « effet marginal » est un écart moyenné sur l’ensemble de la population
 
-Cette opération porte, en statistique, le nom d'**effet marginal** — et il faut prendre garde à un faux ami : en sociologie française, à la suite de Philippe Cibois, « effet marginal » désigne souvent un effet *exprimé en points de pourcentage*. Originellement, le mot veut dire **moyenné sur l'échantillon**, et vaut pour un rapport aussi bien qu’une différence. On dira donc aussi bien *effet moyenné* ou *effet moyenné sur l'échantillon*, qui ont l'avantage de dire ce qu'ils font.
+Cette opération porte, en statistique, le nom d'**effet marginal** — et il faut prendre garde à un faux ami : en sociologie française, à la suite de Philippe Cibois, « effet marginal » désigne souvent un effet *exprimé en points de pourcentage*. Originellement, le mot veut dire **moyenné sur l'échantillon**, et vaut pour un ratio aussi bien qu’une différence. On dira donc aussi bien *effet moyenné* ou *effet moyenné sur l'échantillon*, qui ont l'avantage de dire ce qu'ils font.
 
 Le terme « marginal » vient des **marges d'un tableau croisé**. Une marge, c’est la ligne Total, c'est ce qu'on obtient quand on cesse de répartir les gens en groupes pour les regarder tous à la fois — et l'opération est identique : calculer l'effet pour chaque enquêté·e, avec sa propre combinaison de caractéristiques, puis faire la moyenne, comme une ligne Total moyenne les lignes au-dessus d’elle. (À une différence près, bien sûr : le Total est observé, non ajusté ; tandis que l'effet moyenné provient du modèle — le pourcentage prédit de chaque personne est calculé avec les autres prédicteurs maintenus à ses propres valeurs.)
 
@@ -560,7 +560,7 @@ Les étudiant·es s’attendent généralement à ce que l'ajustement réduise t
 | **l’écart s’amplifie** | la classe sociale, sur le fait d'aller au cinéma (France)| &minus;21,3 &rarr; &minus;24,9 points |
 | **l’écart s'inverse**  | le sexe, sur l'admission à Berkeley (USA)                | &minus;14,2 &rarr; +1,9 point         |
 
-**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité canadienne et les antécédents dans les rapports avec la police (tous conséquences, d’une certaine manière, d’une certaine dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
+**Noir-blanc : l’écart se réduit.** Dans le cas des mises en garde à vue à Toronto, nous avons vu que l'effet de la couleur de peau perdait environ la moitié de sa taille. Une partie de ce qui ressemblait à un effet direct de la race assignée était l'emploi, la nationalité canadienne et les antécédents dans les relations avec la police (tous conséquences, d’une certaine manière, d’une certaine dimension du racisme structurel). Mais l’autre moitié, celle qui tient, pourrait *aussi* s’expliquer par une forme de racisation plus directe se jouant dans les interactions avec les policiers – ou par d’autres facteurs non mesurés ici.
 
 **Homme-femme : l’écart disparaît.** Dans les mêmes données, les femmes sont relâchées un peu plus souvent que les hommes (86 % contre 83 %, tout juste significatif). Pourtant dans le modèle, dès lors qu’on raisonne entre personnes comparables sur les variables choisies, l’effet se dissipe totalement :
 
@@ -604,7 +604,7 @@ tab_reg(car_arrests, "released",
         stats=NULL)
 ```
 
-Les nuances du jaune au rouge disent que l'ajustement a ramené l'écart **plus près de la valeur nulle** (0 = « aucun effet »), voire parfois qu'il en a **inversé le sens** (par exemple, on passe d’un écart négatif à un écart positif). Pour un rapport ou un **odds ratio** la valeur nulle est 1, et inverser l’effet consisterait à passer de « A a *moins* de chances de X que B » (`÷`) à « A a *plus* de chances de X que B » (`×`). 
+Les nuances du jaune au rouge disent que l'ajustement a ramené l'écart **plus près de la valeur nulle** (0 = « aucun effet »), voire parfois qu'il en a **inversé le sens** (par exemple, on passe d’un écart négatif à un écart positif). Pour un ratio ou un **odds ratio** la valeur nulle est 1, et inverser l’effet consisterait à passer de « A a *moins* de chances de X que B » (`÷`) à « A a *plus* de chances de X que B » (`×`). 
 
 Des bleus de plus en plus foncés diraient, pour leur part, que l'ajustement a poussé l'écart **plus loin de la valeur nulle** (0 = « aucun effet ») : si la différence observée était déjà sous 0, le modèle a agrandi l'effet dans le même sens, creusé l’écart observé entre les deux catégories.
 
@@ -642,11 +642,11 @@ reg_formulas(tab_reg(car_arrests, "released", c("colour", "checks"), link    = "
 ```
 
 `link` est l'écart que chaque modèle estime — le mot que prend `link =` — et `fit` est l'appel R qui a
-tourné : un `glm()` logistique ordinaire pour le premier, dont le rapport vient des prédictions,
-contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le rapport directement et
+tourné : un `glm()` logistique ordinaire pour le premier, dont le ratio vient des prédictions,
+contre un `svyglm()` à vraisemblance de Poisson pour le second, qui estime le ratio directement et
 prend des erreurs-types robustes (Huber-White), cette vraisemblance étant délibérément la mauvaise.
 
-**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même rapport vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur un modèle Poisson modifié publié. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html). 
+**Lequel utiliser.** Préférer **`measure = "ratio"`**, la voie moyennée, dans presque tous les cas : le modèle logistique converge toujours, ne peut jamais prédire une probabilité supérieure à 100 %, et le nombre qu'il donne décrit les gens qu'on a enquêtés. Aller chercher **`link = "ratio"`** quand on a besoin du risque relatif *conditionnel* — celui qui suppose que le même ratio vaut pour tout le monde : c'est ce qu'attendra un lecteur venu de l'épidémiologie, et c'est ce qu'il faut pour s'aligner sur un modèle Poisson modifié publié. La grille complète de ce que chaque famille peut ajuster et rapporter est dans [Tableaux de régression](tabxplor-reg-fr.html). 
 -->
 
 # 6. Ce que le modèle ne tranche pas
@@ -770,7 +770,7 @@ tab(questionr_hdv, qualif, c(cinema, age), pct = "row", na = "drop_all",
 
 Les catégories ont **toutes le même âge moyen**, entre 46 et 50 ans, et la dispersion des réponses y est proche (coefficient de variation entre 28 et 37 % – l’écart-type divisé par la moyenne). Il semble donc douteux que l’âge explique quoi que ce soit. D'où vient alors l'écart supplémentaire ?
 
-Le coupable est le rapport de cotes lui-même. **Un rapport de cotes se déplace dès qu'on ajoute au modèle n'importe quel prédicteur fort de la variable à expliquer, même sans le moindre rapport avec la variable qui nous intéresse.** Cette propriété porte un nom, la non-collapsibilité, et elle relève de l'arithmétique. L'avertissement de Carina Mood aux sociologues est exactement celui-là : pour cette raison, on ne peut pas comparer des rapports de cotes entre modèles ayant des prédicteurs différents — ce qui est précisément ce à quoi une colonne observée et une colonne ajustée, côte à côte, invitent.
+Le coupable est le rapport de cotes lui-même. **Un rapport de cotes se déplace dès qu'on ajoute au modèle n'importe quel prédicteur fort de la variable à expliquer, même sans le moindre lien avec la variable qui nous intéresse.** Cette propriété porte un nom, la non-collapsibilité, et elle relève de l'arithmétique. L'avertissement de Carina Mood aux sociologues est exactement celui-là : pour cette raison, on ne peut pas comparer des rapports de cotes entre modèles ayant des prédicteurs différents — ce qui est précisément ce à quoi une colonne observée et une colonne ajustée, côte à côte, invitent.
 
 La vérification consiste à poser la même question avec une mesure de l'écart qui n'a pas ce défaut, comme une différence de points de pourcentages :
 

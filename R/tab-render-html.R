@@ -86,7 +86,7 @@ render_kable_html <- function(rd, meta,
   # a table that merely lost its class keeps its fmt columns and is not degraded; only
   # tab_export_prep()'s own `degrade` flag (a non-tabxplor input) takes this path.
   if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)  # batch-aware (see tab_export_prep)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars)  # batch-aware (see tab_export_prep)
     return(render_html_degrade(rd$tab))
   }
 
@@ -524,9 +524,11 @@ render_html_engine <- function(rd, meta, subtext, caption, tooltips, popover, ge
            paste0(subtext, collapse = "<br>"), '</div></td></tr></tfoot>')
   } else ""
 
-  # no `tabxplor-<theme>` token in the markup -- the stylesheet carries the theme. A table showing
-  # significance stars gets `tx-has-stars`, flipping the number cells to the monospace stack in CSS.
-  tbl_class <- if (isTRUE(roles$has_stars)) "tabxplor-tab tx-has-stars" else "tabxplor-tab"
+  # no COLOUR-theme token in the markup -- the stylesheet carries it, so `auto` follows the page. A
+  # publication palette IS one (tx_palette_class()): it is the table's, and its rules are scoped to it.
+  # A table showing significance stars gets `tx-has-stars`, flipping the number cells to monospace.
+  tbl_class <- paste(c("tabxplor-tab", tx_palette_class(meta$theme_cols$theme),
+                       if (isTRUE(roles$has_stars)) "tx-has-stars"), collapse = " ")
   paste0(
     cap_div,
     tx_scrollbox(paste0(

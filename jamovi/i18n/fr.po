@@ -93,7 +93,7 @@ msgstr "<b>predictors = <i>(variables explicatives)</i></b>"
 
 #: jmvtab/ui[2].label
 msgid "<b>References (points of comparison), levels and missing values</b>"
-msgstr "<b>Références (points de comparaison), modalités, manquants</b>"
+msgstr "<b>Références (points de comparaison), modalités, valeurs manquantes</b>"
 
 #: jmvtab/options/row_vars.title
 #: jmvtab/ui/variablesupplier[0].label
@@ -125,7 +125,7 @@ msgid ""
 "numeric)</i></b>"
 msgstr ""
 "<b>test = <i>(Chi2/V de Cramér si var. catégorielle; ANOVA F/eta2 si var. "
-"numérique</i></b>"
+"numérique)</i></b>"
 
 #: jmvtabreg/options/wt.title
 #: jmvtabreg/ui/variablesupplier[3].label
@@ -196,9 +196,12 @@ msgid "adjustment <i>(gap between model/observed)</i>"
 msgstr "adjustment <i>(distance modèle/observé)</i>"
 
 #: jmvtab/options/pct/all.title
+msgid "all (whole table)"
+msgstr "all (tout le tableau)"
+
 #: jmvtab/options/lvs/all.title
-msgid "all"
-msgstr "all (toutes les garder)"
+msgid "all <i>(keep every level)</i>"
+msgstr "all <i>(garder toutes les modalités)</i>"
 
 #: jmvtab/options/comp/all.title
 msgid "all (compare with the total subtable)"
@@ -879,7 +882,7 @@ msgstr "odds_ratio"
 
 #: jmvtab/options/color/odds_ratio.title
 msgid "odds_ratio <i>(odds ratios)</i>"
-msgstr "odds_ratio <i>(rapport de cotes)</i>"
+msgstr "odds_ratio <i>(rapport de cotes : ratio de deux cotes)</i>"
 
 #: jmvtabreg/options/measure/odds_ratio.title
 msgid "odds_ratio <i>(OR)</i>"
@@ -998,15 +1001,15 @@ msgstr "ratio"
 
 #: jmvtab/options/display/ratio.title
 msgid "ratio (ratio to ref)"
-msgstr "ratio (rapport, risque rel.)"
+msgstr "ratio (risque relatif)"
 
 #: jmvtab/options/color/ratio.title
 msgid "ratio <i>(relative risk, or mean ratio)</i>"
-msgstr "ratio <i>(rapport case/réf., risque relatif)</i>"
+msgstr "ratio <i>(risque relatif, ou ratio de moyennes)</i>"
 
 #: jmvtabreg/options/measure/ratio.title
-msgid "ratio <i>(RR, IRR, RoM)</i>"
-msgstr "ratio <i>(RR, IRR, RoM)</i>"
+msgid "ratio <i>(RR, RoM)</i>"
+msgstr "ratio <i>(RR, RoM)</i>"
 
 #: jmvtabreg/options/measure/raw_coefficient.title
 msgid "raw_coefficient <i>(log, etc.)</i>"

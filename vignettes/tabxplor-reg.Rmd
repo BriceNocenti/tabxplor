@@ -109,7 +109,7 @@ You rarely set `family` by hand — `tab_reg()` mostly detects it:
 |:--------|:---------------|:--------------------------------|
 | 2-level factor | binomial (logistic) | odds ratio (`OR`) |
 | numeric (continuous) | gaussian (linear) | mean difference (`diff`) |
-| count | poisson | incidence-rate ratio (`IRR`) |
+| count | poisson | ratio of means (`RoM`) |
 | 3+ level unordered factor | multinomial | one `OR` column per category vs. the reference |
 | 3+ level ordered factor | ordinal (proportional odds) | cumulative `OR`, or Somers' `D` |
 
@@ -122,7 +122,7 @@ One rule covers every case: **the observed effect is the effect of that predicto
 - 2 levels logistic (binomial) → observed %, and observed odd-ratios
 - 3+ levels logistic (multinomial) → the observed ORs are shown as a tooltip on the model cells in html exports
 - gaussian (linear) → group means and their difference
-- poisson (counts) → observed rate and observed rate ratio
+- poisson (counts) → observed mean count and observed ratio of means
 
 A continuous predictor has no levels, so its cell shows the effect alone — there is no observed percentage or mean to put beside it — and its distribution (mean, standard deviation, and the mean in each outcome group) is shown in the html tooltip instead.
 
@@ -264,7 +264,7 @@ measure — the one the model estimates directly — so the statistician's vocab
 | numeric, score | `binomial`+trials| percentage | the same three   | the same, per item          | `OR`/`RR`/`RD` |
 | numeric        | `gaussian`       | a mean     | `"difference"` † | linear regression           | `diff`         |
 |                |                  |            | `"ratio"`        | log-link Poisson pseudo-ML  | `RoM`          |
-| numeric, count | `poisson`        | a count    | `"ratio"` †      | Poisson, quasi-Poisson SEs  | `IRR`          |
+| numeric, count | `poisson`        | a count    | `"ratio"` †      | Poisson, quasi-Poisson SEs  | `RoM`          |
 | factor, 3+ un. | `multinomial`    | percentage | `"odds_ratio"` † | multinomial logit           | `OR`           |
 | factor, ord.   | `ordinal`        | a rank     | `"odds_ratio"` † | proportional-odds model     | `cumOR`        |
 
@@ -287,7 +287,7 @@ header, after the constant `Model_` prefix.
 | a mean     | `"difference"` | `diff`                  | `mdiff`      | `refdiff`        |
 | a mean     | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
 | a mean     | `"odds_ratio"` | not defined             | not defined  | not defined      |
-| a count    | `"ratio"`      | `IRR`                   | `mIRR`       | `refIRR`         |
+| a count    | `"ratio"`      | `RoM`                   | `mRoM`       | `refRoM`         |
 | a count    | `"difference"` | —                       | `mdiff`      | `refdiff`        |
 | a count    | `"odds_ratio"` | not defined             | not defined  | not defined      |
 | a rank     | `"difference"` | —                       | `mD`         | not offered ²    |
@@ -318,7 +318,7 @@ so, and for the risk difference it falls back to the linear probability model.
 
 `measure = "raw_coefficient"` is not a fourth column: it is **the model's own coefficient**, the
 estimand shown un-transformed. Where the reported measure is multiplicative that is its log, and the
-header says which one it logs (`Model_log(OR)`, `Model_log(IRR)`, `Model_log(RoM)`); where the model
+header says which one it logs (`Model_log(OR)`, `Model_log(RR)`, `Model_log(RoM)`); where the model
 is already additive there is nothing to un-exponentiate, and the coefficient IS the additive estimate
 the column already shows. So it answers for every family — which is what lets a table mixing a
 logistic outcome and a linear one be asked for its coefficients at all. Being the fit's *own* number
@@ -337,8 +337,7 @@ up per quantity, and one marker to read on top of it.
 | `cumOR` | cumulative odds ratio      | `exp(coef(MASS::polr(...)))`, the proportional-odds model         |
 | `RR`    | risk ratio                 | modified Poisson, robust SE (Zou 2004)                            |
 | `RD`    | risk difference, in points | `glm(y ~ ., binomial("identity"))`, robust SE                     |
-| `IRR`   | incidence-rate ratio       | `exp(coef(glm(y ~ ., poisson)))`                                  |
-| `RoM`   | ratio of means             | log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
+| `RoM`   | ratio of means             | a count: `exp(coef(glm(y ~ ., poisson)))`; a mean: log-link pseudo-Poisson, robust SE (Santos Silva & Tenreyro 2006) |
 | `diff`  | mean difference            | `coef(lm(...))`                                                   |
 
 | marker        | reads                                             | example         |
@@ -365,7 +364,7 @@ Each link buys a directly readable coefficient at the price of one:
 | binomial · `"difference"` | identity-link binomial, robust SE | a constant risk difference |
 | gaussian · `"difference"` *(default)* | linear regression | a constant mean difference |
 | gaussian · `"ratio"` | log-link Poisson pseudo-ML, robust SE | E(y) = exp(xβ), so a constant ratio of means |
-| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant rate ratio |
+| poisson · `"ratio"` *(default)* | Poisson, quasi-Poisson SEs | a constant ratio of means |
 | ordinal · `"odds_ratio"` *(default)* | proportional-odds model | one odds ratio, shared by every cut |
 | multinomial · `"odds_ratio"` *(default)* | multinomial logit | a constant odds ratio per category |
 
@@ -619,7 +618,7 @@ tab(gss_simple, "race", "age", pct = "row", digits = 2, na = "drop",
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson")
 ```
 
-An **incidence-rate ratio** (IRR) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals. Concretely: with an over-dispersed outcome, `family = "poisson"` returns CIs and p-values **identical to `family = "quasipoisson"`** and emits a warning saying so (the footer reports the dispersion); at equidispersion (≈ 1) the scaling is a no-op and the result matches a plain `glm(family = poisson)` — so a comparison to a hand-fit Poisson `glm` never surprises you.
+A **ratio of means** (`RoM`) of 1.5 means "50% more hours of TV per day". Unweighted Poisson models automatically use dispersion-scaled (quasi-Poisson) standard errors, so over-dispersed counts get honest, wider intervals. Concretely: with an over-dispersed outcome, `family = "poisson"` returns CIs and p-values **identical to `family = "quasipoisson"`** and emits a warning saying so (the footer reports the dispersion); at equidispersion (≈ 1) the scaling is a no-op and the result matches a plain `glm(family = poisson)` — so a comparison to a hand-fit Poisson `glm` never surprises you.
 
 In the case of a poisson regression, the **empirical/observed counterpart of the model’s exponentiated coefficient** for a categorical predictor is the **ratio of means** : here, the ratio of average TV hours compared to the reference level.
 
@@ -627,13 +626,13 @@ In the case of a poisson regression, the **empirical/observed counterpart of the
 tab_reg(gss_simple, "tvhours", c("race", "marital", "relig", "rincome"), family = "poisson", empirical = TRUE)
 ```
 
-The empirical average TV hours per day, and differences of rate of television watching from reference, can be computed in a simple table with : 
+The empirical average TV hours per day, and their ratios to the reference, can be computed in a simple table with : 
 
 ```{r}
 tab(gss_simple, "race", "tvhours", pct = "row", digits = 2, na = "drop",
     color = "ratio", ref = 1,  ci_method = c(mean_ratio = "quasipoisson")
 ) |> 
-  mutate(IRR = set_display(tvhours, "ratio"))
+  mutate(RoM = set_display(tvhours, "ratio"))
 # the default method is a robust ratio of means (each group's own variance) ;
 #  we use "quasipoisson" to match those computed by quasi-poisson regression -- one dispersion
 #  estimated over every level (assumption : variance is proportional to mean). 
@@ -813,7 +812,7 @@ The `"adjustment"` colour always shows the **size** of the gap. Whether it also 
 | `measure = "difference"` — any outcome | **yes** |
 | `measure = "ratio"`, or `link = "ratio"` (risk ratios) | **yes** |
 | `measure = "odds_ratio", effect = "marginal"` (binary or summed score) | **yes** |
-| Poisson incidence-rate ratios, a linear mean difference | **yes** |
+| Poisson ratios of means, a linear mean difference | **yes** |
 | **conditional** odds ratios — binomial, multinomial, ordinal cumulative | no (non-collapsible) |
 | a compound `formula =` | no |
 | a *weighted* 3+ level outcome | it can only be read on its coefficients |
@@ -821,7 +820,7 @@ The `"adjustment"` colour always shows the **size** of the gap. Whether it also 
 Where there is no test, `color_signif` is ignored for that channel and the colours read descriptively — the table never pretends to a significance it does not have.
 
 The null is that the modelled and observed effects are equal, on the effect's own scale: the log-ratio
-for a risk ratio, an odds ratio or an incidence-rate ratio, the plain difference for a mean
+for a risk ratio, an odds ratio or a ratio of means, the plain difference for a mean
 difference or a marginal effect in points. That is the scale the colour already folds around, so the test and the colour cannot
 drift apart.
 
@@ -1027,7 +1026,7 @@ The two groups are disjoint samples, so the two estimates are independent and th
 their difference is `sqrt(SE_A² + SE_B²)` — the textbook test for a difference between two independent
 estimates (Altman & Bland 2003). Both standard errors are read back from the confidence intervals the
 table already prints, so the test and the printed intervals cannot disagree. The difference is measured
-on the effect's own scale — the log-ratio for an odds ratio, a risk ratio or an incidence-rate ratio,
+on the effect's own scale — the log-ratio for an odds ratio, a risk ratio or a ratio of means,
 the plain difference for a beta or a marginal effect — and compared to a normal (z) threshold, which is
 mildly conservative in small samples.
 

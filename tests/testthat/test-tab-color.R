@@ -260,7 +260,7 @@ testthat::test_that("a column with no stored method names no method (Phase 19b, 
 })
 
 
-testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says OR", {
+testthat::test_that("tab_reg: a mean difference shows SD, a count ratio says RoM, OR says OR", {
   b <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "gaussian"))
   lb <- leg_en(b)
   # the acronym is DATA: printed exactly as the header spells it, never capitalised as prose
@@ -276,11 +276,11 @@ testthat::test_that("tab_reg: a mean difference shows SD, IRR says IRR, OR says 
 
   i <- suppressWarnings(tab_reg(gss, "tvhours", c("marital", "race"), family = "poisson"))
   li <- leg_en(i)
-  testthat::expect_match(li, "IRR \u2265")
+  testthat::expect_match(li, "RoM \u2265")
   testthat::expect_no_match(li, "OR \u2265")
-  # Phase 14c: ci_type "or" is the multiplicative SHAPE (OR / IRR / cumulative OR alike); naming it
-  # unconditionally called a Poisson rate ratio an odds ratio.
-  testthat::expect_match(li, "Wald interval on the log rate-ratio")
+  # ci_type "or" is the multiplicative SHAPE (OR / RoM / cumulative OR alike); naming it
+  # unconditionally called a Poisson ratio of means an odds ratio.
+  testthat::expect_match(li, "Wald interval on the log ratio of means")
   testthat::expect_no_match(li, "odds-ratio")
 
   d2 <- dplyr::mutate(gss, married = as.integer(marital == "Married"))

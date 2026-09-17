@@ -832,7 +832,7 @@ test_that("a regression losing `meta` drops its title/effect wording, keeps the 
   expect_true(any(grepl("Poisson regression", full)))    # caption + Model: line
   no_meta <- md(strip_attr(tr, "meta"))
   expect_false(any(grepl("^: Poisson regression", no_meta)))  # caption gone
-  expect_true(any(grepl("Model_IRR", no_meta)))          # the estimate columns remain
+  expect_true(any(grepl("Model_RoM", no_meta)))          # the estimate columns remain
   expect_true(any(grepl("\\{\\.[pm][1-4]", no_meta)))    # colours still there
 })
 

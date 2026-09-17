@@ -111,7 +111,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #'   \item \code{"mean_diff"}: a difference between two means, in the outcome's own units
 #'   \item \code{"raw_diff"}: a regression coefficient / marginal effect in the outcome's units
 #'   \item \code{"pct_ratio"}, \code{"mean_ratio"}: the ratio of two percentages / two means
-#'   \item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, rate ratio)
+#'   \item \code{"odds_ratio"}: a multiplicative effect (odds ratio, risk ratio, ratio of means)
 #'   \item \code{"log_coef"}: a link-scale coefficient (a log-odds, a log-rate)
 #'   \item \code{"mixed"}: what binding columns of unlike scales collapses to
 #' }
@@ -217,7 +217,7 @@ utils::globalVariables(c("OR", "tot", "color_breaks"))
 #'   column may carry them, provided it fills the \code{obs} field they score.
 #' }
 #' The value is \strong{validated and normalised}: every accepted spelling --- the discipline's
-#' acronyms included (\code{"RD"}, \code{"RR"}, \code{"IRR"}, \code{"RoM"}, \code{"OR"} and their
+#' acronyms included (\code{"RD"}, \code{"RR"}, \code{"RoM"}, \code{"OR"} and their
 #' lowercase twins) --- is stored as its canonical measure name, and an unknown one is an error.
 #' The tabxplor 1.x combined strings \code{"diff_ci"} / \code{"after_ci"} still work but are
 #' superseded by the \code{color} + \code{color_signif} pair; here they resolve to their
@@ -1950,7 +1950,7 @@ fmt_get_color_code <- function(x, type = "text", theme = "light", ...) {  # ... 
 #              is how `tab_reg(digits = c(base = 2))` is written.
 #   const_display the token a regression's BASELINE row renders: the quantity this column's effects
 #              OPERATE ON. Odds ratios multiply odds, so an odds column shows the baseline odds; risk
-#              and rate ratios multiply the level, and differences add to it, so those show the level
+#              ratios and ratios of means multiply the level, and differences add to it, so those show the level
 #              itself; a coefficient adds on the link scale. NA on the level scales, which have no
 #              baseline row. A LEVEL token here also means the row carries no p-value: there is no
 #              null a percentage or a mean could be tested against.
@@ -1976,12 +1976,12 @@ EST_SCALES <- tx_grid(tibble::tribble(
   # names the LEVEL, not the ratio, so neither can borrow its ungrouped twin's row: `{base}` would
   # fold a score into `pct` (x100, "%") and the column would claim var_kind "pct" to every tooltip
   # and plot. WARNING: they are TWO rows for the same reason odds_ratio and pct_ratio are -- folding
-  # them printed every summed-score RR as "1/x". An incidence-rate ratio is in neither: a rate ratio
-  # is a ratio of means, so it is `mean_ratio`, whose `unit` already says so.
+  # them printed every summed-score RR as "1/x". A count ratio is in neither: with no exposure
+  # offset it is a ratio of mean counts, so it is `mean_ratio`.
   "score_odds_ratio", "effect", "ratio",      "mean",    "pct",   1,        "log10",    TRUE,  FALSE,   "or",       "or",         "mean",           "or",         2L,          "mean",        NULL,         "or",           "odds_ratio",  "adj_ratio",    "odds_ratio", NULL,  NULL,
   "score_ratio",      "effect", "ratio",      "mean",    "pct",   1,        "log10",    TRUE,  FALSE,   "ratio",    "ratio",      "mean",           "ratio",      2L,          "mean",        NULL,         "mean",         "pct_ratio",   "adj_ratio",    "ratio",      NULL,  NULL,
   "pct_ratio",        "effect", "ratio",      "pct",     "pct",   1,        "log10",    TRUE,  FALSE,   "ratio",    "ratio",      "pct",            "ratio",      NULL,        "pct",         0L,           "pct",          "pct_ratio",   "adj_ratio",    "ratio",      NULL,  NULL,
-  "mean_ratio",       "effect", "ratio",      "mean",    "std",   1,        "log10",    TRUE,  FALSE,   "ratio",    "rate_ratio", "mean",           "ratio",      2L,          "mean",        NULL,         "mean",         "mean_ratio",  "adj_ratio",    "ratio",      NULL,  NULL,
+  "mean_ratio",       "effect", "ratio",      "mean",    "std",   1,        "log10",    TRUE,  FALSE,   "ratio",    "mean_ratio", "mean",           "ratio",      2L,          "mean",        NULL,         "mean",         "mean_ratio",  "adj_ratio",    "ratio",      NULL,  NULL,
   # A beta / a count AME, printed in the OUTCOME's units and coloured on the SD-standardized ladder;
   # then the crosstab MEAN difference, the same ladder standardized by the REFERENCE cell's SD.
   # `est_display = "diff"` on both -- an identity-link beta IS a mean difference, and naming it
@@ -2110,7 +2110,7 @@ fmt_excel_value <- function(x, fold = TRUE) {
 
 # fmt_coef_label() -- THE NAME of the `coef` token, composed the way the header is
 # (reg_word_logged): a coefficient is only worth calling one where the model's own scale is LOGGED,
-# and there the truth is log(OR) / log(IRR) / log(cumOR). On an additive column the coefficient IS
+# and there the truth is log(OR) / log(RoM) / log(cumOR). On an additive column the coefficient IS
 # the difference and says so, which is why an identity-link beta never prints "coef".
 # The acronym comes from the family (reg_own_word); a crosstab, which has none, reads its scale.
 #' @keywords internal
@@ -3643,7 +3643,7 @@ format.tabxplor_fmt <- function(x, ..., html = FALSE, na = NA,
   # scale, one branch per column). `gap` carries the ADJUSTMENT SCORE -- the very number the colour
   # grades -- so a printed gap and its shade can never say different things.
   obs_m    <- ok & (display %in% c("obs", "gap"))
-  obs_mult <- ci_mult                          # OR / RR / IRR       -> like `or`  (bare, big.mark, 2 dg)
+  obs_mult <- ci_mult                          # OR / RR / RoM       -> like `or`  (bare, big.mark, 2 dg)
   obs_coef <- !ci_mult && is_coef              # beta / log(OR)      -> like `coef` (plain)
   obs_pct  <- !ci_mult && !is_coef             # AME / risk-diff     -> like `diff` (x100, signed, %)
   # the precision follows the SCALE, not the cell's own value, so an empty cell keeps its column's
@@ -4448,7 +4448,7 @@ guaranteed_breaks <- function(breaks, center, origin = NULL) {
 
 # the additive (center-0) break scale for a NON-gaussian regression coefficient on the LINK scale,
 # derived by LOGGING the odds_ratio scale and rounding to 1 dp (log c(1.2,1.5,2,4) -> c(0.2,0.4,0.7,1.4)),
-# so a log-odds/log-rate coefficient reads ~the same intensity as its exponentiated OR/IRR twin and
+# so a log-odds/log-rate coefficient reads ~the same intensity as its exponentiated OR/RoM twin and
 # follows any user change to `odds_ratio`. `std = FALSE` (no var(Y) on the link scale).
 #' @keywords internal
 log_odds_scale <- function(or_scale) {
@@ -5075,7 +5075,7 @@ MEASURES <- list(
                                                   ref_phrase = function() gettext("independence")))),
   # the two tab_reg-only measures. They score the SAME quantity through the SAME helper (how far the
   # model estimate sits from `obs`) and differ ONLY in what `obs` is, hence in the reference the legend
-  # names. `scale_from = "gap"` takes the ladder from the ESTIMATE's own scale: an OR/RR/IRR folds around
+  # names. `scale_from = "gap"` takes the ladder from the ESTIMATE's own scale: an OR/RR/RoM folds around
   # 1 on `adj_ratio`, a beta/AME/risk-difference around 0 on `adj_diff`. Both derive their interval from
   # the stored `gap_se`, so both read `color_signif` normally -- WHERE tab_reg could write one; where it
   # could not, `force_policy` (fmt_gap_force_policy) makes them read under `ignore`. The two SEs come
@@ -5126,7 +5126,7 @@ MEASURE_PRODUCER_FN <- c(tab = "tab", reg = "tab_reg")
 
 # `adjustment` on an ODDS RATIO needs one sentence of honesty: the odds ratio is NON-COLLAPSIBLE --
 # adjusting for a covariate that predicts the outcome moves it away from 1 even with zero confounding,
-# the same order of magnitude as the 10 % first break. Collapsible estimands (AME, RR, IRR, beta) are
+# the same order of magnitude as the 10 % first break. Collapsible estimands (AME, RR, RoM, beta) are
 # exempt, which is what the caveat says. `is_coef` covers a raw logit coefficient (the same quantity, logged).
 # WARNING: reads `reg_fam_prob()` off COLUMN facts (the legend cannot see `effect`); keep set-identical
 # to reg_estimand_collapsible(), which states it from the build side.
@@ -5237,14 +5237,14 @@ measure_nameable <- function(producer, channel = NULL) {
 # measure: `tab(color =)`, `fmt(color =)`, `tab_reg(measure =)`, `tab_reg(link =)`. It IS the REG_WORDS
 # set -- what a header can print is what an argument can be typed -- and a foreign key checks that at
 # load, in both directions. The acronyms are permanent aliases, never deprecated: the argument teaches
-# the CONCEPT word ("ratio"), the header keeps the discipline's ("RR" / "IRR" / "RoM").
+# the CONCEPT word ("ratio"), the header keeps the discipline's ("RR" / "RoM").
 #
-# A mismatched acronym is a REQUEST, and the header is the answer: `measure = "IRR"` on a gaussian
+# A mismatched acronym is a REQUEST, and the header is the answer: `measure = "RR"` on a gaussian
 # outcome resolves to the outcome's own word (`Model_mRoM`), and a crosstab's legend prints the concept
 # word, so nothing can mislabel itself. That is why the table is permissive and needs no message.
 #' @keywords internal
 MEASURE_ACRONYMS <- c(RD = "difference", diff = "difference",
-                      RR = "ratio", IRR = "ratio", RoM = "ratio",
+                      RR = "ratio", RoM = "ratio",
                       OR = "odds_ratio")
 
 # ⚠ REGRESSION-ONLY: the words a RANK level names (REG_LEVEL_MEASURES$rank) plus the ordinal family's
@@ -5254,6 +5254,12 @@ MEASURE_ACRONYMS <- c(RD = "difference", diff = "difference",
 # unknown -- the header prints `Model_cumOR`, so a reader will type it.
 #' @keywords internal
 MEASURE_ACRONYMS_REG <- c(cumOR = "odds_ratio", D = "difference", WR = "ratio")
+
+# RETIRED header words: no header prints them any more, so they are outside the two-way key above, but
+# a call that types one keeps resolving to its measure, silently (an acronym is never deprecated).
+# `IRR`: a count has no exposure offset here, so its ratio is a ratio of means and prints `RoM`.
+#' @keywords internal
+MEASURE_ACRONYMS_RETIRED <- c(IRR = "ratio")
 
 # the all-lowercase twin of every acronym, DERIVED so that a row cannot be forgotten. ⚠ ONE clause: a
 # ONE-LETTER acronym gets none -- `d` is a slip, not a spelling.
@@ -5286,7 +5292,7 @@ color_legacy_spellings <- function() names(COLOR_LEGACY_ALIASES)
 #' @keywords internal
 MEASURE_COLOR_KEYS <- c(
   stats::setNames(names(MEASURES), names(MEASURES)),
-  measure_twins(MEASURE_ACRONYMS),
+  measure_twins(c(MEASURE_ACRONYMS, MEASURE_ACRONYMS_RETIRED)),
   vapply(COLOR_LEGACY_ALIASES, function(a) a$measure, character(1))
 )
 stopifnot("no colour spelling is declared twice" = !anyDuplicated(names(MEASURE_COLOR_KEYS)))

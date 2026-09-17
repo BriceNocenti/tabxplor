@@ -191,7 +191,7 @@ test_that("obs == the Obs_* effect column, for every family / effect shape", {
       tabxplor:::fmt_est_of)
   chk(suppressWarnings(tab_reg(d, outcome = "tvhours", predictors = c("race", "party3"),
                                family = "poisson", empirical = TRUE)),   # tvhours is over-dispersed
-      "Model_IRR", "Obs_IRR", get_ratio)
+      "Model_RoM", "Obs_RoM", get_ratio)
   chk(tab_reg(d, outcome = "age", predictors = c("race", "party3"),
               family = "gaussian", empirical = TRUE), "Model_diff", "Obs_diff", get_diff)
   chk(tab_reg(d, outcome = "married", predictors = c("race", "party3"), family = "binomial",

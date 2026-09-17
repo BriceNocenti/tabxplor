@@ -161,7 +161,8 @@ tab_md <- function(tabs,
   # byte-identical (no div).
   any_color <- any(vapply(prep$tables, function(x) isTRUE(x$roles$has_color), logical(1)))
   styled    <- any_color || isTRUE(css)
-  if (styled) md_text <- paste0("::: {.tabxplor-tab}\n", md_text, "\n:::")
+  if (styled) md_text <- paste0("::: {", paste0(".", c("tabxplor-tab", tx_palette_class(theme)),
+                                                  collapse = " "), "}\n", md_text, "\n:::")
   if (isTRUE(css)) {
     md_text <- paste0(tab_css(theme = theme, format = "html", style_tag = TRUE), "\n\n", md_text)
   }
@@ -238,7 +239,7 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
                           color = TRUE, css = FALSE, lang = NULL, title = NULL,
                           theme = NULL) {
   if (isTRUE(rd$vars$degrade)) {
-    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars$reason)
+    if (isTRUE(rd$vars$notify)) tab_degrade_inform(rd$vars)
     return(md_plain_pipe(rd$tab))
   }
 
@@ -652,6 +653,10 @@ md_render_one <- function(rd, special_formatting, wrap_rows, subtext,
   }
 
   if (length(subtext_text) > 0) {
+    # WARNING: pandoc joins consecutive lines into ONE paragraph, so without the `\` hard break the
+    # legend, "Champ : ..." and "Source : ..." render as a single run of text.
+    n_sub <- length(subtext_text)
+    if (n_sub > 1L) subtext_text[-n_sub] <- paste0(subtext_text[-n_sub], "\\")
     all_lines <- c(all_lines, "", subtext_text)
   }
 
