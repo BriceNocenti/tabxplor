@@ -192,12 +192,12 @@ jobs:
               cp -R "$mnt/jamovi.app" "$RUNNER_TEMP/jamovi.app"
               hdiutil detach "$mnt" -quiet || true
               home="$RUNNER_TEMP/jamovi.app"
-              rscript="$home/Contents/Frameworks/R.framework/Versions/Current/Resources/bin/Rscript"
+              rhome="$home/Contents/Frameworks/R.framework/Versions/Current/Resources"
+              rscript="$rhome/bin/Rscript"
               # `@executable_path` in a patched load command is jamovi's MacOS/ directory; run from
               # R it is R's own bin/, so stand in for it. Both spellings, because Rscript may or may
               # not have exec'd into bin/exec/R yet. See .github/scripts/jmo-verify.R.
               fw="$home/Contents/Frameworks"
-              rhome="$home/Contents/Frameworks/R.framework/Versions/Current/Resources"
               ln -sfn "$fw" "$rhome/Frameworks"
               ln -sfn "$fw" "$rhome/bin/Frameworks" ;;
             zip|exe)
@@ -215,20 +215,26 @@ jobs:
               d=$(dirname "$exe")
               if [ "$(basename "$d")" = "bin" ]; then d=$(dirname "$d"); fi
               home=$(cygpath -m "$d")
-              rscript="$home/Frameworks/R/bin/x64/Rscript.exe" ;;
+              rhome="$home/Frameworks/R"
+              rscript="$rhome/bin/x64/Rscript.exe" ;;
           esac
           [ -x "$rscript" ] || [ -f "$rscript" ] || {
             echo "::error title=jamovi's R not where the compiler looks::expected $rscript. The archive layout changed; the compiler hard-codes this path and would fail too."
             exit 1; }
           echo "JAMOVI_HOME=$home" >> "$GITHUB_ENV"
           echo "JRSCRIPT=$rscript" >> "$GITHUB_ENV"
+          # R_HOME, exactly as the compiler sets it: a RELOCATED framework's `Rscript` still carries
+          # the R_HOME its build baked in, and dies "Rscript execution error: No such file or
+          # directory" without this.
+          echo "R_HOME=$rhome" >> "$GITHUB_ENV"
 
       # Checked before the thirty-minute part, and the only place the compiler's bare TypeError on
       # an unknown R version is turned into a sentence.
       - name: Check jamovi's R against the grid
         run: |
           set -euo pipefail
-          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")')
+          # tr -d '\r': Windows R writes CRLF, and the CR would land inside $arch and miss the case
+          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")' | tr -d '\r')
           case "$arch" in aarch64) a=arm64 ;; x86_64) a=x64 ;; *) a="$arch" ;; esac
           if [ "$rv" != '${{ matrix.r }}' ] || [ "$a" != '${{ matrix.arch }}' ]; then
             echo "::error title=The grid is stale (${{ matrix.channel }})::jamovi ${{ matrix.version }} runs R $rv-$a, the grid declares ${{ matrix.r }}-${{ matrix.arch }}. Building now would stamp a .jmo no jamovi accepts."
@@ -329,7 +335,8 @@ jobs:
             echo "::error title=The grid is stale (current, linux)::Flathub serves jamovi $JAMOVI_VERSION (line $line); the grid declares $LLINE for the current channel."
             exit 1
           fi
-          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")')
+          # tr -d '\r': Windows R writes CRLF, and the CR would land inside $arch and miss the case
+          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")' | tr -d '\r')
           if [ "$rv" != "$LR" ] || [ "$arch" != "x86_64" ]; then
             echo "::error title=The grid is stale (current, linux)::jamovi $JAMOVI_VERSION runs R $rv-$arch; the grid declares $LR-x64."
             exit 1
