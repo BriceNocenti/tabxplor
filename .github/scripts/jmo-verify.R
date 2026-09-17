@@ -22,10 +22,8 @@
 #     jamovi's executable, so it proves the code runs, never that the rewrite is right.
 # See: dev/jamovi_library_vs_sideloading.md section 3 (why seven files, and what jamovi checks).
 
-# DESIGN: two switches, because both rest on something unproven on a CI runner rather than on a
-# supported mechanism -- the stand-in symlink, and whether jmvcore instantiates an analysis with no
-# jamovi server around it. Flipping one keeps the rest of the verification.
-MACOS_LOAD_IS_FATAL <- TRUE
+# DESIGN: one switch, because it rests on something unproven on a CI runner rather than on a
+# supported mechanism: whether jmvcore instantiates an analysis with no jamovi server around it.
 ANALYSIS_IS_FATAL <- TRUE
 
 # The list exists for ONE failure mode: `install.packages()` reports a failed SOURCE build as a
@@ -172,12 +170,13 @@ check_load <- function(pkgs) {
     ok <- tryCatch({ loadNamespace(p); TRUE },
                    error = function(e) { why <<- conditionMessage(e); FALSE })
     if (!ok) {
-      m <- paste0("'", p, "' does not load in jamovi's R: ", gsub("\n", " ", if (is.null(why)) "?" else why))
-      if (os == "macos") {
-        m <- paste0(m, " -- if its .so passed the otool check, suspect the @executable_path ",
-                    "stand-in symlink the workflow creates, not the build")
-      }
-      if (os != "macos" || MACOS_LOAD_IS_FATAL) fail("Package does not load", m) else note(m)
+      m <- paste0("'", p, "' does not load in jamovi's R: ",
+                  gsub("\n", " ", if (is.null(why)) "?" else why))
+      # Fatal only for what the module OWES a user. A vendored Suggests that will not load in a bare
+      # R process is not evidence it fails inside jamovi -- RhpcBLASctl's OpenMP symbols come from
+      # the host process, and tx_need_pkg() guards it anyway. The otool check above is the strict
+      # half, and it covers every object whether or not this loop can exercise it.
+      if (p %in% REQUIRED) fail("Package does not load", m) else note(m)
     }
   }
   # the REQUIRED contract: available to R once the paths are jamovi's, vendored or bundled

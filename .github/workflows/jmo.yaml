@@ -260,13 +260,17 @@ jobs:
       # which no runner has, so clang dies "ld: framework 'R' not found". openxlsx2 is the only
       # dependency with no binary in the 28 line's snapshot -- give it one, and the compiler then
       # skips it (it installs only what is not already in the build library).
-      # ⚠ Cold cache only: on a warm one the compiler's install_name_tool pass does not run, so a
-      # copy seeded then would never be patched.
+      # ⚠ Keyed on the PACKAGE, not on the cache: a warm cache restored from a run where the source
+      # build failed holds every other dependency and not this one, and a `cache-hit` guard would
+      # then skip exactly the run that needs seeding. openxlsx2 is C++ over Rcpp and links nothing
+      # the compiler patches, so seeding it outside the install_name_tool pass is safe -- and the
+      # otool check in jmo-verify.R is what says so rather than this comment.
       - name: Pre-seed openxlsx2 from a binary (macOS)
-        if: runner.os == 'macOS' && steps.deps.outputs.cache-hit != 'true'
+        if: runner.os == 'macOS'
         run: |
           set -euo pipefail
           mkdir -p '${{ matrix.build_dir }}'
+          if [ -d '${{ matrix.build_dir }}/openxlsx2' ]; then echo "already there"; exit 0; fi
           "$JRSCRIPT" --vanilla -s -e 'install.packages("openxlsx2", lib = commandArgs(TRUE)[[1]],
              repos = "https://packagemanager.posit.co/cran/latest", type = "mac.binary",
              dependencies = c("Depends", "Imports", "LinkingTo"))' --args '${{ matrix.build_dir }}'
