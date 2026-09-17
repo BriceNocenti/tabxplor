@@ -1760,10 +1760,23 @@ absent: the tarball is 1.8 MB and holds zero `build_old` entries either way. `^b
 anyway, for intent, and `^build/js/` lost its trailing slash so it matches the directory as well as
 its contents.
 
-**What remains, in order:** commit; push `ci/jmo` and read the workflow's first real run; tag
-`jmo-2.0.1`, sideload-test a Mac file, publish; re-run the gates (the URL note clears); then the
-release branch, the PR, rhub, win-builder, and the submission. `dev/release_checklist.md` is the
-procedure and now carries all of it.
+✓ **The module is out.** Eight rounds on a `ci/**` branch made the workflow green on all seven,
+`jmo-2.0.1` is published, and `R CMD check(manual, remote, incoming)` is **0/0/0** — the URL note
+cleared the moment the release went public, which is the ordering this phase exists to state. Every
+failure was platform plumbing, not design: Windows `Rscript.exe` writes CRLF; a relocated macOS
+framework needs `R_HOME` and a top-level `R` entry point before `-framework R` will link; a cached R
+library can carry a `00LOCK` from an install that died; and a 400 MB download drops often enough to
+need `--retry-all-errors -C -`. The verifier earned itself twice over, catching a `.jmo` that built
+“successfully” without its Excel exporter, and teaching two lessons of its own — which Suggests
+jamovi bundles differs per line, and `RhpcBLASctl` cannot load outside a host that already has
+OpenMP, so a load failure is fatal only for what the module owes a user.
+
+⚠ **The Mac files are unverified by a sideload** (no Mac here): CI proves they load and compute in
+jamovi's own R, not that jamovi's installer accepts them. Students test them in October, and a
+`jmo-*` tag is re-cut in a day without touching CRAN — which is the namespace's whole point.
+
+**What remains:** the release branch, the PR, rhub, win-builder, and the submission.
+`dev/release_checklist.md` carries all of it.
 
 
 

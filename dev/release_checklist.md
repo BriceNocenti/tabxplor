@@ -11,41 +11,46 @@ The permanent branches:
 ```bash
 git checkout dev && git pull
 
-# 1. Pre-flight on dev. The ORDER matters: each gate reads what the one before it wrote, and the
-#    home pages link to release assets that must exist before anything URL-checks them.
-#    - Version bumped in DESCRIPTION, NEWS.md section finalized
-#    - Home pages regenerated (below), then the jamovi modules published (step 1b), THEN the checks
-#    - Full test suite green (the CLAUDE.md § Testing recipe)
-#    - Second suite green:  OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
-#      (the engine-parity sweeps, the source-tree lint and the seam checks the shipped suite
-#       keeps only a slice of -- see CLAUDE.md § Testing)
-#    - Reverse dependency green:  Rscript dev/revdep_ggfacto.R
-#      (CRAN ggfacto and the local checkout, both R CMD check'ed against this tree -- the CRAN one
-#       still calls the superseded surface, which is how set_type() was caught at 2.0.0)
-#    - urlchecker::url_check(".") clean -- the same tools::check_url_db that R CMD check --as-cran
-#      runs, over DESCRIPTION, README.md, NEWS.md, every Rd and the built vignettes. It is what
-#      catches a .../releases/latest/download/... link whose release has not been published yet,
-#      and a 301, which is also a NOTE.
-#    - devtools::check(manual = TRUE, remote = TRUE, incoming = TRUE) green (the ~4 min release
-#      gate). NONE of the three arguments is optional, and the bare form is misleading:
-#        `manual = TRUE`  -- the default builds no PDF, and "checking PDF version of manual" is the
-#                            only step that catches a glyph LaTeX cannot set. Locally:
-#                            R CMD Rd2pdf --no-preview --force .  Needs HTML Tidy too
-#                            (apt install tidy), or "checking HTML version of manual" only SKIPS.
-#        `incoming = TRUE` -- devtools defaults it to `remote`, i.e. FALSE, so the bare call runs
-#                            NO URL check and NO CRAN-incoming check. It is the only way to see
-#                            locally what CRAN's own incoming machine will say.
-#    - Rscript -e 'pkgdown::check_pkgdown()' clean
-#    - Generated jamovi files regenerated and committed. R/jmvtab*.h.R are compiler output and
-#      they SHIP in the tarball: a stale one makes a declared option read back NULL in the running
-#      module, silently, for a whole release (it happened -- `design_effect`). Refresh them either
-#      with jmvtools::install(home = 'flatpak') on WSL, or by downloading the `generated-files`
-#      artefact from the last jmo workflow run, which needs no local jamovi. Bump
-#      jamovi/0000.yaml's version alongside DESCRIPTION's at the same time: CI overrides it per
-#      build, a local build does not. The gate, which must print nothing:
-#        git status --porcelain -- 'R/*.h.R' inst/i18n jamovi/0000.yaml
-#    - Home pages regenerated from their sources, on dev (dev/ is stripped from the release
-#      branch, and README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
+# 1. Pre-flight on dev, IN THIS ORDER. Each gate reads what the one before it wrote, and the home
+#    pages link to release assets that must exist before anything URL-checks them.
+#
+#    a) Version bumped in DESCRIPTION *and* in jamovi/0000.yaml (hand-duplicated: CI overrides it
+#       per build, a local build does not), NEWS.md section finalized.
+#    b) Generated jamovi files regenerated and committed. R/jmvtab*.h.R are compiler output and
+#       they SHIP in the tarball: a stale one makes a declared option read back NULL in the running
+#       module, silently, for a whole release (it happened -- `design_effect`). Refresh them either
+#       with jmvtools::install(home = 'flatpak') on WSL, or by downloading the `generated-files`
+#       artefact from the last jmo workflow run, which needs no local jamovi. The gate, which must
+#       print nothing:
+#         git status --porcelain -- 'R/*.h.R' inst/i18n jamovi/0000.yaml
+#    c) Home pages regenerated from their sources (dev/ is stripped from the release branch, and
+#       README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
+#    d) >>> step 1b: publish the jamovi modules. Everything below reads the links they provide. <<<
+#    e) Full test suite green (the CLAUDE.md § Testing recipe).
+#    f) Second suite green:  OMP_NUM_THREADS=1 Rscript dev/run_dev_tests.R
+#       (the engine-parity sweeps, the source-tree lint and the seam checks the shipped suite
+#        keeps only a slice of -- see CLAUDE.md § Testing)
+#    g) Reverse dependency green:  Rscript dev/revdep_ggfacto.R
+#       (CRAN ggfacto and the local checkout, both R CMD check'ed against this tree -- the CRAN one
+#        still calls the superseded surface, which is how set_type() was caught at 2.0.0. Its own
+#        "missing Depends: R (>= 4.1.0)" NOTE is ggfacto's, not ours.)
+#    h) urlchecker::url_check(".") clean -- the same tools::check_url_db that R CMD check --as-cran
+#       runs, over DESCRIPTION, README.md, NEWS.md, every Rd and the built vignettes. It is what
+#       catches a .../releases/latest/download/... link whose release is not published yet, and a
+#       301, which is also a NOTE.
+#    i) devtools::check(manual = TRUE, remote = TRUE, incoming = TRUE) green (~4 min). NONE of the
+#       three arguments is optional, and the bare form is misleading:
+#         `manual = TRUE`   -- the default builds no PDF, and "checking PDF version of manual" is
+#                              the only step that catches a glyph LaTeX cannot set. Locally:
+#                              R CMD Rd2pdf --no-preview --force .  Needs HTML Tidy too
+#                              (apt install tidy), or "checking HTML version of manual" only SKIPS.
+#         `incoming = TRUE` -- devtools defaults it to `remote`, i.e. FALSE, so the bare call runs
+#                              NO URL check and NO CRAN-incoming check. It is the only way to see
+#                              locally what CRAN's own incoming machine will say.
+#    j) Rscript -e 'pkgdown::check_pkgdown()' clean.
+#
+#    The push of (a)-(c) also starts R-CMD-check on 5 platforms; that run is the GitHub Actions
+#    link cran-comments.md wants (step 5).
 
 # 1b. Publish the jamovi modules BEFORE the checks and before CRAN.
 #     The home pages link to .../releases/latest/download/<file>, which 404s until a release
@@ -53,9 +58,15 @@ git checkout dev && git pull
 #     R CMD check --as-cran. `jmo-*` is the module's own tag namespace, so `v*` keeps meaning
 #     "a CRAN release" and the module can be rebuilt when a jamovi line moves.
 git tag jmo-x.y.z && git push origin jmo-x.y.z
-#     The jmo workflow builds seven files into a DRAFT release. Sideload-test at least one Mac
-#     file, then publish it -- and only then run the checks above. Publishing does not touch the
-#     site: pkgdown deploys from master only.
+#     The jmo workflow builds the seven files and opens a DRAFT release carrying them. Publishing
+#     does not touch the site: pkgdown deploys from master only.
+#     ⚠ Rehearse on a scratch branch FIRST whenever the workflow, a jamovi line or a dependency has
+#     moved -- `git push origin dev:ci/jmo` builds all seven without creating a release. That is
+#     what `ci/**` is for, and at 2.0.1 it took eight rounds to get green.
+#     ⚠ Sideload-test at least one Mac file if a Mac is at hand. At 2.0.1 none was: CI proves the
+#     files load and compute in jamovi's own R, not that jamovi's installer accepts them, so the
+#     students were the test. That is an acceptable risk precisely because `jmo-*` is independent
+#     of CRAN -- a bad build is re-cut as jmo-x.y.z+1 the same day.
 gh run watch && gh release edit jmo-x.y.z --draft=false
 
 # 2. Branch + strip development-only files
@@ -86,7 +97,9 @@ git push origin --delete release/x.y.z
 git branch -D release/x.y.z   # denied in Claude sessions: run in your own terminal
 
 # 5. CRAN
-#    - Fill the real CI/rhub run links into cran-comments.md (commit on dev)
+#    - Fill the three <FILL> links in cran-comments.md (commit on dev): the R-CMD-check run from
+#      step 1, the rhub run, and the win-builder result mailed to the maintainer address.
+#      ⚠ rhub and win-builder must run AFTER step 1b: they URL-check README.md too.
 #    - devtools::submit_cran() (regenerates CRAN-SUBMISSION) or the web form
 
 # 6. After CRAN acceptance
@@ -103,11 +116,15 @@ gh run watch && gh release edit vx.y.z --draft=false
 ## Notes
 
 - **Every published release must carry the seven `.jmo` files**, because the course links are
-  `.../releases/latest/download/<name>`, and `latest` is the newest published non-prerelease
-  release whatever it holds. Publishing one without them gives students a dead link. A release
-  the workflow *creates* is a draft and triggers nothing; one **you** publish rebuilds the site.
-  To get files to students before CRAN has accepted, tag `vx.y.z-rc1` and publish it as a
-  **pre-release** — which deliberately does not become `latest`, so it needs its own link.
+  `.../releases/latest/download/<name>` and `latest` is the newest published non-prerelease release
+  *whatever it holds*. Publishing one without them gives students a dead link — which is why the
+  workflow refuses an incomplete set and why both `jmo-*` and `v*` tags build the same seven.
+  ⚠ Publishing a release does **not** rebuild the site: `pkgdown.yaml` deliberately has no
+  `release:` trigger, because a release is a tag and the site is `master`'s — publishing a `jmo-*`
+  tagged on `dev` would otherwise replace the live site with a development build.
+- **A module release is not a package release.** `jmo-*` is the module's own namespace, so the
+  seven files can be re-cut the day a jamovi line moves, a build proves bad on a student's machine,
+  or the panel needs a fix — with no CRAN release and no version bump. `v*` stays "a CRAN release".
 - The strip list (step 2) is the single source of truth for "not on master":
   `dev/`, `.claude/`, `.vscode/`, `CLAUDE.md`, `air.toml`. Everything else stays
   (`jamovi/`, `po/`, `vignettes/articles/`, `_pkgdown.yml`, `.github/`,
@@ -120,20 +137,10 @@ gh run watch && gh release edit vx.y.z --draft=false
   -D release/x.y.z` in their own terminal -- twice, once to free the name and once after the
   merge -- and it fails with `cannot delete branch used by worktree` unless the checkout has
   been moved off it (`git checkout dev`).
-- **GitHub Pages is a once-per-repo setup, done AFTER the first merge.** The deploy action
-  creates `gh-pages` itself on the first push to `master`; enabling Pages before that branch
-  exists is refused. Settings -> Pages -> "Deploy from a branch" -> `gh-pages` / `(root)`, or
-  `gh api --method POST repos/<owner>/<repo>/pages -f 'source[branch]=gh-pages' -f
-  'source[path]=/'`. Not "GitHub Actions" (it would mean rewriting `pkgdown.yaml` around
-  `upload-pages-artifact`/`deploy-pages`, diverging from the r-lib template the workflow came
-  from), and never `master`/`docs` -- `docs/` is git-ignored by design. Set the repo `homepage`
-  field to the site URL at the same time, or the sidebar shows no link to it.
-- **The site must be live before step 5.** Every `bricenocenti.github.io` link in the Rd,
-  the README and the vignettes 404 until the pkgdown workflow has deployed from `master` and
-  Pages is enabled, and CRAN's incoming check reports them. Merge, confirm the site answers,
-  then submit. `urlchecker::url_check(".")` (step 1) is the gate: it runs the same
-  `tools::check_url_db` that `R CMD check --as-cran` runs, over the same files, and reports a
-  301 as well as a 404 -- a permanent redirect is also a NOTE.
+- **Two things must be live before step 5**, and one gate covers both: the pkgdown site (every
+  `bricenocenti.github.io` link in the Rd, the README and the vignettes 404 until it has deployed
+  from `master`) and the `jmo-*` release (step 1b). `urlchecker::url_check(".")` is that gate — the
+  same `tools::check_url_db` CRAN runs, over the same files, reporting a 301 as well as a 404.
 - **rhub: the compiler containers say nothing here.** tabxplor has no `src/`, so `clang*`,
   `gcc*`, `c23`, `lto`, `*-asan`, `valgrind` and `rchk` only exercise a toolchain the package
   never uses -- and a stale image there fails on a *dependency* (`clang19`/`clang20` carry an
