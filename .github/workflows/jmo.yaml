@@ -1,0 +1,450 @@
+# PURPOSE: build the sideloadable jamovi module (.jmo) for every system and every jamovi line, and
+#          attach the set to a draft GitHub Release.
+# ROLE: the release path for the jamovi module. A .jmo vendors compiled R packages and carries an
+#   `rVersion` stamp jamovi compares for EXACT equality, so one file per (jamovi line x system) is
+#   needed and none of them can be built from another. The maintainer's local builds stay as
+#   development tools; this is what students download.
+# KEY CONSTRAINTS:
+#   - The two grids in `resolve` are the declared facts: one row per jamovi line, one per system.
+#     Every other value is RESOLVED from jamovi's own versions.json, and both the resolved line and
+#     the R jamovi actually runs are CHECKED against the grid -- so a channel that moves fails by
+#     name, early, instead of shipping a mislabelled file.
+#   - Never a `paths:` filter: combined with `tags:` it silently suppresses tag pushes.
+#   - Never `--patch-version`: it overwrites the module version with the jamovi app version.
+#   - The dependency cache has no `restore-keys`: the compiler skips a package whose DIRECTORY NAME
+#     exists, with no version check, and copies the whole directory into the module -- so a
+#     near-miss restore would ship stale packages in silence. `CACHE_EPOCH` discards the lot.
+#   - Nothing here may reference `dev/`: a release tag points at a master merge commit, and `dev/`
+#     is stripped from master.
+# See: dev/jamovi_library_vs_sideloading.md section 3 (why seven files, what jamovi checks, the
+#   evidence behind every URL here) and .github/scripts/jmo-verify.R (what a green build proves).
+
+name: jmo
+
+on:
+  push:
+    tags: ['v*']
+    branches: ['ci/**']   # a scratch branch: the workflow can be exercised before it reaches master
+  workflow_dispatch:      # usable only once this file is on the default branch, which is how GitHub works
+    inputs:
+      solid_version:
+        description: 'Override the solid jamovi version (e.g. 2.7.38.0). Empty = versions.json.'
+        required: false
+        type: string
+      current_version:
+        description: 'Override the current jamovi version (e.g. 28.2.0.0). Empty = versions.json.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jmo-${{ github.ref }}
+  # a superseded test run is worth cancelling, a release build is not
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  # its bundled jamovi-compiler accepts jamovi 2.x through 28.x, so one compiler builds both lines
+  JMVTOOLS_VERSION: "28.3"
+  # bump by hand to discard every dependency cache -- see the header
+  CACHE_EPOCH: "1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  resolve:
+    name: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.fold.outputs.matrix }}
+      linux: ${{ steps.fold.outputs.linux }}
+      module_version: ${{ steps.fold.outputs.module_version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Fold the grids with jamovi's published versions
+        id: fold
+        env:
+          SOLID_OVERRIDE: ${{ inputs.solid_version }}
+          CURRENT_OVERRIDE: ${{ inputs.current_version }}
+        run: |
+          set -euo pipefail
+
+          # One row per jamovi line tabxplor ships for. `r` is the R that line MUST bundle: the
+          # .jmo's rVersion stamp is built from it and jamovi compares it for exact equality.
+          lines='[ { "channel": "solid",   "line": "2.7", "r": "4.5.0" },
+                   { "channel": "current", "line": "28",  "r": "4.6.0" } ]'
+
+          # One row per system a .jmo is built for. `key` indexes jamovi's versions.json, `ext` is
+          # its installer format, `arch`/`plat` are what the compiler names its build library.
+          systems='[ { "platform": "macos-arm64", "os": "macos-latest",   "ext": "dmg", "key": "macos", "arch": "arm64", "plat": "macos" },
+                     { "platform": "macos-x64",   "os": "macos-15-intel", "ext": "dmg", "key": "macos", "arch": "x64",   "plat": "macos" },
+                     { "platform": "win-x64",     "os": "windows-latest", "ext": "zip", "key": "win64", "arch": "x64",   "plat": "win64" },
+                     { "platform": "linux-x64",   "os": "ubuntu-latest",  "ext": "",    "key": "linux", "arch": "x64",   "plat": "linux" } ]'
+
+          curl -fsSL --retry 3 -o versions.json https://www.jamovi.org/versions.json
+          cat versions.json
+
+          cat > fold.jq <<'JQ'
+          . as $v
+          | [ $L[] as $l | $S[] as $s
+              | (if   $l.channel == "solid"   and ($sv | length) > 0 then $sv
+                 elif $l.channel == "current" and ($cv | length) > 0 then $cv
+                 else $v[$s.key][$l.channel] end) as $ver
+              | select($ver != null)                      # a line a system does not have is skipped
+              | ($ver | split(".")) as $p
+              | (if ($p[0] | tonumber) < 3 then "\($p[0]).\($p[1])" else $p[0] end) as $got
+              | if $got != $l.line
+                then error("jamovi channel \($l.channel) is now line \($got) (\($ver)); the grid in .github/workflows/jmo.yaml declares \($l.line). Update the grid, and the R version with it.")
+                else $s + { channel: $l.channel, line: $l.line, r: $l.r, version: $ver,
+                            build_dir: "build/R\($l.r)-\($s.arch)-\($s.plat)",
+                            jmo: "tabxplor_jamovi-\($l.line)_\($s.platform).jmo" } end ]
+          JQ
+
+          rows=$(jq -c --argjson L "$lines" --argjson S "$systems" \
+                       --arg sv "${SOLID_OVERRIDE:-}" --arg cv "${CURRENT_OVERRIDE:-}" \
+                       -f fold.jq versions.json)
+          echo "matrix=$(jq -c '[ .[] | select(.plat != "linux") ]' <<<"$rows")" >> "$GITHUB_OUTPUT"
+          echo "linux=$(jq -c '[ .[] | select(.plat == "linux") ][0]'   <<<"$rows")" >> "$GITHUB_OUTPUT"
+
+          ver=$(awk '/^Version:/ { print $2 }' DESCRIPTION)
+          echo "module_version=$ver" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### jamovi versions resolved"
+            echo
+            echo "| channel | line | R | jamovi | file |"
+            echo "|---|---|---|---|---|"
+            jq -r '.[] | "| \(.channel) | \(.line) | \(.r) | \(.version) | \(.jmo) |"' <<<"$rows"
+            echo
+            echo "Module version, from \`DESCRIPTION\`: \`$ver\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # The tracked jamovi/0000.yaml version is hand-copied; the build overwrites it from
+          # DESCRIPTION, so this is a nudge to keep the repo honest, never a gate.
+          tracked=$(awk '/^version:/ { print $2; exit }' jamovi/0000.yaml)
+          if [ "$tracked" != "$ver" ]; then
+            echo "::notice::jamovi/0000.yaml says version $tracked, DESCRIPTION says $ver. The built files carry $ver; the tracked value is stale."
+          fi
+
+  build:
+    name: jamovi ${{ matrix.line }} / ${{ matrix.platform }}
+    needs: resolve
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.resolve.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: State the module version once, from DESCRIPTION
+        run: |
+          set -euo pipefail
+          ver='${{ needs.resolve.outputs.module_version }}'
+          awk -v v="$ver" 'BEGIN { d = 0 }
+                           /^version:/ && d == 0 { print "version: " v; d = 1; next }
+                           { print }' jamovi/0000.yaml > 0000.tmp
+          mv 0000.tmp jamovi/0000.yaml
+          grep '^version:' jamovi/0000.yaml
+
+      - name: Download jamovi ${{ matrix.version }}
+        env:
+          # the CDN turns away requests without browser-like headers
+          UA: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+        run: |
+          set -euo pipefail
+          exts='${{ matrix.ext }}'
+          # 28.x's Windows installer format is unconfirmed (2.7.38 ships a .zip): probe both
+          if [ "$RUNNER_OS" = "Windows" ]; then exts="zip exe"; fi
+          url=""
+          for host in archives.jamovi.org dl-cdn.jamovi.org; do
+            for ext in $exts; do
+              cand="https://$host/jamovi-${{ matrix.version }}-${{ matrix.platform }}.$ext"
+              if curl -fsI -A "$UA" -H "Referer: https://www.jamovi.org/" "$cand" > /dev/null 2>&1; then
+                url="$cand"; echo "JAMOVI_EXT=$ext" >> "$GITHUB_ENV"; break 2
+              fi
+            done
+          done
+          if [ -z "$url" ]; then
+            echo "::error title=No installer::no jamovi installer answered for ${{ matrix.version }} / ${{ matrix.platform }} (tried '$exts' on archives.jamovi.org and dl-cdn.jamovi.org). Re-run with the solid_version / current_version input set to a version the archive still holds."
+            exit 1
+          fi
+          echo "downloading $url"
+          curl -fL --retry 3 --max-time 1800 -A "$UA" -H "Referer: https://www.jamovi.org/" \
+            -o "$RUNNER_TEMP/jamovi-dist.${url##*.}" "$url"
+
+      - name: Unpack jamovi
+        run: |
+          set -euo pipefail
+          f="$RUNNER_TEMP/jamovi-dist.$JAMOVI_EXT"
+          case "$JAMOVI_EXT" in
+            dmg)
+              # tail, not head: head closes the pipe early and `pipefail` would call that a failure
+              mnt=$(hdiutil attach -nobrowse -readonly "$f" | grep -o '/Volumes/.*' | tail -1)
+              cp -R "$mnt/jamovi.app" "$RUNNER_TEMP/jamovi.app"
+              hdiutil detach "$mnt" -quiet || true
+              home="$RUNNER_TEMP/jamovi.app"
+              rscript="$home/Contents/Frameworks/R.framework/Versions/Current/Resources/bin/Rscript"
+              # `@executable_path` in a patched load command is jamovi's MacOS/ directory; run from
+              # R it is R's own bin/, so stand in for it. Both spellings, because Rscript may or may
+              # not have exec'd into bin/exec/R yet. See .github/scripts/jmo-verify.R.
+              fw="$home/Contents/Frameworks"
+              rhome="$home/Contents/Frameworks/R.framework/Versions/Current/Resources"
+              ln -sfn "$fw" "$rhome/Frameworks"
+              ln -sfn "$fw" "$rhome/bin/Frameworks" ;;
+            zip|exe)
+              if [ "$JAMOVI_EXT" = zip ]; then
+                7z x -y -o"$RUNNER_TEMP/jamovi-dist" "$f" > /dev/null
+              else
+                # NSIS silent install; /D= must come last and unquoted, and returns before it ends
+                MSYS2_ARG_CONV_EXCL='*' "$f" /S /D=C:\\jamovi
+                for _ in $(seq 60); do if [ -f "C:/jamovi/jamovi.exe" ]; then break; fi; sleep 5; done
+              fi
+              # Never assume the archive's layout: find the executable, then take the directory the
+              # compiler calls `home` -- it accepts jamovi.exe either at its root or under bin/.
+              exe=$(find "$RUNNER_TEMP/jamovi-dist" C:/jamovi -name jamovi.exe -print -quit 2> /dev/null || true)
+              [ -n "$exe" ] || { echo "::error title=No jamovi.exe::the Windows archive did not unpack to a recognisable jamovi tree"; exit 1; }
+              d=$(dirname "$exe")
+              if [ "$(basename "$d")" = "bin" ]; then d=$(dirname "$d"); fi
+              home=$(cygpath -m "$d")
+              rscript="$home/Frameworks/R/bin/x64/Rscript.exe" ;;
+          esac
+          [ -x "$rscript" ] || [ -f "$rscript" ] || {
+            echo "::error title=jamovi's R not where the compiler looks::expected $rscript. The archive layout changed; the compiler hard-codes this path and would fail too."
+            exit 1; }
+          echo "JAMOVI_HOME=$home" >> "$GITHUB_ENV"
+          echo "JRSCRIPT=$rscript" >> "$GITHUB_ENV"
+
+      # Checked before the thirty-minute part, and the only place the compiler's bare TypeError on
+      # an unknown R version is turned into a sentence.
+      - name: Check jamovi's R against the grid
+        run: |
+          set -euo pipefail
+          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")')
+          case "$arch" in aarch64) a=arm64 ;; x86_64) a=x64 ;; *) a="$arch" ;; esac
+          if [ "$rv" != '${{ matrix.r }}' ] || [ "$a" != '${{ matrix.arch }}' ]; then
+            echo "::error title=The grid is stale (${{ matrix.channel }})::jamovi ${{ matrix.version }} runs R $rv-$a, the grid declares ${{ matrix.r }}-${{ matrix.arch }}. Building now would stamp a .jmo no jamovi accepts."
+            exit 1
+          fi
+          case "$rv" in
+            4.0.2|4.0.5|4.1.1|4.1.2|4.1.3|4.3.2|4.4.1|4.5.0|4.6.0) ;;
+            *) echo "::error title=No package snapshot for R $rv::the compiler in jmvtools ${JMVTOOLS_VERSION} knows snapshots for 4.0.2 4.0.5 4.1.1 4.1.2 4.1.3 4.3.2 4.4.1 4.5.0 4.6.0 only, and dies on the rest with a bare TypeError. A newer jmvtools is needed."; exit 1 ;;
+          esac
+          echo "jamovi ${{ matrix.version }} runs R $rv-$a, as declared."
+
+      - name: Restore the dependency library
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ matrix.build_dir }}
+          # no restore-keys, deliberately: see the file header
+          key: jmo-${{ env.CACHE_EPOCH }}-${{ matrix.platform }}-R${{ matrix.r }}-${{ hashFiles('DESCRIPTION') }}
+
+      - name: Fetch the compiler, inside the jmvtools source tarball
+        run: |
+          set -euo pipefail
+          TMP=$(cygpath -u "$RUNNER_TEMP" 2> /dev/null || echo "$RUNNER_TEMP")
+          curl -fsSL --retry 3 -o "$TMP/jmvtools.tar.gz" \
+            "https://repo.jamovi.org/src/contrib/jmvtools_${JMVTOOLS_VERSION}.tar.gz"
+          tar xzf "$TMP/jmvtools.tar.gz" -C "$TMP"
+          echo "JMC=$TMP/jmvtools/inst/node_modules/jamovi-compiler/index.js" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          node "$JMC" --build . --home "$JAMOVI_HOME" --jmo '${{ matrix.jmo }}' \
+            --assume-app-version '${{ matrix.version }}'
+
+      # Saved even when the build or the verification failed: a cold macOS build spends its time
+      # compiling openxlsx2, and throwing that away on a verification failure costs the next run.
+      - name: Save the dependency library
+        if: always() && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ matrix.build_dir }}
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+
+      - name: Verify, in jamovi's own R
+        run: |
+          set -euo pipefail
+          # --vanilla: never read a user .Renviron, which is how a foreign R library wins silently
+          "$JRSCRIPT" --vanilla .github/scripts/jmo-verify.R \
+            '${{ matrix.jmo }}' "$JAMOVI_HOME" '${{ matrix.platform }}' \
+            '${{ matrix.r }}' '${{ needs.resolve.outputs.module_version }}'
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jmo-${{ matrix.line }}-${{ matrix.platform }}
+          path: ${{ matrix.jmo }}
+          if-no-files-found: error
+
+  # Linux has no solid line, and jamovi for Linux ships only through Flathub: build with the flatpak
+  # jamovi, whose sandbox sees $HOME -- where the runner's workspace lives.
+  build-linux:
+    name: jamovi ${{ fromJSON(needs.resolve.outputs.linux).line }} / linux-x64
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      LLINE: ${{ fromJSON(needs.resolve.outputs.linux).line }}
+      LR: ${{ fromJSON(needs.resolve.outputs.linux).r }}
+      JMO: ${{ fromJSON(needs.resolve.outputs.linux).jmo }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install jamovi and the Sdk its runtime needs
+        run: |
+          set -euo pipefail
+          sudo apt-get update && sudo apt-get install -y flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.jamovi.jamovi
+          # `--home flatpak` shells out to `flatpak run --devel`, which needs the freedesktop Sdk
+          # matching the app's runtime. Read it from the app; never name a version here.
+          runtime=$(flatpak info --user org.jamovi.jamovi | awk '/Runtime:/ { print $2 }')
+          echo "jamovi runtime: $runtime"
+          flatpak install --user -y --noninteractive flathub "${runtime/Platform/Sdk}"
+          # the appstream Version: field lies (it still says 2.7.27); only --version is truth
+          ver=$(flatpak run org.jamovi.jamovi --version | grep -oEm1 '[0-9]+(\.[0-9]+)+')
+          echo "Flathub serves jamovi $ver"
+          echo "JAMOVI_VERSION=$ver" >> "$GITHUB_ENV"
+          printf '%s\n' '#!/usr/bin/env bash' \
+            'exec flatpak run --devel --command=/app/bin/Rscript org.jamovi.jamovi "$@"' \
+            > "$RUNNER_TEMP/jrscript"
+          chmod +x "$RUNNER_TEMP/jrscript"
+          echo "JRSCRIPT=$RUNNER_TEMP/jrscript" >> "$GITHUB_ENV"
+
+      - name: Check the line and jamovi's R against the grid
+        run: |
+          set -euo pipefail
+          line=$(awk -F. '{ if ($1 < 3) print $1"."$2; else print $1 }' <<<"$JAMOVI_VERSION")
+          if [ "$line" != "$LLINE" ]; then
+            echo "::error title=The grid is stale (current, linux)::Flathub serves jamovi $JAMOVI_VERSION (line $line); the grid declares $LLINE for the current channel."
+            exit 1
+          fi
+          read -r rv arch < <("$JRSCRIPT" --vanilla -e 'cat(as.character(getRversion()), R.version$arch, "\n")')
+          if [ "$rv" != "$LR" ] || [ "$arch" != "x86_64" ]; then
+            echo "::error title=The grid is stale (current, linux)::jamovi $JAMOVI_VERSION runs R $rv-$arch; the grid declares $LR-x64."
+            exit 1
+          fi
+          echo "jamovi $JAMOVI_VERSION runs R $rv-$arch, as declared."
+
+      - name: State the module version once, from DESCRIPTION
+        run: |
+          set -euo pipefail
+          ver='${{ needs.resolve.outputs.module_version }}'
+          awk -v v="$ver" 'BEGIN { d = 0 }
+                           /^version:/ && d == 0 { print "version: " v; d = 1; next }
+                           { print }' jamovi/0000.yaml > 0000.tmp
+          mv 0000.tmp jamovi/0000.yaml
+
+      - name: Restore the dependency library
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ fromJSON(needs.resolve.outputs.linux).build_dir }}
+          key: jmo-${{ env.CACHE_EPOCH }}-linux-x64-R${{ env.LR }}-${{ hashFiles('DESCRIPTION') }}
+
+      - name: Fetch the compiler, inside the jmvtools source tarball
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/jmvtools.tar.gz" \
+            "https://repo.jamovi.org/src/contrib/jmvtools_${JMVTOOLS_VERSION}.tar.gz"
+          tar xzf "$RUNNER_TEMP/jmvtools.tar.gz" -C "$RUNNER_TEMP"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          node "$RUNNER_TEMP/jmvtools/inst/node_modules/jamovi-compiler/index.js" \
+            --build . --home flatpak --jmo "$JMO" --assume-app-version "$JAMOVI_VERSION"
+
+      - name: Save the dependency library
+        if: always() && steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ fromJSON(needs.resolve.outputs.linux).build_dir }}
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+
+      - name: Verify, in jamovi's own R
+        run: |
+          set -euo pipefail
+          "$JRSCRIPT" --vanilla .github/scripts/jmo-verify.R \
+            "$PWD/$JMO" flatpak linux-x64 "$LR" '${{ needs.resolve.outputs.module_version }}'
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jmo-${{ env.LLINE }}-linux-x64
+          path: ${{ env.JMO }}
+          if-no-files-found: error
+
+      # Every build regenerates these from jamovi/*.yaml and jamovi/i18n/*.po into the checkout, so
+      # the .jmo is always in step with the YAML whatever the repo holds. The tracked copies ship in
+      # the CRAN tarball, so hand them back -- as a notice, never a gate, and never a bot commit.
+      # Here only: they are platform-independent, and seven identical notices would be noise.
+      - name: Hand back the generated files
+        if: always()
+        run: |
+          drift=$(git status --porcelain -- 'R/*.h.R' inst/i18n || true)
+          if [ -n "$drift" ]; then
+            git diff -- 'R/*.h.R' inst/i18n > "$RUNNER_TEMP/generated.diff" || true
+            {
+              echo "### Generated files differ from the tracked ones"
+              echo
+              echo '```'
+              echo "$drift"
+              echo '```'
+              echo
+              echo "The build regenerates \`R/*.h.R\` from \`jamovi/*.a.yaml\` and refills"
+              echo "\`inst/i18n/\` from \`jamovi/i18n/*.po\`. A stale \`.h.R\` ships in the CRAN"
+              echo "tarball and makes a declared option read back \`NULL\` in the running module."
+              echo "Download the \`generated-files\` artifact and commit it."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=Generated files drifted::R/*.h.R or inst/i18n/*.json differ from the tracked copies -- see the run summary."
+          fi
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: generated-files
+          path: |
+            R/*.h.R
+            inst/i18n/*.json
+            ${{ runner.temp }}/generated.diff
+          if-no-files-found: warn
+
+  release:
+    name: draft release
+    # all or nothing: a draft carrying five of seven files gives students a dead link, which is
+    # worse than no release at all
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: jmo-*
+          merge-multiple: true
+      - name: Attach the files to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          ls -l tabxplor_jamovi-*.jmo
+          n=$(ls tabxplor_jamovi-*.jmo | wc -l)   # `needs:` already guarantees every job passed
+          [ "$n" -eq 7 ] || { echo "::error title=Incomplete set::$n files, expected 7"; exit 1; }
+          # A release CREATED by this token starts no other workflow, so the draft is left for a
+          # human: publishing it by hand is also what redeploys the pkgdown site.
+          gh release view "$TAG" > /dev/null 2>&1 || gh release create "$TAG" --draft \
+            --title "tabxplor ${TAG#v}" \
+            --notes "jamovi modules to sideload. Pick the file for your jamovi line (About box: 2.7.x is *solid*, 28.x is *current*) and for your computer."
+          gh release upload "$TAG" tabxplor_jamovi-*.jmo --clobber
+          echo "Draft release $TAG carries $n .jmo files. Publish it by hand." >> "$GITHUB_STEP_SUMMARY"

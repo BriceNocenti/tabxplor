@@ -22,6 +22,14 @@ git checkout dev && git pull
 #      step that catches a glyph LaTeX cannot set. Locally: R CMD Rd2pdf --no-preview --force .
 #      Needs HTML Tidy too (apt install tidy), or "checking HTML version of manual" only SKIPS.
 #    - Rscript -e 'pkgdown::check_pkgdown()' clean
+#    - Generated jamovi files regenerated and committed. R/jmvtab*.h.R are compiler output and
+#      they SHIP in the tarball: a stale one makes a declared option read back NULL in the running
+#      module, silently, for a whole release (it happened -- `design_effect`). Refresh them either
+#      with jmvtools::install(home = 'flatpak') on WSL, or by downloading the `generated-files`
+#      artefact from the last jmo workflow run, which needs no local jamovi. Bump
+#      jamovi/0000.yaml's version alongside DESCRIPTION's at the same time: CI overrides it per
+#      build, a local build does not. The gate, which must print nothing:
+#        git status --porcelain -- 'R/*.h.R' inst/i18n jamovi/0000.yaml
 #    - Home pages regenerated from their sources, on dev (dev/ is stripped from the release
 #      branch, and README.md ships):  OMP_NUM_THREADS=1 Rscript dev/build_readmes.R
 
@@ -59,10 +67,22 @@ git branch -D release/x.y.z   # denied in Claude sessions: run in your own termi
 # 6. After CRAN acceptance
 git tag vx.y.z <merge-commit-sha>
 git push origin vx.y.z
+
+# 7. The jamovi modules
+#    The tag starts .github/workflows/jmo.yaml, which builds the seven .jmo files and opens a
+#    DRAFT release carrying them. Sideload-test at least one Mac file, then publish the draft
+#    by hand -- publishing is also what redeploys the pkgdown site.
+gh run watch    # then: gh release view vx.y.z
 ```
 
 ## Notes
 
+- **Every published release must carry the seven `.jmo` files**, because the course links are
+  `.../releases/latest/download/<name>`, and `latest` is the newest published non-prerelease
+  release whatever it holds. Publishing one without them gives students a dead link. A release
+  the workflow *creates* is a draft and triggers nothing; one **you** publish rebuilds the site.
+  To get files to students before CRAN has accepted, tag `vx.y.z-rc1` and publish it as a
+  **pre-release** — which deliberately does not become `latest`, so it needs its own link.
 - The strip list (step 2) is the single source of truth for "not on master":
   `dev/`, `.claude/`, `.vscode/`, `CLAUDE.md`, `air.toml`. Everything else stays
   (`jamovi/`, `po/`, `vignettes/articles/`, `_pkgdown.yml`, `.github/`,

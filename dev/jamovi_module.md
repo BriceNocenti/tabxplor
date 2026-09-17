@@ -80,12 +80,22 @@ tabxplor's module is `usesNative: true`, embedded in the R package (`R/jmvtab.b.
 
 ### 2.1 Install
 
-⚠ **A `.jmo` is tied to OS + arch + jamovi series, so there are two build paths and they are not
-interchangeable.** Edit source in **one place only** — WSL — and build the Windows bundle from a
-pulled copy. The installed versions, the two checkouts, the pinned `jmvtools`, the required
+⚠ **A `.jmo` is tied to OS + arch + jamovi series, so there are three build paths and they are not
+interchangeable.** The **release** path is CI: `.github/workflows/jmo.yaml` builds all seven files —
+macOS arm64 and Intel, Windows and Linux, on both jamovi lines — and drafts a release carrying them
+(`dev/jamovi_library_vs_sideloading.md` §3.4). The two local paths are development tools: **WSL**,
+where source is edited and `jmvtools::install(home = 'flatpak')` gives a two-minute loop into the
+running app, and **Windows**, kept for testing a real solid-line app. Edit source in **one place
+only** — WSL. The installed versions, the two checkouts, the pinned `jmvtools`, the required
 freedesktop SDK and the two environment traps that will otherwise waste a day
 (`ELECTRON_RUN_AS_NODE`, a version-pinned `R_LIBS_USER` in `~/.Renviron`) are all stated in
 **`CLAUDE.md` § Jamovi module development**, which owns them. Read that before installing anything.
+
+⚠ **A build EMPTIES `inst/i18n/` and refills it from `jamovi/i18n/*.po`, and rewrites `R/*.h.R` and
+`jamovi/0000.yaml` in the source tree** — harmless in CI's throwaway checkout, not harmless here:
+`jmvtools::prepare()` empties that tracked directory *without* refilling it (§2.4). CI uploads the
+regenerated files as its `generated-files` artefact, which is the way to refresh them without a
+local jamovi.
 
 ⚙ **The Windows build is scripted**: `Rscript dev/build_jmo_windows.R`, run on Windows. It clones
 the current branch into a **throwaway temp folder** (not the `D:\` checkout), pins `jmvtools`,

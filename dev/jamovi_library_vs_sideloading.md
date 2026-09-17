@@ -10,8 +10,9 @@ KEY CONSTRAINTS:
     on the 2.6.44 dev-console capture in `dev/jamovi/dev_console_live_capture/`, on the jamovi-compiler
     bundled in jmvtools 28.2 and 28.3 -- or cited to a URL. Web facts were read on 2026-09-17 and age
     fast (runner labels, CI free tiers, jamovi download names).
-  - NOTHING here has been built or run on a Mac. The CI workflow of section 3.4 (macOS, Windows, Linux)
-    is a sketch until its first green run AND a sideload test of each file.
+  - NOTHING here has been built or run on a Mac. The CI workflow of section 3.4 exists
+    (`.github/workflows/jmo.yaml`), but a Mac file it produces is proven only until its first green
+    run AND a sideload test on a real Mac.
   - The jamovi team's two reports (`dev/jamovi/2026-09-16*.md`) come from an automated reviewer reading
     `master` at 2.0.0. Section 4 checks every finding against the code and jamovi's own builds instead
     of taking it as given -- three of them are wrong, two are real bugs.
@@ -46,7 +47,7 @@ Taken by the maintainer on 2026-09-17, after this document's first version; noth
 
 **`print_ready` is APA in spirit, not in letter.** No colour, a note explaining every device, and even bold and italic are APA (with that note). Underline, grey ink, vertical rules, composite cells, stars at `.10/.05/.01`, p-values printed as percentages and leading zeros on bounded statistics are not.
 
-**macOS builds are solved, for free, by a proven pattern.** The jamovi compiler builds a `.jmo` from the R inside a downloaded jamovi, without R on the machine and without opening the app. Three public modules already do it on GitHub's free macOS runners (arm64, and Intel until about August 2027), green in August–September 2026, one of them publishing per-platform files to its students as GitHub Release assets. Because jamovi's download page recommends *solid* (2.7.38, R 4.5.0) and a sideloaded module is disabled unless its R stamp matches the app's exactly, tabxplor needs both lines: four Mac files. rhub adds nothing; a Mac-less assembly on Linux is possible in principle but unnecessary.
+**macOS builds are built, for free, on a proven pattern** (`.github/workflows/jmo.yaml`, 2.0.1 phase 16). The jamovi compiler builds a `.jmo` from the R inside a downloaded jamovi, without R on the machine and without opening the app. Three public modules already do it on GitHub's free macOS runners (arm64, and Intel until about August 2027), green in August–September 2026, one of them publishing per-platform files to its students as GitHub Release assets. Because jamovi's download page recommends *solid* (2.7.38, R 4.5.0) and a sideloaded module is disabled unless its R stamp matches the app's exactly, tabxplor needs both lines: four Mac files. rhub adds nothing; a Mac-less assembly on Linux is possible in principle but unnecessary.
 
 **The two review reports sort into four piles.** The jamovi team's automated audit and visual inspection make twenty findings, two of them the same. Checked one by one against the code, jamovi 28.2 and jamovi's own library builds:
 
@@ -63,7 +64,7 @@ Taken by the maintainer on 2026-09-17, after this document's first version; noth
 | `print_ready` on a native table?          | ≈ `print_marks` yes (symbols); `print_emphasis` no       |
 | Native APA default + colour `Html` opt-in | ✓ technically; acceptance to negotiate                   |
 | Is `print_ready` APA?                     | ≈ semantics, bold, italic yes; underline, grey, rules no |
-| Mac `.jmo` without a Mac                  | ✓ GitHub Actions, free, Release assets                   |
+| Mac `.jmo` without a Mac                  | ✓ GitHub Actions, free, Release assets — built            |
 | Grey on a native table?                   | ✗ no route, not APA → italic with a note                 |
 | Bold reference rows and columns?          | ✗ today → upstream format bit; a note letter meanwhile   |
 | Borders set by the module?                | ✗ fixed rules → white space, separate tables             |
@@ -298,7 +299,7 @@ Seven files cover every student; the three solid ones (Windows, both Macs) cover
 
 So a build for jamovi 28.x compiles exactly one package from source (`openxlsx2`, C++ through Rcpp — no Fortran), which the Xcode command-line tools should cover; the solid build compiles nothing. jamovi ships those Posit binaries unchanged: in the library's own macOS arm64 build of SummaryTables, `bit.so` is byte-identical to Posit's `bit_4.6.0.tgz` at the same snapshot.
 
-### 3.4 Route A — GitHub Actions (decided, for every platform)
+### 3.4 Route A — GitHub Actions (built: `.github/workflows/jmo.yaml`)
 
 **The runners** (GitHub documentation, 2026-09-17). Standard hosted runners are free and unlimited for public repositories:
 
@@ -311,16 +312,14 @@ So a build for jamovi 28.x compiles exactly one package from source (`openxlsx2`
 | `macos-26-intel`              | x86_64       | 4 / 14 GB  | GA 2026-02-26; no separate end date published        |
 | `-large` / `-xlarge` variants | either       | more       | ✗ always billed, even on public repositories         |
 
-Limits that matter here: 6 h per job, at most 5 concurrent macOS jobs on the Free plan. Rosetta 2 is installed on the arm64 images.
+Limits that matter here: 6 h per job, at most 5 concurrent macOS jobs on the Free plan — the workflow runs four. Rosetta 2 is installed on the arm64 images.
 
 **Getting the file out.** Two mechanisms, and for students only one of them works:
 
-- **A workflow artifact** (`actions/upload-artifact@v7`, and since 2026-02-26 `archive: false` uploads a single file unzipped). Downloading it requires a GitHub login; retention is 90 days. Good for the maintainer's own testing.
-- **A GitHub Release asset** (`gh release upload <tag> <file> --clobber`, or `softprops/action-gh-release`). A public, permanent URL of the form `https://github.com/BriceNocenti/tabxplor/releases/download/<tag>/<file>`, no login, 2 GiB per file. **This is the student link.**
+- **A workflow artifact** (`actions/upload-artifact`). Downloading it requires a GitHub login; retention is 90 days. Good for the maintainer's own testing.
+- **A GitHub Release asset.** A public, permanent URL of the form `https://github.com/BriceNocenti/tabxplor/releases/download/<tag>/<file>`, no login, 2 GiB per file. **This is the student link.**
 
-**Triggers.** `workflow_dispatch` (a *Run workflow* button) and a tag push. ⚠ A `workflow_dispatch` workflow must exist on the **default branch** (`master`) to be runnable; it can then build `dev` through the branch selector or `gh workflow run jmo.yaml --ref dev`.
-
-**It has been done — three public precedents** (GitHub, read on 2026-09-17):
+**It had been done — three public precedents** (GitHub, read on 2026-09-17), and the workflow is adapted from the first:
 
 | Module                | What it builds                        | Record                                         |
 |-----------------------|---------------------------------------|------------------------------------------------|
@@ -328,164 +327,30 @@ Limits that matter here: 6 h per job, at most 5 concurrent macOS jobs on the Fre
 | `usyd-soles-edu/miso` | the same three, SHA-256 pinned        | green 2026-09-12; artifacts only               |
 | `torryscott/pandion`  | macOS arm64 + Windows, **2.7 and 28** | green 2026-09-14; stamp `4.6.0-arm64`          |
 
-Randomize and miso use the leanest recipe, and it is the one to copy: download jamovi's own installer, mount it, fetch the `jmvtools` source tarball, and run the compiler inside it with the runner's `node` — **no R, no jmvtools installation, no jamovi launch**. Two details are not in any documentation: jamovi's CDN refuses a download without a browser user-agent and a `Referer`, and `dl.jamovi.org` no longer resolves (`dl-cdn.jamovi.org` and `archives.jamovi.org` do; the latter keeps old versions). Pandion's detour for 28.x (installing jmvtools into jamovi's own R) is only needed because it uses the standalone compiler, which refuses 28.
+Their recipe is the lean one: download jamovi's own installer, unpack it, fetch the `jmvtools` source tarball, and run the compiler inside it with the runner's `node` — **no R, no jmvtools installation, no jamovi launch**. Two details are in no documentation: jamovi's CDN refuses a download without a browser user-agent and a `Referer`, and `dl.jamovi.org` no longer resolves (`dl-cdn.jamovi.org` and `archives.jamovi.org` do; the latter keeps old versions). Pandion's detour for 28.x is only needed because it uses the standalone compiler, which refuses 28.
 
-**The workflow for tabxplor**, adapted from Randomize to both lines, to stable asset names and — for Linux — from jwellplate's flatpak route. ⚠ Untested for tabxplor; its first run is the test.
+#### What tabxplor's workflow does beyond that recipe
 
-```yaml
-# .github/workflows/jmo.yaml -- sideloadable .jmo files for macOS, Windows and Linux, every jamovi line.
-# Must live on the default branch (master) to be runnable by hand; `--ref dev` then builds dev.
-name: jmo
+Four jobs — `resolve`, `build` (6), `build-linux`, `release` — in `.github/workflows/jmo.yaml`, whose header states the traps. Three departures from the precedents, each for a reason this document measured:
 
-on:
-  workflow_dispatch:
-  push:
-    tags: ['v*']
+- **Versions are resolved, the stamp is declared.** The precedents pin `JAMOVI_VERSION` and rot. Every `2.7.x` produces the same `4.5.0-*` stamp (§3.1), so the patch is a build detail and only the URL needs one: `resolve` reads `versions.json` for the `solid` and `current` channels, derives the line, and two grids — one row per line with the R it must bundle, one row per system — say what that must be. A channel that moves line, or a line whose R changes, fails **by name**, at the fold or at the two-minute R probe, instead of stamping a file no jamovi accepts. It is the package's own foreign-key-checked-at-load rule; the Linux job checks the flatpak it installed the same way. `workflow_dispatch` takes a version override for the day the archive drops one.
+- **It proves the file loads.** The precedents check that the `.jmo` is not suspiciously small. That cannot see the failure that matters here: a Mac build whose compiled dependencies do not load, which is what the compiler's `install_name_tool` pass exists to prevent and never tests. `.github/scripts/jmo-verify.R` — one R script, run by jamovi's *own* R on the system that built the file, against the *unzipped* `.jmo` — resolves every macOS load command against the app (the strict, static half), then pins `.libPaths()`, loads every vendored package and runs `tab()`, `tab_reg()`, `tab_xl()` and `jmvtab()`. ⚠ It also asserts a declared **required set** of packages, because `install.packages()` reports a failed *source* build as a warning: the compiler can finish and write a perfectly valid `.jmo` with `openxlsx2` simply missing, and nothing else in the chain would notice.
+- **A draft release, and the seven files or none.** `gh` rather than a third-party action; `gh release create --draft` if the tag has none, then `gh release upload --clobber`. The maintainer publishes it, which is also what redeploys the pkgdown site — a release *created* by the workflow's `GITHUB_TOKEN` triggers nothing. The job refuses an incomplete set: after publishing, a `…/releases/latest/download/…` link that is missing its file is a dead link, which is worse than no release.
 
-permissions:
-  contents: read
+Two smaller decisions: the jamovi installer is **not** cached (six ~400 MB entries against a 10 GB repo budget would evict the dependency caches that actually cost minutes), while the compiler's own build library **is**, keyed on `DESCRIPTION` with no `restore-keys` — it skips a package whose directory name exists, with no version check, and copies the whole directory into the module, so a near-miss restore would ship a stale dependency in silence; `CACHE_EPOCH` discards the lot. And `jamovi/0000.yaml`'s `version:`, hand-copied and already drifted from `DESCRIPTION`, is rewritten from `DESCRIPTION` in the checkout before every build and never committed, so a development build is stamped `2.0.0.9000` and is visibly not the release.
 
-env:
-  JMVTOOLS_VERSION: "28.3"   # its compiler accepts jamovi 2.x to 28.x
-
-jobs:
-  build:
-    name: jamovi ${{ matrix.line }} / ${{ matrix.platform }}
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { line: "2.7", jamovi: "2.7.38.0", os: macos-latest,   platform: macos-arm64, ext: dmg }
-          - { line: "2.7", jamovi: "2.7.38.0", os: macos-15-intel, platform: macos-x64,   ext: dmg }
-          - { line: "2.7", jamovi: "2.7.38.0", os: windows-latest, platform: win-x64,     ext: zip }
-          - { line: "28",  jamovi: "28.2.0.0", os: macos-latest,   platform: macos-arm64, ext: dmg }
-          - { line: "28",  jamovi: "28.2.0.0", os: macos-15-intel, platform: macos-x64,   ext: dmg }
-          - { line: "28",  jamovi: "28.2.0.0", os: windows-latest, platform: win-x64,     ext: zip }
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/cache@v4
-        id: cache
-        with:
-          path: ${{ runner.temp }}/jamovi.${{ matrix.ext }}
-          key: jamovi-${{ matrix.jamovi }}-${{ matrix.platform }}
-
-      - name: Download jamovi
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: |
-          # the CDN turns away requests without browser-like headers
-          curl -fL --retry 3 --max-time 900 \
-            -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36" \
-            -H "Referer: https://www.jamovi.org/" \
-            -o "$RUNNER_TEMP/jamovi.${{ matrix.ext }}" \
-            "https://archives.jamovi.org/jamovi-${{ matrix.jamovi }}-${{ matrix.platform }}.${{ matrix.ext }}"
-
-      - name: Unpack jamovi
-        run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            7z x -y -o"$RUNNER_TEMP/jamovi-dist" "$RUNNER_TEMP/jamovi.zip" > /dev/null
-            echo "JAMOVI_HOME=$(cygpath -m "$RUNNER_TEMP")/jamovi-dist/jamovi" >> "$GITHUB_ENV"
-          else
-            mnt=$(hdiutil attach -nobrowse -readonly "$RUNNER_TEMP/jamovi.dmg" | grep -o '/Volumes/.*' | head -1)
-            cp -R "$mnt/jamovi.app" "$RUNNER_TEMP/jamovi.app"
-            hdiutil detach "$mnt" -quiet || true
-            echo "JAMOVI_HOME=$RUNNER_TEMP/jamovi.app" >> "$GITHUB_ENV"
-          fi
-
-      - name: Fetch the compiler (inside the jmvtools source tarball)
-        run: |
-          TMP=$(cygpath -u "$RUNNER_TEMP" 2>/dev/null || echo "$RUNNER_TEMP")
-          curl -fsSL --retry 3 -o "$TMP/jmvtools.tar.gz" \
-            "https://repo.jamovi.org/src/contrib/jmvtools_${JMVTOOLS_VERSION}.tar.gz"
-          tar xzf "$TMP/jmvtools.tar.gz" -C "$TMP"
-
-      - name: Build
-        run: |
-          OUT="tabxplor_jamovi-${{ matrix.line }}_${{ matrix.platform }}.jmo"
-          node "$RUNNER_TEMP/jmvtools/inst/node_modules/jamovi-compiler/index.js" \
-            --build . --home "$JAMOVI_HOME" --jmo "$OUT"
-          [ "$(wc -c < "$OUT")" -gt 5000000 ] || { echo "suspiciously small .jmo"; exit 1; }
-          # the stamp, in the log (7z on the Windows runner, unzip on macOS)
-          { unzip -p "$OUT" tabxplor/jamovi.yaml 2>/dev/null || 7z x -so "$OUT" tabxplor/jamovi.yaml; } | grep '^rVersion'
-          echo "JMO=$OUT" >> "$GITHUB_ENV"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: ${{ env.JMO }}
-          archive: false
-          if-no-files-found: error
-
-  # Linux has no solid line, and jamovi for Linux ships only through Flathub: build with the flatpak
-  # jamovi, whose sandbox sees $HOME -- where the runner's workspace lives.
-  build-linux:
-    name: jamovi 28 / linux-x64
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install jamovi and the Sdk its runtime needs
-        run: |
-          sudo apt-get update && sudo apt-get install -y flatpak
-          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive flathub org.jamovi.jamovi
-          # `--devel` needs the Sdk matching jamovi's runtime (25.08 for 28.2); read it, never hard-code it
-          runtime=$(flatpak info --user org.jamovi.jamovi | awk '/Runtime:/ {print $2}')
-          flatpak install --user -y --noninteractive flathub "${runtime/Platform/Sdk}"
-          flatpak run org.jamovi.jamovi --version
-
-      - name: Fetch the compiler (inside the jmvtools source tarball)
-        run: |
-          curl -fsSL --retry 3 -o "$RUNNER_TEMP/jmvtools.tar.gz" \
-            "https://repo.jamovi.org/src/contrib/jmvtools_${JMVTOOLS_VERSION}.tar.gz"
-          tar xzf "$RUNNER_TEMP/jmvtools.tar.gz" -C "$RUNNER_TEMP"
-
-      - name: Build
-        run: |
-          OUT="tabxplor_jamovi-28_linux-x64.jmo"
-          node "$RUNNER_TEMP/jmvtools/inst/node_modules/jamovi-compiler/index.js" \
-            --build . --home flatpak --jmo "$OUT"
-          [ "$(wc -c < "$OUT")" -gt 5000000 ] || { echo "suspiciously small .jmo"; exit 1; }
-          unzip -p "$OUT" tabxplor/jamovi.yaml | grep '^rVersion'
-          echo "JMO=$OUT" >> "$GITHUB_ENV"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          path: ${{ env.JMO }}
-          archive: false
-          if-no-files-found: error
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, build-linux]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v3
-        with:
-          files: "tabxplor_jamovi-*.jmo"
-```
-
-The asset names carry the jamovi line and the system but **not** tabxplor's version, so a link of the form `https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-arm64.jmo` never goes stale — Randomize's trick; the release tag records the version. Seven jobs, four of them on macOS (the Free plan runs five at once). The Linux job follows `zindy/jwellplate`, green on 2026-09-16: jamovi and the freedesktop Sdk installed per user through flatpak, then the same compiler with `--home flatpak`, which runs jamovi's own R through `flatpak run --devel`. jamovi's `main` also has a `--home docker:` route, but not the compiler jmvtools 28.3 ships, and a Docker image is not what Linux students install.
+The asset names carry the jamovi line and the system but **not** tabxplor's version, so a link of the form `https://github.com/BriceNocenti/tabxplor/releases/latest/download/tabxplor_jamovi-2.7_macos-arm64.jmo` never goes stale — Randomize's trick; the release tag records the version. The Linux job follows `zindy/jwellplate`, green on 2026-09-16: jamovi and the freedesktop Sdk installed per user through flatpak, then the same compiler with `--home flatpak`, which runs jamovi's own R through `flatpak run --devel`. jamovi's `main` also has a `--home docker:` route, but not the compiler jmvtools 28.3 ships, and a Docker image is not what Linux students install.
 
 **Known risks**, in the order a first run would show them:
 
-- **The download.** URL scheme and header requirements are observed behaviour, not an API; a changed CDN rule breaks step 2 first. On 2026-09-17 all six files of the matrix answered on both `archives.jamovi.org` and `dl-cdn.jamovi.org` (the former keeps every version). The Windows zip is known to unpack to a top-level `jamovi/` for 2.7.38 (Randomize); for 28.2 that is unverified.
-- **`openxlsx2` compiled from source on the 28 line** (section 3.3), through jamovi's R and its `Makeconf` — nobody has shown that path yet. Fallback if it fails: pre-seed the build library, which the compiler skips when a package is already there (`compilerr.js`: `depends.filter(x => installed.indexOf(x) === -1)`) — untar CRAN's current `openxlsx2` binary for R 4.6 into `build/R4.6.0-<arch>-macos/` before the Build step.
+- **The download.** URL scheme and header requirements are observed behaviour, not an API. The workflow probes both hosts and, on Windows, both `.zip` and `.exe`, so a changed rule shows as one named error rather than a wrong guess. ⚠ The Windows archive is known to unpack to a top-level `jamovi/` for 2.7.38 (Randomize); for 28.2 that is unverified, which is why the job **finds** `jamovi.exe` instead of assuming the layout.
+- **`openxlsx2` compiled from source on the 28 line** (§3.3) — through jamovi's R and its `Makeconf`, a path nobody has shown yet. Its quiet failure is caught by the verifier's required set. Fallback: pre-seed the build library, which the compiler skips when a package is already there (`compilerr.js`: `depends.filter(x => installed.indexOf(x) === -1)`) — untar CRAN's current `openxlsx2` binary for R 4.6 into `build/R4.6.0-<arch>-macos` before the build step. ⚠ Pre-seed only on a *cold* cache: the `install_name_tool` pass is guarded by `depends.length > 0`, so on a warm one the pre-seeded copy would never be patched.
+- **macOS dynamic loading.** A patched load command names `@executable_path/../Frameworks/…`, which resolves against *jamovi's* executable; run from R it does not, so the workflow symlinks a stand-in inside the throwaway app copy. That makes the dynamic half pass by construction — which is exactly why the static check is the contract and is kept strict.
 - **`macos-latest` moves.** It is macOS 26 today; the build does not depend on the host macOS, but pin `macos-26` if a future image breaks something.
 - **Intel ends.** `macos-15-intel` is announced as the last Intel image, until August 2027; after that, Intel Macs need Rosetta on arm64 (untested) or no build.
-- **Tags and the site.** The `v*` trigger shares the version tags of the CRAN releases (the planned `v2.0.0` included), which is the point: each package release carries its `.jmo` files. `pkgdown.yaml` also runs on `release: published`, but a release created by this workflow's `GITHUB_TOKEN` starts no other workflow (a GitHub rule), so only a release published by hand redeploys the site.
+- **Tags and the site.** The `v*` trigger shares the version tags of the CRAN releases, which is the point: each package release carries its `.jmo` files. ⚠ The checklist tags only *after* CRAN acceptance, so files reaching students earlier means a `v…-rc1` tag published **as a pre-release** — which deliberately does not become `latest`, and so needs its own version-bearing link.
 - **Linux follows Flathub.** Flathub keeps only a handful of commits, so the Linux job always builds against the *current* jamovi, and the Sdk must match its runtime — which is why the step reads the runtime instead of naming 25.08 (the trap `CLAUDE.md` records for the WSL build). The workspace must stay under `$HOME` for the flatpak sandbox to see it; on GitHub's runners it does.
-- **The first real test is a student's Mac.** A green run proves the file was written, not that it loads: sideload each Mac file once (Apple silicon and Intel, solid and current) and open a Crosstables analysis on real data, before announcing the link.
+- **The first real test is still a student's Mac.** The verifier proves the file loads and computes in jamovi's own R; it does not prove jamovi's *installer* accepts it. Sideload each Mac file once (Apple silicon and Intel, both lines) and open a Crosstables analysis on real data before announcing the link.
 
 ### 3.5 rhub is not a separate route
 
@@ -802,7 +667,7 @@ A timeline, from the decisions of 2026-09-17.
 **Autumn 2026 — the package, and the builds.**
 
 1. ✓ **DONE (2.0.1 phase 15) — the two real bugs** (section 4.4). Wider than reported on both counts. The quoting is one helper, `tx_backtick()`, used by every formula built from names — `svy_design_formula()`, the three `reformulate()` calls of `svy_omnibus_one()`, the multinomial/ordinal LR null model (which was failing silently inside a `tryCatch`) and `reg_fit_formula()`, which hand-backticked — so `tab_reg(wt = "Household weight")` was broken with or without `design_effect`. The escaping is NOT at the jamovi boundary: the html footer renderer escaped only its `esc` tokens and never `>`, so the weight line, the model lines and reference-level names leaked too — `legend_render_line()` now escapes every plain token, which also keeps the `<placeholder>`s for free (they resolve before rendering). ⚠ A `<b>` a user writes in a note is now SHOWN, not run.
-2. **The CI workflow of section 3.4 — all platforms**, on `master` (`.github/` already ships there): macOS arm64 and Intel, Windows, both jamovi lines, and Linux x64 through flatpak. Run it by hand against `dev` once.
+2. ✓ **DONE (2.0.1 phase 16) — the CI workflow of section 3.4**, `.github/workflows/jmo.yaml` and `.github/scripts/jmo-verify.R`: macOS arm64 and Intel, Windows, both jamovi lines, and Linux x64 through flatpak. It went beyond the sketch on three points — the jamovi versions are resolved and the R stamp declared and checked, the built file is loaded and run in jamovi's own R rather than weighed, and the regenerated `R/*.h.R` come back as an artefact. ⚠ It has not yet run: `.github/` reaches `master` with the 2.0.1 release, and until then a `ci/**` branch push is how it is exercised.
 3. **Test each file by sideloading it** — a Mac with Apple silicon at least, both lines ideally, and Windows once, since the workflow builds 2.7 with the 28.3 compiler rather than the Windows checkout's pinned jmvtools 2.7.26.
 4. **Tag, let the release job attach the seven files**, and publish the one-page install guide of section 3.8. The local Windows and WSL builds stay as development tools, no longer as the release path.
 5. ✓ **DONE (2.0.1 phase 15) — the small corrections** (section 4.4), all but the last:

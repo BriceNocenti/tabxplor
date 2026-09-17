@@ -105,7 +105,7 @@ R files (`R/`) are grouped into seven subsystems. Every file carries a header co
 
 **Cross-cutting** (touch with care): `fmt_class.R` is the foundation of every column; `.onLoad()` in `utils.R` seeds every option; `format.tabxplor_fmt()` and `fmt_color_channels()` are the shared display/colour sources of truth across all backends.
 
-**Other directories:** `vignettes/` (introduction, *Reading a regression*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the five French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d).
+**Other directories:** `vignettes/` (introduction, *Reading a regression*, regression, weights, programming; `vignettes/articles/` is pkgdown-only and holds the five French twins) · `tests/testthat/` (testthat v3, subsystem-named: the package's contract) · `man/` (roxygen-generated, never edit) · `data/` + `data-raw/` (the four example data sets and the script that builds them) · `inst/i18n/` + `po/` (translations) · `jamovi/` (module definition) · `dev/` (seven technical guides, the dev scripts and perf harness, `dev/tests/` — the second test suite — and `dev/archive_2.0.0/`, the 2.0.0 evidence base; all `.Rbuildignore`'d) · `.github/` (CI: `R CMD check`, pkgdown, coverage, rhub, and `jmo.yaml` + `scripts/jmo-verify.R`, which build and verify the seven jamovi modules).
 
 ---
 
@@ -476,14 +476,17 @@ Diagnose in one line: `flatpak run --command=/app/bin/Rscript org.jamovi.jamovi 
 
 ⚠ **WSLg is in COPY MODE** (known WSL 2.7.x bug [microsoft/WSL#40618](https://github.com/microsoft/WSL/issues/40618)): windows can be slow or render blank (taskbar entry + penguin icon, `[WARN:COPY MODE]` in the title). **Not a jamovi problem** — plain `xmessage` fails identically. One-time fix, persists across reboots: `sudo mkdir -p /mnt/shared_memory && sudo mount -t tmpfs tmpfs /mnt/shared_memory`. ⚠ The bug is *unstable* — it sometimes renders fine without the mount, then regresses; a working window is not evidence the mount is unneeded.
 
-⚠ **There are now TWO build paths, and they are not interchangeable — `.jmo` bundles are platform-specific** (migration Phase A1):
+⚠ **There are THREE build paths, and they are not interchangeable — `.jmo` bundles are platform-specific.** CI is the release path; the two local ones are development tools:
 
 | Target                               | jamovi                                           | Checkout                                                                    | Recipe                                                                                                                                                         |
 |--------------------------------------|--------------------------------------------------|-----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Linux `.jmo`** (WSL, the dev path) | flatpak `org.jamovi.jamovi` **28.2 ✅ installed** | `~/github/tabxplor` — **authoritative for source**                          | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//25.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
-| **Windows `.jmo`** (release only)    | Windows jamovi, **kept forever**                 | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`                                     |
+| **All seven files** (the RELEASE path) | downloaded per job, both lines                 | the tag, on GitHub                                                          | `.github/workflows/jmo.yaml` — macOS arm64/Intel, Windows, Linux × solid/current, verified in jamovi's own R, into a draft release (`dev/jamovi_library_vs_sideloading.md` §3.4) |
+| **Linux `.jmo`** (WSL, the dev loop) | flatpak `org.jamovi.jamovi` **28.2 ✅ installed** | `~/github/tabxplor` — **authoritative for source**                          | `jmvtools::install(home = 'flatpak')` (setup doc §7.4; the SDK `org.freedesktop.Sdk//25.08` is REQUIRED — `flatpak run --devel` is how the compiler reaches R) |
+| **Windows `.jmo`** (solid-line testing) | Windows jamovi, **kept forever**              | `D:\Statistiques\github\tabxplor` — **build-only: pull, build, never edit** | `options(jamovi_home='C:/Program Files/jamovi 2.6.44.0'); devtools::load_all(); jmvtools::install(); devtools::load_all()`                                     |
 
-**A Linux jamovi cannot produce a Windows bundle**, so the Windows checkout survives *even if C3 fully succeeds* — this is not a C3-failure fallback. The rule that matters: **never edit tabxplor in both places.** Edit in WSL, pull on Windows, build there.
+The Windows checkout survives because only a real Windows app can *test* a solid-line build. The rule that matters: **never edit tabxplor in both places.** Edit in WSL, pull on Windows, build there.
+
+⚠ **Any build rewrites the source tree**: `R/*.h.R` and `jamovi/0000.yaml` are regenerated, and `inst/i18n/` is EMPTIED and refilled from `jamovi/i18n/*.po`. Harmless in CI's throwaway checkout — and CI hands the regenerated files back as its `generated-files` artefact, which is how they are refreshed without a local jamovi.
 
 ✅ **`jmvtools` is pinned per machine, to the app it builds for** — **28.2** on this WSL2 box (measured), **2.7.26** on Windows. ⚠ Never `install.packages("jmvtools", repos = "https://repo.jamovi.org")` — that index serves 2.7.26 **and** 28.0-28.3 at once, so a bare install silently takes the newest. Use the explicit tarball, e.g. `install.packages("https://repo.jamovi.org/src/contrib/jmvtools_2.7.26.tar.gz", repos = NULL, type = "source")` (install `node` from that repo first — `repos = NULL` resolves no deps). The two toolchains do **not** conflict: the bundled `jamovi-compiler` in 2.7.26 and in 28.2 both hard-pin `jms: '1.0'` and both accept `jas` in `(1.1, 1.2]`, so the git-tracked `jamovi/*.yaml` stay valid for both.
 
@@ -1607,11 +1610,87 @@ fonction interne.
 Tests ciblés verts (edge-cases, utils, exporteurs) ; `dev/tests/` : les deux assertions qui exigeaient
 le message sont retournées (366 verts).
 
-### v2.0.1 — Phase 16 — github actions to compile the jamovi module for all platforms
+#### v2.0.1 — Phase 16 — GitHub Actions builds the module for every platform **DONE**
 
-I need to compile the jamovi module .jmo for my MacOS students. I want to use GitHub Actions for every platform — macOS arm64 and Intel, Windows, Linux, each jamovi line that exists there — and published as GitHub Release assets.
+Asked for by the macOS students, who had no file at all: the two build paths were the maintainer's own
+machines, and a `.jmo` is tied to OS + arch + jamovi line. `.github/workflows/jmo.yaml` and
+`.github/scripts/jmo-verify.R` build the seven files — macOS arm64 and Intel, Windows and Linux ×
+solid and current — and draft a release carrying them. The decision record's §3.4 owns the *why* and
+the evidence; its 143-line untested YAML sketch is replaced there by a 53-line account and a pointer,
+because the recipe is now a file.
 
-See more details at `dev/jamovi_library_vs_sideloading.md`.
+**Versions are RESOLVED, the stamp is DECLARED.** Every `2.7.x` produces the same `4.5.0-*` stamp, so
+the exact patch is a build detail and only the URL needs one — pinning it, as the three public
+precedents do, only rots. `resolve` reads jamovi's own `versions.json` for the `solid` and `current`
+channels, derives the line (`major < 3 ? major.minor : major`), and **two grids** — one row per line
+with the R it must bundle, one row per system — say what that must be. A `jq` fold crosses them and
+**fails by name** when they disagree; the R itself is re-checked against the grid by a two-minute probe
+of jamovi's own R, before the thirty-minute part, and once more on the produced `jamovi.yaml`. It is
+the package's foreign-key-checked-at-load rule, transposed: the fact is stated once, the edge is
+checked where it is used. The Linux job asks the flatpak it just installed and goes through the same
+check. ⚠ The grids live in the `resolve` step, not in `env:`, because the table and the rule that
+derives a line from a version are one fact.
+
+**A green build now means the file LOADS.** The precedents check that a `.jmo` is not suspiciously
+small, which cannot see the failure that matters: the compiler rewrites macOS load commands and never
+tests one, so until now a green run proved only that a file had been written. `jmo-verify.R` — one R
+script, run by jamovi's **own** R on the system that built the file, against the **unzipped** `.jmo` —
+resolves every macOS load command against the app (the strict, static half: `/opt/homebrew`,
+`/usr/local` and an unpatched `/Library/Frameworks/…` all fail by name), then pins `.libPaths()`,
+asserts the pin held, loads every vendored package and runs `tab()`, `tab_reg()`, `tab_html()`,
+`tab_md()`, `tab_xl()` and `jmvtab()`. ⚠ It asserts a **declared required set** of packages, because
+`install.packages()` reports a failed *source* build as a warning: the compiler can finish and write a
+perfectly valid `.jmo` with `openxlsx2` — the one package the 28 line compiles from source — simply
+missing, and nothing else in the chain would notice. ⚠ The dynamic half rests on a symlink standing in
+for jamovi's executable (`@executable_path` is jamovi's `MacOS/`, not R's), so it proves the code runs,
+never that the rewrite is right; the static check is the contract, and `MACOS_LOAD_IS_FATAL` /
+`ANALYSIS_IS_FATAL` are the two one-line switches if a first run shows either stand-in cannot work.
+
+**The module version is stated once.** `jamovi/0000.yaml`'s `version:` is hand-copied and had already
+drifted (`2.0.0` against `2.0.0.9000`); every build now rewrites it from `DESCRIPTION` in the checkout
+and never commits it, so a development build is stamped `2.0.0.9000` and is visibly not the release,
+where today the two were indistinguishable in jamovi's module list. The verifier then checks that value
+in both places it lands — `jamovi.yaml` and the installed package's `DESCRIPTION`.
+
+**A draft release, all seven files or none.** `gh` rather than a fourth third-party action; the job
+refuses an incomplete set, because after publishing, a `…/releases/latest/download/…` link missing its
+file is a dead link — worse than no release. The maintainer publishes the draft, which is also what
+redeploys the site: a release *created* by the workflow's own token triggers nothing. ⚠ Two traps in
+the trigger: no `paths:` filter, ever (with `tags:` it silently suppresses tag pushes), and a
+`ci/**` branch, because `workflow_dispatch` only offers a workflow already on the default branch —
+and `.github/` reaches master only with the 2.0.1 release.
+
+**Two smaller decisions against the sketch.** The jamovi installer is **not** cached (six ~400 MB
+entries against a 10 GB repo budget would evict the dependency caches, which are the ones that cost
+minutes), while the compiler's build library **is** — keyed on `DESCRIPTION`, split into
+`restore` + `save if: always()` so a failed verification does not throw away a source compile, and
+with **no `restore-keys`**: the compiler skips a package whose directory *name* exists, with no version
+check, and copies the whole directory into the module. `CACHE_EPOCH` discards the lot by hand.
+
+**The generated files come back.** Every build regenerates `R/*.h.R` from the YAML and refills
+`inst/i18n/` from the `.po` files; those ship in the CRAN tarball, and refreshing them needed a local
+jamovi. The Linux job uploads them as the `generated-files` artefact and reports drift as a
+**notice** — never a gate, never a bot commit (maintainer's decision); what makes it stick is a
+pre-flight line in `dev/release_checklist.md`, since a stale `.h.R` matters at a release and nowhere
+else. ⚠ Measured against `HEAD`:
+`jmvtab.h.R`, `jmvtabreg.h.R` and `fr.json` are all **0 changed lines** today, so phase 15's
+hand-maintenance was right and that is the baseline.
+
+**Verified here, not merely written.** The whole Linux job was run locally against the flatpak jamovi,
+with the real `jmvtools_28.3.tar.gz` fetched from `repo.jamovi.org`: build → a 22.3 MB `.jmo` stamped
+`4.6.0-x64` / `2.0.0.9000`, 16 packages vendored, and every one of the six smoke calls green, exit 0.
+The `jq` fold was dry-run against the live `versions.json` (seven rows out; a doctored file with solid
+at `28.3.0.0` fails with *"jamovi channel solid is now line 28 … the grid declares 2.7"*), and the
+version override input with it. ⚠ **Running it is what found the one real bug**: `cat()` writes no
+trailing newline, so `read -r rv arch < <(…)` returns non-zero and `set -euo pipefail` would have
+killed the R-version check on every job.
+
+**What is NOT done.** The workflow has never run on GitHub: a `ci/**` push is the first test, and the
+macOS and Windows jobs are unexercised — §3.4's risk list says what each would show. A green run proves
+the file loads in jamovi's R, not that jamovi's *installer* accepts it, so each Mac file still needs one
+sideload. And the student-facing install page, with the download links, is phase 17's — §3.8 holds its
+table. No scheduled canary run: the workflow is exercised only at release time and will rot silently
+between them, which one `schedule:` line would catch.
 
 
 ### v2.0.1 — Phase 17 — v2.0.1 release
@@ -1632,8 +1711,9 @@ For my message to CRAN, reuse the 2.0.0 one and modify it, and change the rhub a
 
 Check possible CRAN after-release messages from v 2.0.0 on exotic platforms, etc.
 
-At the end, when everything is ready, I’ll submit to CRAN myself.
+If there are useless or outdated stuff in the release checklist, we can think about removing them.
 
+At the end, when everything is ready, I’ll submit to CRAN myself.
 
 
 
