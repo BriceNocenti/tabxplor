@@ -268,9 +268,16 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
+          fw="$JAMOVI_HOME/Contents/Frameworks/R.framework"
           sudo mkdir -p /Library/Frameworks
-          sudo ln -sfn "$JAMOVI_HOME/Contents/Frameworks/R.framework" /Library/Frameworks/R.framework
-          ls -l /Library/Frameworks/R.framework/
+          sudo ln -sfn "$fw" /Library/Frameworks/R.framework
+          # `-framework R` looks for <F>/R.framework/R, the framework's top-level binary. jamovi
+          # ships the library but not that entry point, so make it: without it the search path
+          # resolves and the link still fails with "ld: framework 'R' not found".
+          if [ ! -e "$fw/R" ]; then
+            ln -sfn "Versions/Current/Resources/lib/libR.dylib" "$fw/R"
+          fi
+          ls -lL "$fw/R" && ls -l "$fw/"
 
       - name: Fetch the compiler, inside the jmvtools source tarball
         run: |
