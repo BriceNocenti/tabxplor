@@ -13,21 +13,25 @@ meet them.
 ## Test environments
 * local WSL2 Ubuntu install, R 4.6.1
 
-* github Actions (PR merge) : [<FILL: github actions run URL>](<FILL>)
+* github Actions (PR merge) : [https://github.com/BriceNocenti/tabxplor/actions/runs/35279552851](https://github.com/BriceNocenti/tabxplor/actions/runs/35279552851)
   - macOS, R-release
   - Microsoft Windows Server, R-release
   - Ubuntu Linux LTS, R-devel
   - Ubuntu Linux LTS, R-release
   - Ubuntu Linux LTS, R-oldrel-1
 
-* win-builder (R-devel): [<FILL: win-builder URL>](<FILL>)
+* win-builder (R-devel): [<FILL: the https://win-builder.r-project.org/... link from the email>](<FILL>)
 
-* rhub: [<FILL: rhub run URL>](<FILL>)
-  Platforms run: nosuggests, nold, atlas, mkl, donttest, ubuntu-next, ubuntu-release.
-  (The compiler containers are not run: the package has no compiled code.)
+* rhub: [https://github.com/BriceNocenti/tabxplor/actions/runs/35313555736](https://github.com/BriceNocenti/tabxplor/actions/runs/35313555736)
+  Platforms run: nold, atlas, mkl, donttest, ubuntu-next, ubuntu-release.
+  (The compiler containers are not run: the package has no compiled code. The `nosuggests`
+  platform is run locally instead, with `_R_CHECK_DEPENDS_ONLY_=true`.)
 
 ## R CMD check results
-* local (devtools::check(manual = TRUE)):
+* local (devtools::check(manual = TRUE, remote = TRUE, incoming = TRUE)):
+  - No Error, no Warning, no Note.
+
+* local, with `_R_CHECK_DEPENDS_ONLY_=true` (the `nosuggests` check):
   - No Error, no Warning, no Note.
 
 * github Actions :

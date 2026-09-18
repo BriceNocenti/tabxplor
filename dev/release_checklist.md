@@ -47,7 +47,11 @@ git checkout dev && git pull
 #         `incoming = TRUE` -- devtools defaults it to `remote`, i.e. FALSE, so the bare call runs
 #                              NO URL check and NO CRAN-incoming check. It is the only way to see
 #                              locally what CRAN's own incoming machine will say.
-#    j) Rscript -e 'pkgdown::check_pkgdown()' clean.
+#    j) The nosuggests rehearsal, which rhub cannot give you (see the notes):
+#         withr::with_envvar(c("_R_CHECK_DEPENDS_ONLY_" = "true"),
+#                            devtools::check(manual = TRUE))
+#       ~3 min, and it is the check most likely to find something.
+#    k) Rscript -e 'pkgdown::check_pkgdown()' clean.
 #
 #    The push of (a)-(c) also starts R-CMD-check on 5 platforms; that run is the GitHub Actions
 #    link cran-comments.md wants (step 5).
@@ -144,20 +148,23 @@ gh run watch && gh release edit vx.y.z --draft=false
 - **rhub: the compiler containers say nothing here.** tabxplor has no `src/`, so `clang*`,
   `gcc*`, `c23`, `lto`, `*-asan`, `valgrind` and `rchk` only exercise a toolchain the package
   never uses -- and a stale image there fails on a *dependency* (`clang19`/`clang20` carry an
-  R-devel from 2026-03 that vctrs 0.7.2 will not load on). Use the platforms that vary the
-  RUNTIME instead: `nosuggests` (the 25 Suggests and their `tx_need_pkg()` gates), `nold`,
-  `atlas`, `mkl`, `donttest`, `ubuntu-next`, `ubuntu-release`.
-- **`nosuggests` is the one worth rehearsing here first, and it is a real gate.** Its whole
-  mechanism is `_R_CHECK_DEPENDS_ONLY_=true`, which `tools:::.check_packages` alone reads -- so it
-  bites at CHECK time and reproduces locally, no rhub involved:
-  `withr::with_envvar(c("_R_CHECK_DEPENDS_ONLY_" = "true"), devtools::check(manual = TRUE))`.
-  ⚠ What it hides is `Depends + Imports + VignetteBuilder`, plus testthat for the tests step
-  (`tools:::setRlibs`) -- so anything else a TEST or a VIGNETTE reaches for must be guarded, the
-  same way every Rd example already is. Run it before a release; it takes 3 min and it is the
-  check most likely to find something.
-  If the rhub job instead sits silent for hours and dies at GitHub's 6 h limit, that is a stalled
-  container, not a result: `R CMD build` never reads that variable, so the build it hangs in is
-  the one every other platform finishes in ~90 s. Cancel it and re-run the platform alone.
+  R-devel from 2026-03 that vctrs 0.7.2 will not load on). The six that vary the RUNTIME are the
+  whole list:
+
+  ```r
+  rhub::rhub_check(platforms = c("nold", "atlas", "mkl", "donttest",
+                                 "ubuntu-next", "ubuntu-release"), branch = "master")
+  ```
+- ⛔ **Never ask rhub for `nosuggests`: that container does not finish.** Measured twice -- over
+  10 h at 2.0.0, and at 2.0.1 exactly 6 h (21:59:58Z to 04:00:02Z) before GitHub's job limit killed
+  it, while every other platform finished in ~90 s. `R CMD build` never reads the variable that
+  platform sets, so it hangs in the build every other platform completes in seconds. It is not a
+  slow result; it is no result, and waiting for one costs a night.
+- **`nosuggests` is a real gate all the same, and it runs HERE** (step 1j). Its whole mechanism is
+  `_R_CHECK_DEPENDS_ONLY_=true`, which `tools:::.check_packages` alone reads, so it bites at CHECK
+  time and reproduces locally with no rhub involved. ⚠ What it hides is `Depends + Imports +
+  VignetteBuilder`, plus testthat for the tests step (`tools:::setRlibs`) -- so anything else a TEST
+  or a VIGNETTE reaches for must be guarded, the same way every Rd example already is.
 - `.Rbuildignore` stays identical on both branches — building the CRAN tarball
   from `dev` must keep working.
 - Hotfix on master only if CRAN demands an immediate patch: fix on `dev`,

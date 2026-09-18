@@ -19,6 +19,7 @@
 ^air\.toml$
 ^\.vscode$
 ^\.claude$
+^tests/testthat/\.claude$
 ^dev$
 ^_pkgdown\.yml$
 ^docs$
